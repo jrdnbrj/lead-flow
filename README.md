@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LeadFlow
 
-## Getting Started
+LeadFlow es una aplicación móvil-first para capturar prospectos automotrices durante eventos, calificarlos en el momento y llevarlos al siguiente contacto con contexto.
 
-First, run the development server:
+## Inicio rápido
 
 ```bash
+npm install
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abre [http://localhost:3000](http://localhost:3000). La app funciona en modo demo con leads de muestra y guarda capturas nuevas en el navegador mientras Supabase no tenga una sesión autenticada.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Variables de entorno
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`.env` contiene la configuración local existente y `.env.example` mantiene la misma estructura y líneas para nuevos entornos. Las variables `NEXT_PUBLIC_SELLER_*` alimentan la vCard del QR. Las variables `SUPABASE_SERVICE_ROLE_KEY` solo se usan como secreto de la Edge Function y no deben exponerse al frontend.
 
-## Learn More
+## Arquitectura
 
-To learn more about Next.js, take a look at the following resources:
+- `lib/domain`: tipos de dominio y scoring puro, independiente de React.
+- `lib/leads`: validación Zod, Server Action y repositorio Supabase con fallback local UX-first.
+- `components`: captura táctil, dashboard, navegación y QR vCard 3.0.
+- `supabase/migrations`: tabla `leads`, trigger de scoring, índices y RLS.
+- `supabase/functions/send-whatsapp-welcome`: webhook asíncrono hacia Evolution API; una caída de WhatsApp marca el lead como `FAILED` sin revertir la captura.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Supabase
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Aplica `supabase/migrations/001_leadflow_core_schema.sql` y configura un Database Webhook de `INSERT` sobre `public.leads` que invoque `send-whatsapp-welcome`. Define en la función:
 
-## Deploy on Vercel
+```text
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+EVOLUTION_API_URL
+EVOLUTION_API_KEY
+EVOLUTION_API_INSTANCE_NAME
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Producción
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+npm run typecheck
+npm run build
+docker compose up --build
+```
+
+El `Dockerfile` usa `output: "standalone"` de Next.js y el compose expone el puerto `3000` con healthcheck en `/api/health`.

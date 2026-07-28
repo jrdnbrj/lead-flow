@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+build
+coverage
+.git
+.gitignore
+.env*
+!.env.example
+Dockerfile*
+docker-compose*.yml
+supabase/.temp
+supabase/.branches
+*.log
+*.xlsx
+README.md
+docs
