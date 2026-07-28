@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+export const sendLeadSchema = z.object({
+  leadId: z.string().trim().min(1),
+  fullName: z.string().trim().min(2).max(100),
+  phone: z.string().trim().regex(/^[0-9+\s()-]{7,20}$/, "El celular no es válido"),
+  carModel: z.string().trim().min(2).max(100),
+});
+
 export const leadSchema = z.object({
   fullName: z.string().trim().min(2, "Escribe el nombre del prospecto").max(100),
   phone: z.string().trim().regex(/^[0-9+\s()-]{7,20}$/, "Ingresa un celular válido"),

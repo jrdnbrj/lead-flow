@@ -3,6 +3,8 @@ import { calculateLeadScore } from "@/lib/domain/lead";
 import { demoLeads } from "@/lib/leads/mock-data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+const leadSelect = "id,user_id,tenant_id,created_at,full_name,phone,car_model,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,status";
+
 type LeadRow = {
   id: string;
   user_id: string | null;
@@ -46,14 +48,10 @@ export async function getLeads(): Promise<Lead[]> {
   if (!supabase) return demoLeads;
 
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return demoLeads;
-
-  const { data, error } = await supabase
-    .from("leads")
-    .select("id,user_id,tenant_id,created_at,full_name,phone,car_model,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,status")
-    .eq("user_id", userData.user.id)
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const query = supabase.from("leads").select(leadSelect).order("created_at", { ascending: false }).limit(100);
+  const { data, error } = userData.user
+    ? await query.eq("user_id", userData.user.id)
+    : await query.is("user_id", null);
 
   if (error || !data) return demoLeads;
   return data.map((row) => toDomainLead(row));
@@ -80,7 +78,7 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
   };
 
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return { lead: localLead, warning: "Guardado en este dispositivo. Conecta Supabase para sincronizarlo." };
+  if (!supabase) return { lead: localLead, warning: "Guardado en este dispositivo. Configura Supabase para sincronizarlo." };
 
   const { data: userData } = await supabase.auth.getUser();
   const { data, error } = await supabase
@@ -96,12 +94,37 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
       notes: localLead.notes,
       status: localLead.status,
     })
-    .select("id,user_id,tenant_id,created_at,full_name,phone,car_model,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,status")
+    .select(leadSelect)
     .single();
 
   if (error || !data) {
-    return { lead: localLead, warning: "Lead guardado localmente; la sincronización se reintentará cuando haya conexión." };
+    return { lead: localLead, warning: "Lead guardado localmente; Supabase no confirmó la persistencia." };
   }
 
-  return { lead: toDomainLead(data), warning: "Lead guardado. WhatsApp se enviará en segundo plano." };
+  return { lead: toDomainLead(data), warning: "Lead guardado en Supabase. Envíalo desde el dashboard cuando estés listo." };
+}
+
+export async function getLeadById(id: string): Promise<Lead | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+
+  const { data: userData } = await supabase.auth.getUser();
+  const query = supabase.from("leads").select(leadSelect).eq("id", id);
+  const { data, error } = userData.user
+    ? await query.eq("user_id", userData.user.id).maybeSingle()
+    : await query.is("user_id", null).maybeSingle();
+
+  if (error || !data) return null;
+  return toDomainLead(data);
+}
+
+export async function updateLeadWhatsappStatus(id: string, status: Lead["whatsappStatus"]): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return false;
+
+  const update = status === "SENT"
+    ? { whatsapp_status: status, whatsapp_last_error: null, whatsapp_sent_at: new Date().toISOString() }
+    : { whatsapp_status: status };
+  const { error } = await supabase.from("leads").update(update).eq("id", id);
+  return !error;
 }

@@ -54,6 +54,13 @@ export interface CreateLeadInput {
   notes?: string;
 }
 
+export interface SendLeadInput {
+  leadId: string;
+  fullName: string;
+  phone: string;
+  carModel: string;
+}
+
 export interface LeadScore {
   score: number;
   temperature: LeadTemperature;
@@ -71,6 +78,12 @@ export interface SellerProfile {
   phone: string;
   email: string;
   company: string;
+}
+
+export interface WhatsappSendResult {
+  leadId: string;
+  whatsappStatus: "SENT";
+  persisted: boolean;
 }
 
 const timeframePoints: Record<LeadTimeframe, number> = {
@@ -115,4 +128,9 @@ export function getStatusLabel(status: LeadStatus): string {
 export function formatPhoneForWhatsapp(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   return digits.startsWith("57") ? digits : `57${digits}`;
+}
+
+export function buildWhatsAppMessage(fullName: string, carModel: string): string {
+  const firstName = fullName.trim().split(/\s+/)[0] || "cliente";
+  return `Hola ${firstName}, soy tu asesor. Gracias por visitarnos; te escribo para seguir con la información de tu ${carModel}.`;
 }

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, LayoutDashboard, Plus, QrCode, Sparkles, Wifi, WifiOff } from "lucide-react";
+import { BarChart3, LayoutDashboard, MessageCircle, Plus, QrCode, Sparkles, Wifi, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const navigation = [
   { href: "/dashboard", label: "Resumen", icon: LayoutDashboard },
   { href: "/nuevo", label: "Nuevo lead", icon: Plus },
   { href: "/qr", label: "Mi QR", icon: QrCode },
+  { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -55,7 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-black/[0.06] bg-[var(--surface)]/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_32px_rgba(16,24,40,0.06)] backdrop-blur-xl sm:hidden" aria-label="Navegación principal">
-        <div className="mx-auto grid max-w-md grid-cols-3 gap-1">
+        <div className="mx-auto grid max-w-md grid-cols-4 gap-1">
           {navigation.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || (item.href === "/dashboard" && pathname === "/");

@@ -1,0 +1,4 @@
+project_id = "qixdcdpihrckyhqvdvln"
+
+[functions.send-whatsapp-welcome]
+verify_jwt = true

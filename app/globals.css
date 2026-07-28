@@ -40,5 +40,9 @@ button, a { touch-action: manipulation; }
 .icon-action { display: grid; min-height: 42px; min-width: 42px; place-items: center; border-radius: 14px; border: 1px solid rgba(16,24,40,.1); background: white; color: var(--ink); transition: all .2s; }
 .icon-action:hover { border-color: var(--ink); background: var(--ink); color: white; }
 .icon-action-whatsapp:hover { border-color: #25d366; background: #25d366; }
+.send-whatsapp-button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: .4rem; border-radius: 14px; background: #dff7e7; padding: .7rem .8rem; color: #11743d; font-size: .75rem; font-weight: 900; transition: all .2s; }
+.send-whatsapp-button:hover { background: #25d366; color: white; }
+.send-whatsapp-button:disabled { cursor: not-allowed; opacity: .72; }
+.send-whatsapp-button-sent { background: #e9eef0; color: #52616b; }
 
 @media (min-width: 640px) { .field-input { padding: 1rem 1.1rem; } }

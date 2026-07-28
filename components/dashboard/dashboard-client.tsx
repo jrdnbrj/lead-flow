@@ -1,11 +1,13 @@
 "use client";
 
 import * as XLSX from "xlsx";
-import { Download, Flame, MessageCircle, Phone, Search, SlidersHorizontal, Target, UserRound } from "lucide-react";
+import { CheckCircle2, Download, Flame, LoaderCircle, MessageCircle, Phone, Search, Send, SlidersHorizontal, Target, TriangleAlert, UserRound } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import type { Lead, LeadStatus, LeadTemperature } from "@/lib/domain/lead";
+import type { Lead, LeadStatus, LeadTemperature, WhatsappStatus } from "@/lib/domain/lead";
 import { formatPhoneForWhatsapp, getStatusLabel, getTemperatureLabel } from "@/lib/domain/lead";
+import { sendLeadWhatsappAction } from "@/lib/leads/actions";
 
 type TemperatureFilter = "ALL" | LeadTemperature;
 type StatusFilter = "ALL" | LeadStatus;
@@ -30,6 +32,22 @@ function formatRelativeDate(date: string): string {
 
 function temperatureClasses(temperature: LeadTemperature): string {
   return { HIGH: "bg-[#fff0e6] text-[#b94910]", MEDIUM: "bg-[#fff8d8] text-[#8c6c00]", LOW: "bg-[#edf0f4] text-[#647084]" }[temperature];
+}
+
+function updateLocalWhatsappStatus(leadId: string, status: WhatsappStatus): void {
+  const stored = window.localStorage.getItem("leadflow:leads");
+  if (!stored) return;
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return;
+    const updated = parsed.map((value) => {
+      if (!isLead(value) || value.id !== leadId) return value;
+      return { ...value, whatsappStatus: status };
+    });
+    window.localStorage.setItem("leadflow:leads", JSON.stringify(updated));
+  } catch {
+    window.localStorage.removeItem("leadflow:leads");
+  }
 }
 
 export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
@@ -101,6 +119,7 @@ export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <a href="/nuevo" className="button-primary"><Target size={17} />Capturar lead</a>
+          <Link href="/whatsapp" className="button-secondary"><MessageCircle size={17} />Conectar WhatsApp</Link>
           <button type="button" onClick={exportToXlsx} className="button-secondary"><Download size={17} />Exportar XLSX</button>
         </div>
       </section>
@@ -142,5 +161,26 @@ function MetricCard({ icon, label, value, helper, tone }: { icon: React.ReactNod
 
 function LeadCard({ lead }: { lead: Lead }) {
   const message = encodeURIComponent(`Hola ${lead.fullName.split(" ")[0]}, soy tu asesor. Gracias por visitarnos; te escribo para seguir con la información de tu ${lead.carModel}.`);
-  return <article className="rounded-[26px] border border-black/[0.06] bg-white p-4 shadow-[0_12px_36px_rgba(16,24,40,0.045)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(16,24,40,0.08)] sm:p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><div className="flex min-w-0 flex-1 items-start gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#f0eee8] text-sm font-black">{lead.fullName.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-base font-black">{lead.fullName}</h3><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${temperatureClasses(lead.temperature)}`}>{lead.temperature === "HIGH" ? "🔥 " : ""}{getTemperatureLabel(lead.temperature)}</span></div><p className="mt-1 text-sm text-[var(--muted)]">{lead.carModel} <span className="mx-1 text-black/20">·</span> {getStatusLabel(lead.status)} <span className="mx-1 text-black/20">·</span> {formatRelativeDate(lead.createdAt)}</p><p className="mt-2 line-clamp-1 text-xs font-medium text-[#777c86]">{lead.notes || "Sin notas adicionales"}</p></div></div><div className="flex items-center gap-2 sm:shrink-0"><span className="mr-auto rounded-xl bg-[#f6f3ed] px-3 py-2 text-center sm:mr-2"><strong className="block text-lg font-black leading-none">{lead.score}</strong><span className="text-[9px] font-black uppercase tracking-[0.1em] text-[var(--muted)]">score</span></span><a aria-label={`Llamar a ${lead.fullName}`} href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} className="icon-action" title="Llamar"><Phone size={17} /></a><a aria-label={`Escribir por WhatsApp a ${lead.fullName}`} href={`https://wa.me/${formatPhoneForWhatsapp(lead.phone)}?text=${message}`} target="_blank" rel="noreferrer" className="icon-action icon-action-whatsapp" title="WhatsApp"><MessageCircle size={17} /></a></div></div></article>;
+  const [whatsappStatus, setWhatsappStatus] = useState<WhatsappStatus>(lead.whatsappStatus);
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendInfo, setSendInfo] = useState<string | null>(null);
+
+  async function sendMessage() {
+    if (isSending || whatsappStatus === "SENT") return;
+    setIsSending(true);
+    setSendError(null);
+    setSendInfo(null);
+    const response = await sendLeadWhatsappAction({ leadId: lead.id, fullName: lead.fullName, phone: lead.phone, carModel: lead.carModel });
+    if (response.success && response.data) {
+      setWhatsappStatus("SENT");
+      updateLocalWhatsappStatus(lead.id, "SENT");
+      setSendInfo(response.warning || "Mensaje enviado automáticamente por WhatsApp.");
+    } else {
+      setSendError(response.error || "No fue posible enviar el mensaje.");
+    }
+    setIsSending(false);
+  }
+
+  return <article className="rounded-[26px] border border-black/[0.06] bg-white p-4 shadow-[0_12px_36px_rgba(16,24,40,0.045)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(16,24,40,0.08)] sm:p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><div className="flex min-w-0 flex-1 items-start gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#f0eee8] text-sm font-black">{lead.fullName.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-base font-black">{lead.fullName}</h3><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${temperatureClasses(lead.temperature)}`}>{lead.temperature === "HIGH" ? "🔥 " : ""}{getTemperatureLabel(lead.temperature)}</span></div><p className="mt-1 text-sm text-[var(--muted)]">{lead.carModel} <span className="mx-1 text-black/20">·</span> {getStatusLabel(lead.status)} <span className="mx-1 text-black/20">·</span> {formatRelativeDate(lead.createdAt)}</p><p className="mt-2 line-clamp-1 text-xs font-medium text-[#777c86]">{lead.notes || "Sin notas adicionales"}</p></div></div><div className="flex items-center gap-2 sm:shrink-0"><span className="mr-auto rounded-xl bg-[#f6f3ed] px-3 py-2 text-center sm:mr-2"><strong className="block text-lg font-black leading-none">{lead.score}</strong><span className="text-[9px] font-black uppercase tracking-[0.1em] text-[var(--muted)]">score</span></span><a aria-label={`Llamar a ${lead.fullName}`} href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} className="icon-action" title="Llamar"><Phone size={17} /></a><button type="button" aria-label={`Enviar WhatsApp a ${lead.fullName}`} onClick={sendMessage} disabled={isSending || whatsappStatus === "SENT"} className={`send-whatsapp-button ${whatsappStatus === "SENT" ? "send-whatsapp-button-sent" : ""}`} title={whatsappStatus === "SENT" ? "Mensaje enviado" : "Enviar WhatsApp automáticamente"}>{isSending ? <LoaderCircle size={16} className="animate-spin" /> : whatsappStatus === "SENT" ? <CheckCircle2 size={16} /> : <Send size={16} />}<span className="hidden sm:inline">{isSending ? "Enviando" : whatsappStatus === "SENT" ? "Enviado" : "Enviar"}</span></button><a aria-label={`Abrir WhatsApp manual para ${lead.fullName}`} href={`https://wa.me/${formatPhoneForWhatsapp(lead.phone)}?text=${message}`} target="_blank" rel="noreferrer" className="icon-action icon-action-whatsapp" title="Abrir WhatsApp manual"><MessageCircle size={17} /></a></div></div>{sendError ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-red-600"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{sendError}</p> : null}{sendInfo ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-emerald-700"><CheckCircle2 size={14} className="mt-0.5 shrink-0" />{sendInfo}</p> : null}</article>;
 }
