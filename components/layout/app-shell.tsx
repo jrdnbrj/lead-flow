@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, LayoutDashboard, MessageCircle, Plus, QrCode, Sparkles, Wifi, WifiOff } from "lucide-react";
+import { Globe2, LayoutDashboard, MessageCircle, Plus, QrCode, Sparkles, UserRound, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const navigation = [
@@ -41,12 +41,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
 
+          <nav className="hidden items-center gap-1 sm:flex" aria-label="Navegación de escritorio">
+            {navigation.map((item) => {
+              const Icon = item.icon;
+              const active = pathname === item.href || (item.href === "/dashboard" && pathname === "/");
+              return <Link key={item.href} href={item.href} className={active ? "flex items-center gap-1.5 rounded-xl bg-[var(--ink)] px-2.5 py-2 text-xs font-black text-[var(--lime)]" : "flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-black text-[var(--muted)] transition hover:bg-black/[0.04]"}><Icon size={15} />{item.label}</Link>;
+            })}
+          </nav>
+
           <div className="flex items-center gap-3">
-            <div className={`flex items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${isOnline ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-              {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
+            <div title={isOnline ? "Internet disponible, ya sea por Wi-Fi o por cable" : "El navegador no detecta conexión a internet"} className={`flex items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${isOnline ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+              {isOnline ? <Globe2 size={14} /> : <WifiOff size={14} />}
               <span className="hidden sm:inline">{isOnline ? "En línea" : "Modo offline"}</span>
             </div>
-            <div className="hidden size-10 place-items-center rounded-full bg-[#e7dfd1] text-sm font-black text-[var(--ink)] sm:grid">JR</div>
+            <Link href="/whatsapp" aria-label="Configurar vendedor y WhatsApp" title="Configurar vendedor y WhatsApp" className="hidden size-10 place-items-center rounded-full bg-[#e7dfd1] text-[var(--ink)] transition hover:bg-[#dcd0bd] sm:grid"><UserRound size={17} /></Link>
           </div>
         </div>
       </header>
@@ -70,9 +78,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      <div className="fixed bottom-6 right-6 z-30 hidden rounded-full border border-black/[0.06] bg-white/80 p-3 text-[var(--muted)] shadow-lg sm:block" title="Actividad de ventas">
-        <BarChart3 size={17} />
-      </div>
+      <Link href="/nuevo" aria-label="Agregar nuevo lead" title="Agregar nuevo lead" className="fixed bottom-6 right-6 z-30 hidden items-center gap-2 rounded-full bg-[var(--lime)] px-4 py-3 text-xs font-black text-[var(--ink)] shadow-[0_12px_30px_rgba(16,24,40,0.18)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(16,24,40,0.22)] sm:flex">
+        <Plus size={17} />Nuevo lead
+      </Link>
     </div>
   );
 }

@@ -60,14 +60,14 @@ export function QrCard({ seller, leadName }: { seller: SellerProfile; leadName?:
         </div>
       </div>
       <div className="sm:pr-4">
-        <span className="eyebrow">Contacto en el acto</span>
-        <h1 className="mt-3 max-w-lg text-3xl font-black leading-[0.98] tracking-[-0.06em] sm:text-5xl">Que la conversación no termine en la feria.</h1>
-        <p className="mt-5 max-w-md text-base leading-7 text-[var(--muted)]">{leadName ? <><strong className="text-[var(--ink)]">{leadName}</strong>,</> : "Invita a tu prospecto a"} escanear este código y guardar tus datos. Así el siguiente paso queda a un toque.</p>
+        <span className="eyebrow">Tu contacto, a un escaneo</span>
+        <h1 className="mt-3 max-w-lg text-3xl font-black leading-[0.98] tracking-[-0.06em] sm:text-5xl">Que tu cliente pueda encontrarte cuando lo necesite.</h1>
+        <p className="mt-5 max-w-md text-base leading-7 text-[var(--muted)]">{leadName ? <><strong className="text-[var(--ink)]">{leadName}</strong>, guarda los datos de tu asesor</> : "Comparte este código para que tu cliente guarde los datos de su asesor"} y pueda escribirte fácilmente cuando quiera retomar la conversación.</p>
         <div className="mt-7 grid gap-2.5 sm:grid-cols-2">
           <button type="button" onClick={shareContact} className="action-button bg-[var(--ink)] text-white hover:bg-[#24334e]"><Share2 size={17} />Compartir contacto</button>
           <button type="button" onClick={copyVCard} className="action-button border border-black/[0.1] bg-white text-[var(--ink)] hover:bg-[#faf8f3]"><MessageCircle size={17} />{copied ? "¡Copiado!" : "Copiar vCard"}</button>
           <button type="button" onClick={downloadQr} className="action-button border border-black/[0.1] bg-white text-[var(--ink)] hover:bg-[#faf8f3]"><Download size={17} />Descargar QR</button>
-          <a href={`https://wa.me/${seller.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="action-button bg-[var(--lime)] text-[var(--ink)] hover:brightness-95"><ExternalLink size={17} />Abrir WhatsApp</a>
+          <a href="https://web.whatsapp.com/" target="_blank" rel="noreferrer" className="action-button border border-black/[0.1] bg-[#e4f8e9] text-[#18733a] hover:bg-[#d4f1dc]"><ExternalLink size={17} />Abrir WhatsApp</a>
         </div>
         <p className="mt-5 text-xs font-medium text-[var(--muted)]">vCard 3.0 · {seller.phone} · {seller.email}</p>
       </div>

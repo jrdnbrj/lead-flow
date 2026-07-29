@@ -44,5 +44,9 @@ button, a { touch-action: manipulation; }
 .send-whatsapp-button:hover { background: #25d366; color: white; }
 .send-whatsapp-button:disabled { cursor: not-allowed; opacity: .72; }
 .send-whatsapp-button-sent { background: #e9eef0; color: #52616b; }
+.compact-lead-header .icon-action, .compact-lead-header .send-whatsapp-button { min-height: 36px; min-width: 36px; border-radius: 11px; padding: .55rem; }
+.compact-follow-up select, .compact-follow-up input { height: 34px; }
+.compact-follow-up button { min-height: 32px; }
+.template-editor-layer { font-family: Arial, Helvetica, sans-serif; font-size: .875rem; font-weight: 400; letter-spacing: normal; line-height: 1.5rem; word-spacing: normal; }
 
 @media (min-width: 640px) { .field-input { padding: 1rem 1.1rem; } }

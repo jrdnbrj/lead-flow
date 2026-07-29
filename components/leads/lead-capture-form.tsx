@@ -71,7 +71,8 @@ export function LeadCaptureForm() {
           </label>
           <label className="block sm:col-span-2">
             <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-[var(--muted)]">Celular *</span>
-            <input {...register("phone")} autoComplete="tel" inputMode="tel" placeholder="Ej. 300 123 4567" className="field-input" />
+            <input {...register("phone")} autoComplete="tel" inputMode="tel" placeholder="Ej. 0987654321" className="field-input" />
+            <p className="mt-1.5 text-[11px] font-medium text-[var(--muted)]">Ecuador: 0984790449 · Otro país: escribe el código, por ejemplo +57 315 204 8890.</p>
             <FieldError message={formState.errors.phone?.message} />
           </label>
         </div>

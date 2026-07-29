@@ -24,7 +24,23 @@ export type LeadTimeframe = (typeof leadTimeframes)[number]["value"];
 export type PaymentMethod = (typeof paymentMethods)[number]["value"];
 export type LeadTemperature = "HIGH" | "MEDIUM" | "LOW";
 export type LeadStatus = "NUEVO" | "CONTACTADO" | "COTIZADO" | "PERDIDO" | "CERRADO";
-export type WhatsappStatus = "PENDING" | "SENT" | "FAILED";
+export type WhatsappStatus = "PENDING" | "SENT" | "SERVER_ACK" | "DELIVERY_ACK" | "READ" | "PLAYED" | "RECEIVED" | "FAILED";
+export type ConversationState = "NEW" | "ACTIVE" | "WAITING_CUSTOMER" | "CLOSED";
+export type NextActionType = "CALL" | "WHATSAPP" | "QUOTE" | "OTHER";
+export type FollowUpActionStatus = "PENDING" | "DONE" | "POSTPONED" | "IGNORED" | "CANCELED";
+export type MessageDirection = "INBOUND" | "OUTBOUND";
+
+export interface FollowUpAction {
+  id: string;
+  leadId: string;
+  actionType: NextActionType;
+  scheduledFor: string;
+  status: FollowUpActionStatus;
+  note: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface Lead {
   id: string;
@@ -41,7 +57,18 @@ export interface Lead {
   temperature: LeadTemperature;
   notes: string | null;
   whatsappStatus: WhatsappStatus;
+  conversationState: ConversationState;
+  nextActionAt: string | null;
+  nextActionType: NextActionType | null;
+  lastActivityAt: string | null;
+  lastCustomerMessageAt: string | null;
+  lastAgentMessageAt: string | null;
+  lastCustomerMessagePreview: string | null;
+  lastMessageDirection: MessageDirection | null;
+  lastMessagePreview: string | null;
+  deletedAt: string | null;
   status: LeadStatus;
+  followUpActions: FollowUpAction[];
 }
 
 export interface CreateLeadInput {
@@ -59,6 +86,20 @@ export interface SendLeadInput {
   fullName: string;
   phone: string;
   carModel: string;
+}
+
+export interface ScheduleLeadActionInput {
+  leadId: string;
+  actionType: NextActionType;
+  days: number;
+  note?: string;
+}
+
+export interface UpdateFollowUpActionInput {
+  actionId: string;
+  status: "DONE" | "POSTPONED" | "IGNORED";
+  postponeDays?: number;
+  note?: string;
 }
 
 export interface LeadScore {
@@ -82,8 +123,53 @@ export interface SellerProfile {
 
 export interface WhatsappSendResult {
   leadId: string;
-  whatsappStatus: "SENT";
+  whatsappStatus: WhatsappStatus;
   persisted: boolean;
+  providerMessageId: string | null;
+}
+
+export interface LeadMessage {
+  id: string;
+  leadId: string;
+  providerMessageId: string | null;
+  direction: MessageDirection;
+  status: WhatsappStatus;
+  body: string | null;
+  phone: string | null;
+  createdAt: string;
+  deliveredAt: string | null;
+  readAt: string | null;
+  failedAt: string | null;
+}
+
+export function getWhatsappStatusLabel(status: WhatsappStatus): string {
+  return {
+    PENDING: "Enviando",
+    SENT: "Enviado",
+    SERVER_ACK: "Enviado a WhatsApp",
+    DELIVERY_ACK: "Entregado",
+    READ: "Leído",
+    PLAYED: "Reproducido",
+    RECEIVED: "Recibido",
+    FAILED: "Falló",
+  }[status];
+}
+
+export function getConversationStateLabel(state: ConversationState): string {
+  return {
+    NEW: "Nuevo",
+    ACTIVE: "Conversación activa",
+    WAITING_CUSTOMER: "Esperando cliente",
+    CLOSED: "Cerrado",
+  }[state];
+}
+
+export function getNextActionLabel(action: NextActionType): string {
+  return { CALL: "Llamar", WHATSAPP: "Escribir por WhatsApp", QUOTE: "Enviar cotización", OTHER: "Otra acción" }[action];
+}
+
+export function getFollowUpActionStatusLabel(status: FollowUpActionStatus): string {
+  return { PENDING: "Pendiente", DONE: "Hecha", POSTPONED: "Pospuesta", IGNORED: "Ignorada", CANCELED: "Cancelada" }[status];
 }
 
 const timeframePoints: Record<LeadTimeframe, number> = {
@@ -125,9 +211,35 @@ export function getStatusLabel(status: LeadStatus): string {
   }[status];
 }
 
-export function formatPhoneForWhatsapp(phone: string): string {
+export function normalizeWhatsappNumber(phone: string): string | null {
+  const raw = phone.trim();
+  let digits = raw.replace(/\D/g, "");
+  const hasInternationalPrefix = raw.startsWith("+") || raw.startsWith("00");
+
+  if (raw.startsWith("00")) digits = digits.slice(2);
+  if (!digits) return null;
+
+  // Ecuador local format: 0984790449 -> 593984790449.
+  if (digits.length === 10 && digits.startsWith("0")) return `593${digits.slice(1)}`;
+  // Also accept Ecuador mobile numbers without the leading zero: 984790449.
+  if (digits.length === 9 && digits.startsWith("9")) return `593${digits}`;
+  // An explicit international prefix means the caller already supplied the country.
+  if (hasInternationalPrefix || digits.startsWith("593")) return digits.length >= 8 && digits.length <= 15 ? digits : null;
+  // Bare numbers longer than a local Ecuador number are treated as country-coded.
+  if (digits.length > 10 && digits.length <= 15) return digits;
+
+  return null;
+}
+
+export function getWhatsappPhoneError(phone: string): string | null {
+  if (normalizeWhatsappNumber(phone)) return null;
   const digits = phone.replace(/\D/g, "");
-  return digits.startsWith("57") ? digits : `57${digits}`;
+  if (digits.length === 10 && !digits.startsWith("0")) return "Para un número de otro país escribe el código internacional, por ejemplo +57 315 204 8890.";
+  return "Ingresa un celular ecuatoriano de 10 dígitos (por ejemplo 0984790449) o un número internacional con código de país.";
+}
+
+export function formatPhoneForWhatsapp(phone: string): string {
+  return normalizeWhatsappNumber(phone) ?? phone.replace(/\D/g, "");
 }
 
 export function buildWhatsAppMessage(fullName: string, carModel: string): string {
