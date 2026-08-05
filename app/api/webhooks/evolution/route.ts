@@ -95,7 +95,11 @@ function getStatusValue(item: JsonRecord): unknown {
   const update = asRecord(item.update);
   const data = asRecord(item.data);
   const dataUpdate = asRecord(data?.update);
-  return update?.status ?? dataUpdate?.status ?? item.status ?? data?.status;
+  const updateItems = [
+    ...(Array.isArray(item.update) ? item.update : []),
+    ...(Array.isArray(data?.update) ? data.update : []),
+  ].map(asRecord).filter((value): value is JsonRecord => Boolean(value));
+  return update?.status ?? dataUpdate?.status ?? updateItems.find((value) => value.status !== undefined)?.status ?? item.status ?? data?.status;
 }
 
 function statusRank(status: WhatsappStatus): number {

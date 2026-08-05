@@ -1,10 +1,9 @@
 import type { ConversationState, CreateLeadInput, FollowUpAction, FollowUpActionStatus, Lead, LeadMessage, MessageDirection, NextActionType, WhatsappStatus } from "@/lib/domain/lead";
 import { calculateLeadScore, formatPhoneForWhatsapp } from "@/lib/domain/lead";
-import { demoLeads } from "@/lib/leads/mock-data";
 import type { Database } from "@/lib/supabase/database";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-const leadSelect = "id,user_id,tenant_id,created_at,full_name,phone,car_model,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,conversation_state,next_action_at,next_action_type,last_activity_at,last_customer_message_at,last_agent_message_at,last_customer_message_preview,deleted_at,status";
+const leadSelect = "id,user_id,tenant_id,created_at,full_name,phone,car_model,car_models,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,conversation_state,next_action_at,next_action_type,last_activity_at,last_customer_message_at,last_agent_message_at,last_customer_message_preview,deleted_at,status";
 
 type LeadRow = {
   id: string;
@@ -14,6 +13,7 @@ type LeadRow = {
   full_name: string;
   phone: string;
   car_model: Lead["carModel"];
+  car_models: string[];
   timeframe: Lead["timeframe"];
   payment_method: Lead["paymentMethod"];
   trade_in_car: boolean;
@@ -57,6 +57,7 @@ function toDomainLead(row: LeadRow, followUpActions: FollowUpAction[] = []): Lea
     fullName: row.full_name,
     phone: row.phone,
     carModel: row.car_model,
+    carModels: row.car_models?.length ? row.car_models : row.car_model.split(",").map((model) => model.trim()).filter(Boolean),
     timeframe: row.timeframe,
     paymentMethod: row.payment_method,
     tradeInCar: row.trade_in_car,
@@ -120,7 +121,7 @@ async function attachLeadRelations(supabase: NonNullable<Awaited<ReturnType<type
 
 export async function getLeads(): Promise<Lead[]> {
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return demoLeads;
+  if (!supabase) return [];
 
   const { data: userData } = await supabase.auth.getUser();
   const query = supabase.from("leads").select(leadSelect).is("deleted_at", null).order("created_at", { ascending: false }).limit(100);
@@ -128,7 +129,7 @@ export async function getLeads(): Promise<Lead[]> {
     ? await query.eq("user_id", userData.user.id)
     : await query.is("user_id", null);
 
-  if (error || !data) return demoLeads;
+  if (error || !data) return [];
   return attachLeadRelations(supabase, data.map((row) => toDomainLead(row)));
 }
 
@@ -141,7 +142,8 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
     createdAt: new Date().toISOString(),
     fullName: input.fullName.trim(),
     phone: input.phone.trim(),
-    carModel: input.carModel.trim(),
+    carModel: input.carModels.join(", "),
+    carModels: input.carModels,
     timeframe: input.timeframe,
     paymentMethod: input.paymentMethod,
     tradeInCar: input.tradeInCar,
@@ -164,7 +166,7 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
   };
 
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return { lead: localLead, warning: "Guardado en este dispositivo. Configura Supabase para sincronizarlo." };
+  if (!supabase) throw new Error("Supabase no está configurado. Completa NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY para guardar el contacto en la nube.");
 
   const { data: userData } = await supabase.auth.getUser();
   const { data, error } = await supabase
@@ -174,6 +176,7 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
       full_name: localLead.fullName,
       phone: localLead.phone,
       car_model: localLead.carModel,
+      car_models: localLead.carModels,
       timeframe: localLead.timeframe,
       payment_method: localLead.paymentMethod,
       trade_in_car: localLead.tradeInCar,
@@ -184,7 +187,7 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
     .single();
 
   if (error || !data) {
-    return { lead: localLead, warning: "Lead guardado localmente; Supabase no confirmó la persistencia." };
+    throw new Error(error?.message || "Supabase no confirmó la persistencia del contacto.");
   }
 
   return { lead: toDomainLead(data), warning: "Lead guardado en Supabase. Envíalo desde el dashboard cuando estés listo." };
@@ -203,6 +206,15 @@ export async function getLeadById(id: string): Promise<Lead | null> {
   if (error || !data) return null;
   const [lead] = await attachLeadRelations(supabase, [toDomainLead(data)]);
   return lead ?? null;
+}
+
+export async function getCarModelImageUrl(modelName: string): Promise<string | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data: model } = await supabase.from("car_models").select("id").eq("name", modelName).eq("active", true).maybeSingle();
+  if (!model) return null;
+  const { data: image } = await supabase.from("car_model_images").select("image_url").eq("car_model_id", model.id).order("sort_order", { ascending: true }).limit(1).maybeSingle();
+  return image?.image_url ?? null;
 }
 
 export async function findLeadByPhone(phone: string): Promise<Lead | null> {
@@ -311,19 +323,8 @@ export async function softDeleteLead(id: string): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
 
-  const now = new Date().toISOString();
-  const { error: actionsError } = await supabase.from("lead_follow_up_actions").update({
-    status: "CANCELED",
-    completed_at: now,
-    note: "Cancelada porque el contacto fue eliminado.",
-  }).eq("lead_id", id).in("status", ["PENDING", "POSTPONED"]);
-  const { error } = await supabase.from("leads").update({
-    deleted_at: now,
-    conversation_state: "CLOSED",
-    next_action_at: null,
-    next_action_type: null,
-  }).eq("id", id).is("deleted_at", null);
-  return !actionsError && !error;
+  const { data, error } = await supabase.rpc("soft_delete_lead", { p_lead_id: id });
+  return !error && data === true;
 }
 
 export async function markLeadCustomerReply(id: string, preview: string | null, messageAt: string): Promise<boolean> {

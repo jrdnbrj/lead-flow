@@ -1,10 +1,10 @@
 "use client";
 
 import * as XLSX from "xlsx";
-import { Ban, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock3, Download, Flame, LoaderCircle, MessageCircle, Phone, Plus, RotateCcw, Search, Send, SlidersHorizontal, Target, Trash2, TriangleAlert, UserRound } from "lucide-react";
+import { Ban, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock3, Download, Flame, LoaderCircle, MessageCircle, Phone, Plus, RefreshCw, RotateCcw, Search, Send, SlidersHorizontal, Target, Trash2, TriangleAlert, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import type { ConversationState, FollowUpAction, Lead, LeadStatus, LeadTemperature, NextActionType, WhatsappStatus } from "@/lib/domain/lead";
 import { formatPhoneForWhatsapp, getConversationStateLabel, getFollowUpActionStatusLabel, getNextActionLabel, getStatusLabel, getTemperatureLabel, getWhatsappStatusLabel } from "@/lib/domain/lead";
@@ -14,6 +14,8 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type TemperatureFilter = "ALL" | LeadTemperature;
 type StatusFilter = "ALL" | LeadStatus;
+type TradeInFilter = "ALL" | "YES" | "NO";
+type RealtimeState = "connecting" | "live" | "error";
 
 const statusFilters: Array<{ value: StatusFilter; label: string }> = [
   { value: "ALL", label: "Todos los estados" },
@@ -22,73 +24,14 @@ const statusFilters: Array<{ value: StatusFilter; label: string }> = [
   { value: "COTIZADO", label: "Cotizados" },
 ];
 
-function normalizeLead(value: unknown): Lead | null {
-  if (typeof value !== "object" || value === null) return null;
-  const record = value as Partial<Lead>;
-  if (typeof record.id !== "string" || typeof record.fullName !== "string" || typeof record.phone !== "string" || typeof record.score !== "number" || typeof record.temperature !== "string") return null;
-  const legacyAction = record.nextActionAt && record.nextActionType ? [{
-    id: `legacy-${record.id}`,
-    leadId: record.id,
-    actionType: record.nextActionType,
-    scheduledFor: record.nextActionAt,
-    status: "PENDING" as const,
-    note: null,
-    completedAt: null,
-    createdAt: record.createdAt ?? new Date().toISOString(),
-    updatedAt: record.createdAt ?? new Date().toISOString(),
-  }] : [];
-  return {
-    ...record,
-    userId: record.userId ?? null,
-    tenantId: record.tenantId ?? null,
-    createdAt: record.createdAt ?? new Date().toISOString(),
-    carModel: record.carModel ?? "Modelo por definir",
-    timeframe: record.timeframe ?? "EXPLORANDO",
-    paymentMethod: record.paymentMethod ?? "POR_DEFINIR",
-    tradeInCar: record.tradeInCar ?? false,
-    notes: record.notes ?? null,
-    whatsappStatus: record.whatsappStatus ?? "PENDING",
-    conversationState: record.conversationState ?? "NEW",
-    nextActionAt: record.nextActionAt ?? null,
-    nextActionType: record.nextActionType ?? null,
-    lastActivityAt: record.lastActivityAt ?? null,
-    lastCustomerMessageAt: record.lastCustomerMessageAt ?? null,
-    lastAgentMessageAt: record.lastAgentMessageAt ?? null,
-    lastCustomerMessagePreview: record.lastCustomerMessagePreview ?? null,
-    lastMessageDirection: record.lastMessageDirection ?? null,
-    lastMessagePreview: record.lastMessagePreview ?? null,
-    deletedAt: record.deletedAt ?? null,
-    status: record.status ?? "NUEVO",
-    followUpActions: Array.isArray(record.followUpActions) ? record.followUpActions : legacyAction,
-  } as Lead;
-}
-
-function updateLocalLead(leadId: string, patch: Partial<Lead>): void {
-  const stored = window.localStorage.getItem("leadflow:leads");
-  if (!stored) return;
-  try {
-    const parsed: unknown = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return;
-    const updated = parsed.map((value) => {
-      const lead = normalizeLead(value);
-      return lead?.id === leadId ? { ...lead, ...patch } : value;
-    });
-    window.localStorage.setItem("leadflow:leads", JSON.stringify(updated));
-  } catch {
-    window.localStorage.removeItem("leadflow:leads");
-  }
-}
-
-function removeLocalLead(leadId: string): void {
-  const stored = window.localStorage.getItem("leadflow:leads");
-  if (!stored) return;
-  try {
-    const parsed: unknown = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return;
-    window.localStorage.setItem("leadflow:leads", JSON.stringify(parsed.filter((value) => normalizeLead(value)?.id !== leadId)));
-  } catch {
-    window.localStorage.removeItem("leadflow:leads");
-  }
+function WhatsAppLogo({ size = 15 }: { size?: number }) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="10" fill="#25D366" />
+      <path d="m7.45 17.1.75-2.25a7.3 7.3 0 1 1 2.05 1.55l-2.8.7Z" fill="#25D366" stroke="#fff" strokeWidth="1.35" strokeLinejoin="round" />
+      <path d="M9.2 8.8c.2-.3.46-.34.75-.2l1.1.54c.22.1.3.3.24.54l-.28.95c-.06.2-.02.35.1.5.45.54.96.99 1.55 1.33.16.1.3.1.48.02l.9-.4c.2-.1.38-.04.5.14l.68.93c.15.21.13.42-.07.58-.38.32-.82.5-1.3.48-1.05-.04-2.16-.67-3.02-1.45-.87-.78-1.5-1.78-1.77-2.58-.17-.5-.1-.93.14-1.18Z" fill="#fff" />
+    </svg>
+  );
 }
 
 function formatRelativeDate(date: string): string {
@@ -119,11 +62,11 @@ function whatsappStatusClasses(status: WhatsappStatus): string {
 
 function actionStatusClasses(status: FollowUpAction["status"]): string {
   return {
-    PENDING: "bg-[#fff8d8] text-[#8c6c00]",
-    POSTPONED: "bg-[#edf3ff] text-[#3c5f9b]",
-    DONE: "bg-[#e4f8e9] text-[#18733a]",
-    IGNORED: "bg-[#f1f1f1] text-[#777c86]",
-    CANCELED: "bg-[#f1f1f1] text-[#777c86]",
+    PENDING: "border-[#f0ca68] bg-[#fff0bd] text-[#765000]",
+    POSTPONED: "border-[#a9c9f4] bg-[#dceaff] text-[#24578e]",
+    DONE: "border-[#9bd3a8] bg-[#ccefd6] text-[#176333]",
+    IGNORED: "border-[#d0d3d8] bg-[#e5e7eb] text-[#59616d]",
+    CANCELED: "border-[#d0d3d8] bg-[#e5e7eb] text-[#59616d]",
   }[status];
 }
 
@@ -141,28 +84,14 @@ function getNextOpenAction(lead: Lead): FollowUpAction | null {
 
 export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
   const router = useRouter();
-  const [localLeads, setLocalLeads] = useState<Lead[]>([]);
   const [temperature, setTemperature] = useState<TemperatureFilter>("ALL");
   const [status, setStatus] = useState<StatusFilter>("ALL");
+  const [tradeIn, setTradeIn] = useState<TradeInFilter>("ALL");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [hiddenLeadIds, setHiddenLeadIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem("leadflow:leads");
-    if (!stored) return;
-    let timer: number | undefined;
-    try {
-      const parsed: unknown = JSON.parse(stored);
-      if (Array.isArray(parsed)) {
-        const validLeads = parsed.map(normalizeLead).filter((lead): lead is Lead => Boolean(lead));
-        timer = window.setTimeout(() => setLocalLeads(validLeads), 0);
-      }
-    } catch {
-      window.localStorage.removeItem("leadflow:leads");
-    }
-    return () => { if (timer !== undefined) window.clearTimeout(timer); };
-  }, []);
+  const [realtimeState, setRealtimeState] = useState<RealtimeState>(() => process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "connecting" : "error");
+  const [isRefreshing, startRefresh] = useTransition();
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -170,32 +99,39 @@ export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
     let refreshTimer: number | undefined;
     const refresh = () => {
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(() => router.refresh(), 150);
+      refreshTimer = window.setTimeout(() => startRefresh(() => router.refresh()), 150);
     };
     const channel = supabase
       .channel("leadflow-dashboard-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "lead_messages" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "lead_follow_up_actions" }, refresh)
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") setRealtimeState("live");
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setRealtimeState("error");
+      });
     return () => {
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
   }, [router]);
 
+function refreshAllLeads() {
+  startRefresh(() => router.refresh());
+}
+
   const leads = useMemo(() => {
-    const merged = [...initialLeads, ...localLeads];
-    return merged.filter((lead, index, all) => !hiddenLeadIds.includes(lead.id) && all.findIndex((candidate) => candidate.id === lead.id) === index);
-  }, [hiddenLeadIds, initialLeads, localLeads]);
+    return initialLeads.filter((lead) => !hiddenLeadIds.includes(lead.id));
+  }, [hiddenLeadIds, initialLeads]);
 
   const filteredLeads = useMemo(() => leads.filter((lead) => {
     const matchesTemperature = temperature === "ALL" || lead.temperature === temperature;
     const matchesStatus = status === "ALL" || lead.status === status;
+    const matchesTradeIn = tradeIn === "ALL" || (tradeIn === "YES" ? lead.tradeInCar : !lead.tradeInCar);
     const normalizedQuery = query.toLowerCase().trim();
     const matchesQuery = !normalizedQuery || `${lead.fullName} ${lead.phone} ${lead.carModel}`.toLowerCase().includes(normalizedQuery);
-    return matchesTemperature && matchesStatus && matchesQuery;
-  }), [leads, query, status, temperature]);
+    return matchesTemperature && matchesStatus && matchesTradeIn && matchesQuery;
+  }), [leads, query, status, temperature, tradeIn]);
 
   const activeLeads = filteredLeads.filter((lead) => lead.conversationState === "ACTIVE");
   const reminderLeads = filteredLeads.filter((lead) => lead.conversationState !== "ACTIVE" && lead.conversationState !== "CLOSED" && lead.followUpActions.some(isDueAction));
@@ -251,9 +187,15 @@ export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
         <div className="flex flex-wrap gap-2">
           <Link href="/nuevo" className="button-primary"><Target size={17} />Capturar lead</Link>
           <Link href="/whatsapp" className="button-secondary"><MessageCircle size={17} />Conectar WhatsApp</Link>
+          <button type="button" onClick={refreshAllLeads} disabled={isRefreshing} className="button-secondary" aria-label="Actualizar todos los contactos" title="Volver a consultar todos los contactos en Supabase"><RefreshCw size={17} className={isRefreshing ? "animate-spin" : ""} />{isRefreshing ? "Actualizando" : "Actualizar datos"}</button>
           <button type="button" onClick={exportToXlsx} className="button-secondary"><Download size={17} />Exportar XLSX</button>
         </div>
       </section>
+
+      <p className={`-mt-4 flex items-center gap-1.5 text-xs font-bold ${realtimeState === "live" ? "text-[#18733a]" : realtimeState === "error" ? "text-[#b33a2c]" : "text-[var(--muted)]"}`} aria-live="polite">
+        <span className={`size-1.5 rounded-full ${realtimeState === "live" ? "bg-[#39a85c]" : realtimeState === "error" ? "bg-[#d25445]" : "bg-[#d5a82f]"}`} />
+        {realtimeState === "live" ? "Actualización automática activa" : realtimeState === "error" ? "Actualización automática no disponible; usa Actualizar datos" : "Conectando actualización automática…"}
+      </p>
 
       <section className="grid grid-cols-3 gap-2 sm:gap-3">
         <MetricCard icon={<UserRound size={16} />} label="Total leads" value={String(leads.length)} helper="capturados" tone="dark" />
@@ -275,11 +217,14 @@ export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
         <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
           {statusFilters.map((filter) => <button type="button" key={filter.value} onClick={() => { setStatus(filter.value); setPage(1); }} className={`filter-pill ${status === filter.value ? "filter-pill-active-muted" : ""}`}>{filter.label}</button>)}
         </div>
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+          {([{ value: "ALL", label: "Parte de pago: todos" }, { value: "YES", label: "Con vehículo" }, { value: "NO", label: "Sin vehículo" }] as const).map((filter) => <button type="button" key={filter.value} onClick={() => { setTradeIn(filter.value); setPage(1); }} className={`filter-pill ${tradeIn === filter.value ? "filter-pill-active-muted" : ""}`}>{filter.label}</button>)}
+        </div>
       </section>
 
       {filteredLeads.length ? <Pagination currentPage={currentPage} totalPages={totalPages} visibleCount={visibleLeads.length} totalCount={filteredLeads.length} onPageChange={setPage} /> : null}
-      {visibleActiveLeads.length ? <LeadSection title="Conversaciones activas" helper="Responde primero: el cliente ya está hablando contigo." leads={visibleActiveLeads} defaultExpanded onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
-      {visibleReminderLeads.length ? <LeadSection title="Recordatorios para hoy" helper="La alerta empieza a las 00:00 y permanece visible hasta resolverla." leads={visibleReminderLeads} defaultExpanded onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
+      {visibleActiveLeads.length ? <LeadSection title="Conversaciones activas" helper="Responde primero: el cliente ya está hablando contigo." leads={visibleActiveLeads} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
+      {visibleReminderLeads.length ? <LeadSection title="Recordatorios para hoy" helper="La alerta empieza a las 00:00 y permanece visible hasta resolverla." leads={visibleReminderLeads} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
       {visibleContactLeads.length || (!visibleActiveLeads.length && !visibleReminderLeads.length) ? <section className="space-y-3">
         <div className="flex items-center justify-between"><h2 className="text-xl font-black tracking-[-0.04em]">{visibleActiveLeads.length || visibleReminderLeads.length ? "Todos los contactos" : "Seguimiento"}</h2><span className="text-sm font-bold text-[var(--muted)]">{visibleContactLeads.length} en esta página</span></div>
         {visibleContactLeads.length ? visibleContactLeads.map((lead) => <LeadCard key={lead.id} lead={lead} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} />) : <div className="rounded-[22px] border border-dashed border-black/15 bg-white px-5 py-12 text-center"><Search className="mx-auto text-[var(--muted)]" size={28} /><h3 className="mt-4 font-black">No hay contactos con esos filtros</h3><p className="mt-1 text-sm text-[var(--muted)]">Prueba otra búsqueda o captura un nuevo prospecto.</p></div>}
@@ -289,8 +234,8 @@ export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
   );
 }
 
-function LeadSection({ title, helper, leads, defaultExpanded = false, onDeleted }: { title: string; helper: string; leads: Lead[]; defaultExpanded?: boolean; onDeleted: (leadId: string) => void }) {
-  return <section className="space-y-2.5"><div><div className="flex items-center justify-between"><h2 className="text-lg font-black tracking-[-0.04em]">{title}</h2><span className="text-xs font-bold text-[var(--muted)]">{leads.length}</span></div><p className="mt-1 text-xs text-[var(--muted)]">{helper}</p></div>{leads.map((lead) => <LeadCard key={lead.id} lead={lead} defaultExpanded={defaultExpanded} onDeleted={onDeleted} />)}</section>;
+function LeadSection({ title, helper, leads, onDeleted }: { title: string; helper: string; leads: Lead[]; onDeleted: (leadId: string) => void }) {
+  return <section className="space-y-2.5"><div><div className="flex items-center justify-between"><h2 className="text-lg font-black tracking-[-0.04em]">{title}</h2><span className="text-xs font-bold text-[var(--muted)]">{leads.length}</span></div><p className="mt-1 text-xs text-[var(--muted)]">{helper}</p></div>{leads.map((lead) => <LeadCard key={lead.id} lead={lead} onDeleted={onDeleted} />)}</section>;
 }
 
 function Pagination({ currentPage, totalPages, visibleCount, totalCount, onPageChange }: { currentPage: number; totalPages: number; visibleCount: number; totalCount: number; onPageChange: (page: number) => void }) {
@@ -304,7 +249,6 @@ function MetricCard({ icon, label, value, helper, tone }: { icon: React.ReactNod
 
 function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; defaultExpanded?: boolean; onDeleted?: (leadId: string) => void }) {
   const router = useRouter();
-  const message = encodeURIComponent(`Hola ${lead.fullName.split(" ")[0]}, soy tu asesor. Gracias por visitarnos; te escribo para seguir con la información de tu ${lead.carModel}.`);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsappStatus>(lead.whatsappStatus);
   const [conversationState, setConversationState] = useState<ConversationState>(lead.conversationState);
   const [followUpActions, setFollowUpActions] = useState<FollowUpAction[]>(lead.followUpActions);
@@ -318,6 +262,16 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
   const [sendInfo, setSendInfo] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [, startStateSync] = useTransition();
+
+  useEffect(() => {
+    startStateSync(() => {
+      setWhatsappStatus(lead.whatsappStatus);
+      setConversationState(lead.conversationState);
+      setFollowUpActions(lead.followUpActions);
+    });
+  }, [lead.conversationState, lead.followUpActions, lead.whatsappStatus]);
 
   const openActions = followUpActions.filter(isOpenAction);
   const dueActions = openActions.filter(isDueAction);
@@ -326,7 +280,6 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
 
   function patchActions(actions: FollowUpAction[]) {
     setFollowUpActions(actions);
-    updateLocalLead(lead.id, { followUpActions: actions });
   }
 
   async function sendMessage() {
@@ -334,11 +287,10 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
     setIsSending(true);
     setSendError(null);
     setSendInfo(null);
-    const response = await sendLeadWhatsappAction({ leadId: lead.id, fullName: lead.fullName, phone: lead.phone, carModel: lead.carModel });
+    const response = await sendLeadWhatsappAction({ leadId: lead.id, fullName: lead.fullName, phone: lead.phone, carModels: lead.carModels });
     if (response.success && response.data) {
       setWhatsappStatus(response.data.whatsappStatus);
       setConversationState("WAITING_CUSTOMER");
-      updateLocalLead(lead.id, { whatsappStatus: response.data.whatsappStatus, conversationState: "WAITING_CUSTOMER", lastAgentMessageAt: new Date().toISOString() });
       setSendInfo(response.warning || "Mensaje enviado automáticamente por WhatsApp. Los estados se actualizarán desde Evolution.");
     } else {
       setSendError(response.error || "No fue posible enviar el mensaje.");
@@ -356,7 +308,6 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
       const nextActions = [...followUpActions, response.data.action];
       patchActions(nextActions);
       setConversationState("WAITING_CUSTOMER");
-      updateLocalLead(lead.id, { conversationState: "WAITING_CUSTOMER", nextActionAt: response.data.nextActionAt, nextActionType: response.data.actionType });
       setActionNote("");
       setSendInfo(`Recordatorio agregado: ${formatNextActionDate(response.data.nextActionAt)}. Puedes programar otro para el mismo lead.`);
     } else {
@@ -387,7 +338,6 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
     if (response.success) {
       const now = new Date().toISOString();
       patchActions(followUpActions.map((action) => isOpenAction(action) ? { ...action, status: "IGNORED", completedAt: now, note: "Pendiente ignorado por el vendedor." } : action));
-      updateLocalLead(lead.id, { nextActionAt: null, nextActionType: null });
       setSendInfo("Pendientes ignorados. No volverán a generar alertas.");
       router.refresh();
     } else {
@@ -399,7 +349,6 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
     const response = await updateLeadConversationAction({ leadId: lead.id, state });
     if (response.success) {
       setConversationState(state);
-      updateLocalLead(lead.id, { conversationState: state });
       setSendInfo(state === "CLOSED" ? "Conversación cerrada. Puedes reabrirla cuando lo necesites." : "Conversación reabierta.");
       router.refresh();
     } else {
@@ -408,12 +357,12 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
   }
 
   async function deleteContact() {
-    if (isDeleting || !window.confirm(`¿Eliminar a ${lead.fullName}? Se ocultará de la lista y dejará de generar recordatorios.`)) return;
+    if (isDeleting) return;
     setIsDeleting(true);
     const response = await deleteLeadAction(lead.id);
     if (response.success) {
-      removeLocalLead(lead.id);
       onDeleted?.(lead.id);
+      setIsDeleteModalOpen(false);
       router.refresh();
     } else {
       setSendError(response.error || "No pudimos eliminar este contacto.");
@@ -421,10 +370,12 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
     }
   }
 
-  return <article className={`rounded-[20px] border bg-white p-3 shadow-[0_8px_24px_rgba(16,24,40,0.04)] transition hover:shadow-[0_12px_30px_rgba(16,24,40,0.07)] sm:p-3.5 ${conversationState === "ACTIVE" ? "border-[#75c88b] ring-1 ring-[#75c88b]/20" : isReminderDue ? "border-[#f3b257] ring-1 ring-[#f3b257]/20" : "border-black/[0.06]"}`}>
-    <div className="compact-lead-header flex flex-col gap-2.5 sm:flex-row sm:items-center">
-      <div className="flex min-w-0 flex-1 items-start gap-2.5"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#f0eee8] text-xs font-black">{lead.fullName.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="truncate text-sm font-black">{lead.fullName}</h3><span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${temperatureClasses(lead.temperature)}`}>{lead.temperature === "HIGH" ? "🔥 " : ""}{getTemperatureLabel(lead.temperature)}</span></div><p className="mt-0.5 truncate text-xs text-[var(--muted)]">{lead.carModel} <span className="mx-1 text-black/20">·</span> {getStatusLabel(lead.status)} <span className="mx-1 text-black/20">·</span> {formatRelativeDate(lead.createdAt)}</p><div className="mt-1.5 flex flex-wrap gap-1"><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${conversationClasses(conversationState)}`}>{getConversationStateLabel(conversationState)}</span><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${whatsappStatusClasses(whatsappStatus)}`}>{getWhatsappStatusLabel(whatsappStatus)}</span>{isReminderDue ? <span className="rounded-full bg-[#fff8ed] px-1.5 py-0.5 text-[9px] font-black text-[#b94910]">Para hoy</span> : null}</div></div></div>
-      <div className="flex items-center gap-1.5 sm:shrink-0"><span className="mr-auto rounded-lg bg-[#f6f3ed] px-2 py-1.5 text-center sm:mr-1"><strong className="block text-base font-black leading-none">{lead.score}</strong><span className="text-[8px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">score</span></span><a aria-label={`Llamar a ${lead.fullName}`} href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} className="icon-action" title="Llamar"><Phone size={15} /></a><button type="button" aria-label={`Enviar WhatsApp a ${lead.fullName}`} onClick={sendMessage} disabled={isSending || !canSend} className={`send-whatsapp-button ${!canSend ? "send-whatsapp-button-sent" : ""}`} title={!canSend ? getWhatsappStatusLabel(whatsappStatus) : "Enviar WhatsApp automáticamente"}>{isSending ? <LoaderCircle size={15} className="animate-spin" /> : !canSend ? <CheckCircle2 size={15} /> : <Send size={15} />}<span className="hidden sm:inline">{isSending ? "Enviando" : !canSend ? getWhatsappStatusLabel(whatsappStatus) : "Enviar"}</span></button><a aria-label={`Abrir WhatsApp manual para ${lead.fullName}`} href={`https://wa.me/${formatPhoneForWhatsapp(lead.phone)}?text=${message}`} target="_blank" rel="noreferrer" className="icon-action icon-action-whatsapp" title="Abrir WhatsApp manual"><MessageCircle size={15} /></a><button type="button" aria-expanded={isExpanded} aria-label={isExpanded ? `Ocultar detalles de ${lead.fullName}` : `Mostrar detalles de ${lead.fullName}`} onClick={() => setIsExpanded((current) => !current)} className="icon-action" title={isExpanded ? "Ocultar detalles" : "Ver detalles"}>{isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button></div>
+  const toggleExpanded = () => setIsExpanded((current) => !current);
+
+  return <article onClick={() => { if (!isExpanded) setIsExpanded(true); }} className={`rounded-[20px] border bg-white p-3 shadow-[0_8px_24px_rgba(16,24,40,0.04)] transition hover:shadow-[0_12px_30px_rgba(16,24,40,0.07)] ${!isExpanded ? "cursor-pointer" : ""} sm:p-3.5 ${conversationState === "ACTIVE" ? "border-[#75c88b] ring-1 ring-[#75c88b]/20" : isReminderDue ? "border-[#f3b257] ring-1 ring-[#f3b257]/20" : "border-black/[0.06]"}`}>
+    <div onClick={toggleExpanded} className="compact-lead-header flex cursor-pointer flex-col gap-2.5 sm:flex-row sm:items-center">
+      <div className="flex min-w-0 flex-1 items-start gap-2.5"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#f0eee8] text-xs font-black">{lead.fullName.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="truncate text-sm font-black">{lead.fullName}</h3><span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${temperatureClasses(lead.temperature)}`}>{lead.temperature === "HIGH" ? "🔥 " : ""}{getTemperatureLabel(lead.temperature)}</span></div><p className="mt-0.5 truncate text-xs text-[var(--muted)]">{lead.carModel} <span className="mx-1 text-black/20">·</span> {getStatusLabel(lead.status)} <span className="mx-1 text-black/20">·</span> {formatRelativeDate(lead.createdAt)}</p><div className="mt-1.5 flex flex-wrap gap-1"><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${conversationClasses(conversationState)}`}>{getConversationStateLabel(conversationState)}</span><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${whatsappStatusClasses(whatsappStatus)}`}>{getWhatsappStatusLabel(whatsappStatus)}</span>{lead.tradeInCar ? <span className="rounded-full bg-[#e7edf9] px-1.5 py-0.5 text-[9px] font-black text-[#3c5f9b]">Parte de pago</span> : null}{isReminderDue ? <span className="rounded-full bg-[#fff8ed] px-1.5 py-0.5 text-[9px] font-black text-[#b94910]">Para hoy</span> : null}</div></div></div>
+      <div className="flex items-center gap-1.5 sm:shrink-0"><span className="mr-auto rounded-lg bg-[#f6f3ed] px-2 py-1.5 text-center sm:mr-1"><strong className="block text-base font-black leading-none">{lead.score}</strong><span className="text-[8px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">score</span></span><a onClick={(event) => event.stopPropagation()} aria-label={`Llamar a ${lead.fullName}`} href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} className="icon-action icon-action-phone" title="Llamar"><Phone size={15} /></a><button type="button" aria-label={`Enviar WhatsApp a ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); void sendMessage(); }} disabled={isSending || !canSend} className={`send-whatsapp-button ${!canSend ? "send-whatsapp-button-sent" : ""}`} title={!canSend ? "Mensaje automático ya enviado" : whatsappStatus === "FAILED" ? "Reintentar envío automático" : "Enviar WhatsApp automáticamente"}>{isSending ? <LoaderCircle size={15} className="animate-spin" /> : !canSend ? <CheckCircle2 size={15} /> : <Send size={15} />}<span className="hidden sm:inline">{isSending ? "Enviando" : !canSend ? "Enviado" : whatsappStatus === "FAILED" ? "Reintentar" : "Enviar"}</span></button><a onClick={(event) => event.stopPropagation()} aria-label={`Abrir WhatsApp manual para ${lead.fullName}`} href={`https://wa.me/${formatPhoneForWhatsapp(lead.phone)}`} target="_blank" rel="noreferrer" className="icon-action icon-action-whatsapp" title="Abrir chat de WhatsApp"><WhatsAppLogo /></a><button type="button" aria-expanded={isExpanded} aria-label={isExpanded ? `Ocultar detalles de ${lead.fullName}` : `Mostrar detalles de ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); toggleExpanded(); }} className="icon-action" title={isExpanded ? "Ocultar detalles" : "Ver detalles"}>{isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button></div>
     </div>
 
     {isExpanded && lead.lastMessageDirection ? <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f6f3ed] px-2.5 py-2 text-[11px]"><p className="min-w-0 truncate text-[var(--muted)]"><strong className="text-[var(--ink)]">{lead.lastMessageDirection === "INBOUND" ? "Último mensaje · Cliente:" : "Último mensaje · Tú:"}</strong> {lead.lastMessagePreview || "Mensaje sin texto"}</p>{conversationState === "ACTIVE" ? <button type="button" onClick={() => changeConversationState("CLOSED")} className="shrink-0 font-black text-[var(--muted)] hover:text-[var(--ink)]">Cerrar conversación</button> : conversationState === "CLOSED" ? <button type="button" onClick={() => changeConversationState("ACTIVE")} className="shrink-0 font-black text-[#18733a]">Reabrir</button> : null}</div> : null}
@@ -440,7 +391,8 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
       <div className="mt-3 flex flex-col gap-2 border-t border-black/[0.06] pt-3 sm:flex-row sm:flex-wrap sm:items-center"><span className="flex items-center gap-1.5 text-[11px] font-black text-[var(--muted)]"><Plus size={14} />Agregar acción</span><select aria-label="Tipo de siguiente acción" value={actionType} onChange={(event) => setActionType(event.target.value as NextActionType)} className="h-9 rounded-lg border border-black/10 bg-white px-2 text-xs font-bold"><option value="CALL">Llamar</option><option value="WHATSAPP">WhatsApp</option><option value="QUOTE">Cotizar</option><option value="OTHER">Otra</option></select><select aria-label="Días para el recordatorio" value={days} onChange={(event) => setDays(event.target.value)} className="h-9 rounded-lg border border-black/10 bg-white px-2 text-xs font-bold"><option value="1">Mañana</option><option value="3">En 3 días</option><option value="7">En 7 días</option><option value="14">En 14 días</option></select><input value={actionNote} onChange={(event) => setActionNote(event.target.value)} placeholder="Nota opcional" className="h-9 min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-2 text-xs font-semibold outline-none placeholder:text-[#9a9b9b]" /><button type="button" onClick={scheduleAction} disabled={isScheduling} className="h-9 rounded-lg bg-[var(--ink)] px-3 text-xs font-black text-white disabled:opacity-60">{isScheduling ? "Guardando" : "Programar"}</button></div>
     </div> : null}
     {isExpanded && lead.lastCustomerMessageAt ? <p className="mt-3 text-[11px] text-[var(--muted)]">Última respuesta del cliente registrada. Las acciones pendientes se cancelan cuando llega una nueva respuesta.</p> : null}
-    {isExpanded && <div className="mt-3 flex items-center justify-between gap-3 border-t border-black/[0.06] pt-3"><span className="text-[11px] text-[var(--muted)]">Se ocultará de la lista y dejará de generar recordatorios.</span><button type="button" onClick={deleteContact} disabled={isDeleting} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-black text-[#b33a2c] hover:bg-[#fff0ee] disabled:opacity-50"><Trash2 size={14} />{isDeleting ? "Eliminando" : "Eliminar contacto"}</button></div>}
+    {isExpanded && <div className="mt-3 flex items-center justify-between gap-3 border-t border-black/[0.06] pt-3"><span className="text-[11px] text-[var(--muted)]">Se ocultará de la lista y dejará de generar recordatorios.</span><button type="button" onClick={(event) => { event.stopPropagation(); setIsDeleteModalOpen(true); setSendError(null); }} disabled={isDeleting} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-black text-[#b33a2c] hover:bg-[#fff0ee] disabled:opacity-50"><Trash2 size={14} />Eliminar contacto</button></div>}
     {isExpanded && sendError ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-red-600"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{sendError}</p> : null}{isExpanded && sendInfo ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-emerald-700"><CheckCircle2 size={14} className="mt-0.5 shrink-0" />{sendInfo}</p> : null}
+    {isDeleteModalOpen ? <div role="presentation" onClick={(event) => { event.stopPropagation(); if (!isDeleting) setIsDeleteModalOpen(false); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby={`delete-title-${lead.id}`} onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-[26px] border border-black/[0.08] bg-white p-5 shadow-[0_24px_80px_rgba(16,24,40,0.24)] sm:p-6"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#fff0ee] text-[#b33a2c]"><Trash2 size={18} /></span><div><h2 id={`delete-title-${lead.id}`} className="text-lg font-black">¿Eliminar a {lead.fullName}?</h2><p className="mt-1 text-sm leading-6 text-[var(--muted)]">El contacto se ocultará del resumen, dejará de generar recordatorios y no se eliminarán físicamente sus datos. Podrás conservarlo para auditoría.</p></div></div>{sendError ? <p className="mt-4 flex items-start gap-2 rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{sendError}</p> : null}<div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsDeleteModalOpen(false)} disabled={isDeleting} className="button-secondary">Cancelar</button><button type="button" onClick={() => void deleteContact()} disabled={isDeleting} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#b33a2c] px-4 text-sm font-black text-white disabled:opacity-60"><Trash2 size={16} />{isDeleting ? "Eliminando" : "Eliminar contacto"}</button></div></div></div> : null}
   </article>;
 }

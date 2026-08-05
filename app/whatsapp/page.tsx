@@ -8,6 +8,8 @@ import { RefreshQrButton } from "@/components/whatsapp/refresh-qr-button";
 import { UnlinkWhatsappButton } from "@/components/whatsapp/unlink-button";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-template";
+import { getPersistentSettings } from "@/lib/config/persistent-settings";
+import { getEvolutionConnectionStatus, getEvolutionErrorMessage } from "@/lib/whatsapp/service";
 
 export const metadata: Metadata = { title: "Conectar WhatsApp" };
 export const dynamic = "force-dynamic";
@@ -42,17 +44,19 @@ async function getWhatsappConnection(forceRefresh = false): Promise<{ qr: string
   try {
     const baseUrl = apiUrl.replace(/\/$/, "");
     const stateUrl = `${baseUrl}/instance/connectionState/${encodeURIComponent(instanceName)}`;
+    const currentConnection = await getEvolutionConnectionStatus();
     if (forceRefresh) {
-      const currentStateResponse = await fetch(stateUrl, { headers: { apikey: apiKey }, cache: "no-store" });
-      const currentState = getState(await currentStateResponse.json().catch(() => null) as ConnectionStatePayload | null);
-      if (currentState === "open") return { qr: null, error: null, state: currentState };
+      if (currentConnection.ready) return { qr: null, error: null, state: "open" };
 
       const restartResponse = await fetch(`${baseUrl}/instance/restart/${encodeURIComponent(instanceName)}`, {
         method: "POST",
         headers: { apikey: apiKey },
         cache: "no-store",
       });
-      if (!restartResponse.ok) return { qr: null, error: "Evolution API no pudo reiniciar la sesión. Verifica que la instancia exista y esté desconectada.", state: currentState };
+      if (!restartResponse.ok) {
+        const payload = await restartResponse.json().catch(() => null);
+        return { qr: null, error: getEvolutionErrorMessage(restartResponse.status, payload, "Evolution API no pudo reiniciar la sesión. Verifica que la instancia exista y esté desconectada."), state: currentConnection.state };
+      }
     }
 
     const [response, stateResponse] = await Promise.all([
@@ -68,8 +72,10 @@ async function getWhatsappConnection(forceRefresh = false): Promise<{ qr: string
     const payload = await response.json() as ConnectionPayload;
     const statePayload = await stateResponse.json().catch(() => null) as ConnectionStatePayload | null;
     const state = getState(statePayload);
-    if (!response.ok) return { qr: null, error: "Evolution API no pudo preparar la conexión de WhatsApp.", state };
-    return { qr: typeof payload.base64 === "string" ? payload.base64 : null, error: null, state };
+    if (!response.ok) return { qr: null, error: getEvolutionErrorMessage(response.status, payload, "Evolution API no pudo preparar la conexión de WhatsApp."), state };
+    const verified = await getEvolutionConnectionStatus();
+    if (verified.ready) return { qr: null, error: null, state: "open" };
+    return { qr: typeof payload.base64 === "string" ? payload.base64 : null, error: verified.error, state: verified.state || state };
   } catch {
     return { qr: null, error: "No se pudo conectar con Evolution API. Verifica que el servicio esté levantado.", state: null };
   }
@@ -119,9 +125,19 @@ export default async function WhatsappPage({ searchParams }: { searchParams: Pro
   const params = await searchParams;
   const connection = await getWhatsappConnection(Boolean(params.refresh));
   const isConnected = connection.state === "open";
-  const [sellerProfile, messageTemplate] = isConnected
-    ? await Promise.all([getEffectiveSellerProfile(), getEffectiveWhatsappMessageTemplate()])
-    : [null, null];
+  let sellerProfile = null;
+  let messageTemplate = null;
+  let persistentSettingsAvailable = false;
+  if (isConnected) {
+    const [profile, template, persistentSettings] = await Promise.all([
+      getEffectiveSellerProfile(),
+      getEffectiveWhatsappMessageTemplate(),
+      getPersistentSettings(),
+    ]);
+    sellerProfile = profile;
+    messageTemplate = template;
+    persistentSettingsAvailable = persistentSettings.available;
+  }
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -132,7 +148,7 @@ export default async function WhatsappPage({ searchParams }: { searchParams: Pro
       </div>
 
       {isConnected && sellerProfile && messageTemplate ? <>
-        <SellerProfileForm initialProfile={sellerProfile} />
+        <SellerProfileForm initialProfile={sellerProfile} persistentSettingsAvailable={persistentSettingsAvailable} />
         <MessageTemplateEditor initialTemplate={messageTemplate} />
         <div className="mt-8"><p className="eyebrow mb-3">Conexión actual</p><WhatsappConnectionSection connection={connection} /></div>
       </> : <WhatsappConnectionSection connection={connection} />}

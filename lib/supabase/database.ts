@@ -13,6 +13,7 @@ export type Database = {
           full_name: string;
           phone: string;
           car_model: string;
+          car_models: string[];
           timeframe: LeadTimeframe;
           payment_method: PaymentMethod;
           trade_in_car: boolean;
@@ -42,6 +43,7 @@ export type Database = {
           full_name: string;
           phone: string;
           car_model: string;
+          car_models?: string[];
           timeframe: LeadTimeframe;
           payment_method: PaymentMethod;
           trade_in_car?: boolean;
@@ -87,6 +89,48 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["leadflow_settings"]["Insert"]>;
+        Relationships: [];
+      };
+      car_models: {
+        Row: {
+          id: string;
+          name: string;
+          sort_order: number;
+          active: boolean;
+          is_other: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          name: string;
+          sort_order: number;
+          active?: boolean;
+          is_other?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["car_models"]["Insert"]>;
+        Relationships: [];
+      };
+      car_model_images: {
+        Row: {
+          id: string;
+          car_model_id: string;
+          image_url: string;
+          storage_path: string | null;
+          alt_text: string | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          car_model_id: string;
+          image_url: string;
+          storage_path?: string | null;
+          alt_text?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["car_model_images"]["Insert"]>;
         Relationships: [];
       };
       lead_messages: {
@@ -149,7 +193,12 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      soft_delete_lead: {
+        Args: { p_lead_id: string };
+        Returns: boolean;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

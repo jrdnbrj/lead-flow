@@ -31,7 +31,7 @@ export function LeadCaptureForm() {
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadSchema),
     mode: "onChange",
-    defaultValues: { fullName: "", phone: "", carModel: "", timeframe: "INMEDIATA", paymentMethod: "CREDITO", tradeInCar: false, notes: "" },
+    defaultValues: { fullName: "", phone: "", carModels: [], timeframe: "INMEDIATA", paymentMethod: "CREDITO", tradeInCar: false, notes: "" },
   });
   const { formState, register, setValue } = form;
   const values = useWatch({ control: form.control });
@@ -45,10 +45,6 @@ export function LeadCaptureForm() {
       return;
     }
 
-    const existing = window.localStorage.getItem("leadflow:leads");
-    const storedLeads = existing ? JSON.parse(existing) as unknown : [];
-    const localLeads = Array.isArray(storedLeads) ? storedLeads : [];
-    window.localStorage.setItem("leadflow:leads", JSON.stringify([response.data, ...localLeads.filter((lead) => typeof lead === "object" && lead !== null && "id" in lead && lead.id !== response.data?.id)]));
     setWarning(response.warning || null);
     router.push(`/qr?leadId=${encodeURIComponent(response.data.id)}&name=${encodeURIComponent(response.data.fullName)}`);
   }
@@ -87,9 +83,17 @@ export function LeadCaptureForm() {
           <span className="rounded-full bg-[#f5f1e9] px-3 py-1.5 text-xs font-bold text-[var(--muted)]">Toca una opción</span>
         </div>
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
-          {carModels.map((model) => <ChoiceCard key={model} selected={values.carModel === model} label={model} onClick={() => setValue("carModel", model, { shouldValidate: true, shouldDirty: true })} />)}
+          {carModels.map((model) => {
+            const selected = values.carModels?.includes(model) ?? false;
+            return <ChoiceCard key={model} selected={selected} label={model} onClick={() => {
+              const current = values.carModels ?? [];
+              const next = selected ? current.filter((value) => value !== model) : [...current, model];
+              setValue("carModels", next, { shouldValidate: true, shouldDirty: true });
+            }} />;
+          })}
         </div>
-        <FieldError message={formState.errors.carModel?.message} />
+        <p className="mt-2 text-[11px] font-medium text-[var(--muted)]">Puedes elegir uno o varios modelos. El mensaje los mostrará separados por comas y la imagen será la del primero.</p>
+        <FieldError message={formState.errors.carModels?.message} />
       </section>
 
       <section className="rounded-[28px] border border-black/[0.06] bg-white p-5 shadow-[0_16px_50px_rgba(16,24,40,0.06)] sm:p-7">
@@ -112,7 +116,7 @@ export function LeadCaptureForm() {
         </div>
         <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border border-black/[0.08] px-4 py-3.5 transition hover:border-black/20">
           <input {...register("tradeInCar")} type="checkbox" className="size-5 accent-[var(--ink)]" />
-          <span><span className="block text-sm font-extrabold">Tiene vehículo para retoma</span><span className="block text-xs text-[var(--muted)]">Puede acelerar la propuesta comercial.</span></span>
+          <span><span className="block text-sm font-extrabold">Tiene un vehículo para entregar como parte de pago</span><span className="block text-xs text-[var(--muted)]">Puede reducir el valor que necesita financiar y cambia la propuesta.</span></span>
         </label>
       </section>
 

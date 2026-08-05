@@ -1,8 +1,7 @@
 "use server";
 
-import { cookies } from "next/headers";
 import type { ActionResponse, SellerProfile } from "@/lib/domain/lead";
-import { getEffectiveSellerProfile, getSellerProfile, sellerProfileCookieNames } from "@/lib/config/seller";
+import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { savePersistentSettings } from "@/lib/config/persistent-settings";
 import { z } from "zod";
 
@@ -26,14 +25,5 @@ export async function saveSellerProfileOverrideAction(input: SellerProfile): Pro
     return { success: true, data: await getEffectiveSellerProfile() };
   }
 
-  const cookieStore = await cookies();
-  const options = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, maxAge: 60 * 60 * 24 * 3650, path: "/" };
-  const fields = Object.entries(parsed.data) as Array<[keyof SellerProfile, string]>;
-  fields.forEach(([field, value]) => {
-    const cookieName = sellerProfileCookieNames[field];
-    if (value) cookieStore.set(cookieName, value, options);
-    else cookieStore.delete(cookieName);
-  });
-
-  return { success: true, data: getSellerProfile(parsed.data), warning: "Supabase no está disponible; se guardó en este navegador." };
+  return { success: false, error: "No se puede guardar todavía. Configura SUPABASE_SERVICE_ROLE_KEY en el servidor y reinicia LeadFlow para que este perfil se comparta entre todos tus dispositivos." };
 }

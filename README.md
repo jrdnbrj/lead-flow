@@ -22,12 +22,14 @@ Abre [http://localhost:3000](http://localhost:3000). Supabase y el PostgreSQL de
 
 `.env` contiene la configuración local existente y `.env.example` mantiene la misma estructura y líneas para nuevos entornos. Las variables `NEXT_PUBLIC_SELLER_*` alimentan la vCard del QR. `EVOLUTION_WEBHOOK_TOKEN` protege los eventos entrantes; `SUPABASE_SERVICE_ROLE_KEY` es un secreto de servidor y nunca debe exponerse al frontend.
 
+Para activar el guardado compartido del perfil y la plantilla: en Supabase abre **Project Settings → API**, revela la clave `service_role` del proyecto y cópiala en `SUPABASE_SERVICE_ROLE_KEY` tanto en `.env` como en `.env.local`. No la pongas en una variable `NEXT_PUBLIC_*`, no la pegues en el navegador ni la subas a git. Luego reinicia `docker compose up -d --build` o el servidor de desarrollo. Los leads, seguimientos y mensajes ya usan Supabase con la clave pública; esta clave privada se reserva para la configuración global del vendedor.
+
 ## Arquitectura
 
 - `lib/domain`: tipos de dominio y scoring puro, independiente de React.
-- `lib/leads`: validación Zod, Server Action y repositorio Supabase con fallback local UX-first.
+- `lib/leads`: validación Zod, Server Actions y repositorio remoto Supabase; no usa datos demo ni una copia local como fuente de verdad.
 - `components`: captura táctil, dashboard, navegación y QR vCard 3.0.
-- `supabase/migrations`: tabla `leads`, scoring, RLS, mensajes, múltiples acciones de seguimiento, configuración persistente y borrado lógico.
+- `supabase/migrations`: tabla `leads`, scoring, RLS, mensajes, múltiples acciones de seguimiento, configuración persistente, catálogo Changan, imágenes y borrado lógico.
 - `app/api/webhooks/evolution`: receptor Next.js de respuestas del cliente y estados de Evolution.
 - `lib/leads/follow-up.ts`: calcula recordatorios al inicio del día calendario en `America/Guayaquil`.
 - `lib/supabase/client.ts`: suscripción Realtime para actualizar el dashboard solo cuando cambia un lead, mensaje o seguimiento.
@@ -35,7 +37,7 @@ Abre [http://localhost:3000](http://localhost:3000). Supabase y el PostgreSQL de
 
 ## Supabase
 
-Aplica en orden `supabase/migrations/001_leadflow_core_schema.sql`, `002_leadflow_anonymous_dashboard_and_whatsapp.sql`, `003_leadflow_follow_up_and_messages.sql`, `004_leadflow_follow_up_actions.sql`, `005_leadflow_backfill_contacted_status.sql` y `006_leadflow_persistent_config_realtime_and_soft_delete.sql`. Los leads se guardan en `public.leads`, los mensajes en `public.lead_messages`, los seguimientos múltiples en `public.lead_follow_up_actions` y la configuración persistente en `public.leadflow_settings`. El dashboard anónimo solo lee/actualiza filas con `user_id is null`, que es el modo vendedor único actual.
+Aplica en orden las migraciones `001` a `009` con `supabase db push --linked`. Los leads se guardan en `public.leads`, los mensajes en `public.lead_messages`, los seguimientos múltiples en `public.lead_follow_up_actions`, la configuración persistente en `public.leadflow_settings`, y el catálogo en `public.car_models`/`public.car_model_images`. El dashboard anónimo solo trabaja con filas cuyo `user_id is null`, que es el modo vendedor único actual. El borrado lógico usa la función remota `soft_delete_lead` para que la operación también funcione con el rol anónimo y cancele los recordatorios pendientes en una sola transacción.
 
 Con la CLI autenticada, el despliegue completo es:
 
@@ -67,9 +69,9 @@ Evolution API es el gateway HTTP que mantiene una instancia conectada a WhatsApp
 
 Los celulares locales de Ecuador se normalizan automáticamente: `0984790449` se envía como `593984790449`. Para otro país se debe escribir el código internacional, por ejemplo `+57 315 204 8890`; si Evolution no encuentra una cuenta, la aplicación muestra un mensaje claro en lugar del error técnico crudo. En `/qr`, **Abrir WhatsApp** abre WhatsApp Web sin iniciar un chat específico.
 
-En `/whatsapp`, cuando la instancia está conectada aparecen primero el perfil y la plantilla, y la vinculación/QR queda al final. Mientras WhatsApp no esté conectado no se muestran esos formularios. El perfil y la plantilla quedan guardados permanentemente en Supabase mediante la clave de servidor; los campos vacíos vuelven a usar el valor correspondiente del `.env`.
+En `/whatsapp`, cuando la instancia está conectada aparecen primero el perfil y la plantilla, y la vinculación/QR queda al final. Mientras WhatsApp no esté conectado no se muestran esos formularios. El perfil y la plantilla no se guardan en cookies ni en `localStorage`: deben persistir en `leadflow_settings` de Supabase. Para habilitar la escritura del servidor configura `SUPABASE_SERVICE_ROLE_KEY` en `.env` y `.env.local` usando la clave `service_role` del proyecto; es un secreto, no debe empezar por `NEXT_PUBLIC_`, no se debe subir a git y hay que reiniciar Docker/Next después de cambiarlo. Si falta, la aplicación lo informa y no finge haber guardado una copia temporal. Los campos vacíos vuelven a usar el valor correspondiente del `.env`. El QR es una vCard que se regenera al abrir o recargar `/qr`.
 
-La plantilla acepta estas variables: `{{nombre}}`, `{{numero}}` y `{{carro}}` para el cliente; `{{nombre_vendedor}}`, `{{correo_vendedor}}`, `{{empresa_vendedor}}` y `{{numero_vendedor}}` para el vendedor. Las variables se validan y se reemplazan antes de enviar.
+La plantilla acepta estas variables: `{{nombre}}`, `{{numero}}` y `{{carro}}` para el cliente; `{{nombre_vendedor}}`, `{{correo_vendedor}}`, `{{empresa_vendedor}}` y `{{numero_vendedor}}` para el vendedor. Las variables se validan y se reemplazan antes de enviar. Un lead puede elegir uno o varios modelos Changan; `{{carro}}` los lista separados por comas y el primer modelo puede adjuntar su imagen desde `car_model_images`.
 
 La cuenta conectada debe ser un número dedicado del vendedor. Evolution API no permite enviar desde un número que no haya sido previamente vinculado a su instancia.
 
@@ -78,12 +80,21 @@ Variables de la aplicación:
 ```text
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
 EVOLUTION_API_URL
 EVOLUTION_DATABASE_URL
 EVOLUTION_API_KEY
 EVOLUTION_API_INSTANCE_NAME
 EVOLUTION_WEBHOOK_URL
 EVOLUTION_WEBHOOK_TOKEN
+
+# SELLER DEFAULTS
+NEXT_PUBLIC_SELLER_NAME
+NEXT_PUBLIC_SELLER_PHONE
+NEXT_PUBLIC_SELLER_EMAIL
+NEXT_PUBLIC_SELLER_COMPANY
+NEXT_PUBLIC_WHATSAPP_MESSAGE_TEMPLATE
 ```
 
 ## Producción

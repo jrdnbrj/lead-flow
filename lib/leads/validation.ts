@@ -4,7 +4,7 @@ export const sendLeadSchema = z.object({
   leadId: z.string().trim().min(1),
   fullName: z.string().trim().min(2).max(100),
   phone: z.string().trim().regex(/^[0-9+\s()-]{7,20}$/, "El celular no es válido"),
-  carModel: z.string().trim().min(2).max(100),
+  carModels: z.array(z.string().trim().min(2).max(100)).min(1).max(10),
 });
 
 export const scheduleLeadActionSchema = z.object({
@@ -28,7 +28,7 @@ export const updateFollowUpActionSchema = z.object({
 export const leadSchema = z.object({
   fullName: z.string().trim().min(2, "Escribe el nombre del prospecto").max(100),
   phone: z.string().trim().regex(/^[0-9+\s()-]{7,20}$/, "Ingresa un celular válido"),
-  carModel: z.string().trim().min(2, "Selecciona un modelo").max(100),
+  carModels: z.array(z.string().trim().min(2).max(100)).min(1, "Selecciona al menos un modelo").max(10, "Puedes seleccionar hasta 10 modelos"),
   timeframe: z.enum(["INMEDIATA", "1_3_MESES", "3_6_MESES", "EXPLORANDO"]),
   paymentMethod: z.enum(["CREDITO", "CONTADO", "LEASING", "POR_DEFINIR"]),
   tradeInCar: z.boolean(),

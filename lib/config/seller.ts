@@ -1,5 +1,4 @@
 import type { SellerProfile } from "@/lib/domain/lead";
-import { cookies } from "next/headers";
 import { getPersistentSettings, type PersistentSettings } from "@/lib/config/persistent-settings";
 
 export const sellerProfileCookieNames = {
@@ -21,14 +20,7 @@ export function getSellerProfile(overrides: Partial<SellerProfile> = {}): Seller
 export async function getEffectiveSellerProfile(): Promise<SellerProfile> {
   const persistent = await getPersistentSettings();
   if (persistent.available) return getSellerProfileFromPersistentSettings(persistent.settings);
-
-  const cookieStore = await cookies();
-  return getSellerProfile({
-    name: cookieStore.get(sellerProfileCookieNames.name)?.value,
-    phone: cookieStore.get(sellerProfileCookieNames.phone)?.value,
-    email: cookieStore.get(sellerProfileCookieNames.email)?.value,
-    company: cookieStore.get(sellerProfileCookieNames.company)?.value,
-  });
+  return getSellerProfile();
 }
 
 function getSellerProfileFromPersistentSettings(settings: PersistentSettings): SellerProfile {

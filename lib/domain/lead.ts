@@ -13,10 +13,15 @@ export const paymentMethods = [
 ] as const;
 
 export const carModels = [
-  "Mazda CX-30",
-  "Mazda 3",
-  "Toyota Corolla Cross",
-  "Renault Duster",
+  "V3",
+  "CS15 - Modelo 2027",
+  "CS75",
+  "CS55 R-EV - Modelo 2027",
+  "HUNTER E",
+  "HUNTER TURBO",
+  "M60",
+  "Honor S",
+  "Startruck",
   "Otro modelo",
 ] as const;
 
@@ -50,6 +55,7 @@ export interface Lead {
   fullName: string;
   phone: string;
   carModel: string;
+  carModels: string[];
   timeframe: LeadTimeframe;
   paymentMethod: PaymentMethod;
   tradeInCar: boolean;
@@ -74,7 +80,7 @@ export interface Lead {
 export interface CreateLeadInput {
   fullName: string;
   phone: string;
-  carModel: string;
+  carModels: string[];
   timeframe: LeadTimeframe;
   paymentMethod: PaymentMethod;
   tradeInCar: boolean;
@@ -85,7 +91,7 @@ export interface SendLeadInput {
   leadId: string;
   fullName: string;
   phone: string;
-  carModel: string;
+  carModels: string[];
 }
 
 export interface ScheduleLeadActionInput {
@@ -126,6 +132,7 @@ export interface WhatsappSendResult {
   whatsappStatus: WhatsappStatus;
   persisted: boolean;
   providerMessageId: string | null;
+  mediaSent: boolean;
 }
 
 export interface LeadMessage {
@@ -144,7 +151,7 @@ export interface LeadMessage {
 
 export function getWhatsappStatusLabel(status: WhatsappStatus): string {
   return {
-    PENDING: "Enviando",
+    PENDING: "Pendiente",
     SENT: "Enviado",
     SERVER_ACK: "Enviado a WhatsApp",
     DELIVERY_ACK: "Entregado",
@@ -186,8 +193,8 @@ const paymentPoints: Record<PaymentMethod, number> = {
   POR_DEFINIR: 5,
 };
 
-export function calculateLeadScore(input: Pick<CreateLeadInput, "carModel" | "timeframe" | "paymentMethod" | "tradeInCar">): LeadScore {
-  const modelPoints = input.carModel.trim() ? 20 : 0;
+export function calculateLeadScore(input: Pick<CreateLeadInput, "carModels" | "timeframe" | "paymentMethod" | "tradeInCar">): LeadScore {
+  const modelPoints = input.carModels.length > 0 ? 20 : 0;
   const tradeInPoints = input.tradeInCar ? 20 : 8;
   const score = Math.min(100, modelPoints + timeframePoints[input.timeframe] + paymentPoints[input.paymentMethod] + tradeInPoints);
 

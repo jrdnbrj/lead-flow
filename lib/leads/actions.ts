@@ -5,9 +5,9 @@ import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-templa
 import { renderWhatsappMessageTemplate } from "@/lib/config/message-template-shared";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { getStartOfSellerDayAfter } from "@/lib/leads/follow-up";
-import { clearLeadAction, createLead, createLeadMessage, getLeadById, markLeadAfterOutboundMessage, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadMessage } from "@/lib/leads/repository";
+import { clearLeadAction, createLead, createLeadMessage, getCarModelImageUrl, getLeadById, markLeadAfterOutboundMessage, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadMessage } from "@/lib/leads/repository";
 import { leadSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema } from "@/lib/leads/validation";
-import { ensureEvolutionWebhook, sendWhatsappText } from "@/lib/whatsapp/service";
+import { ensureEvolutionWebhook, sendWhatsappMedia, sendWhatsappText } from "@/lib/whatsapp/service";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
 
 export async function createLeadAction(input: CreateLeadInput): Promise<ActionResponse<Lead>> {
@@ -19,8 +19,9 @@ export async function createLeadAction(input: CreateLeadInput): Promise<ActionRe
   try {
     const result = await createLead(parsed.data);
     return { success: true, data: result.lead, warning: result.warning };
-  } catch {
-    return { success: false, error: "No pudimos guardar el lead. Intenta nuevamente." };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "No pudimos guardar el lead en Supabase. Intenta nuevamente.";
+    return { success: false, error: detail };
   }
 }
 
@@ -38,7 +39,7 @@ export async function sendLeadWhatsappAction(input: SendLeadInput): Promise<Acti
     const text = renderWhatsappMessageTemplate(template, {
       nombre: target.fullName.trim().split(/\s+/)[0] || "cliente",
       numero: target.phone,
-      carro: target.carModel,
+      carro: target.carModels.join(", "),
       nombre_vendedor: seller.name,
       correo_vendedor: seller.email,
       empresa_vendedor: seller.company,
@@ -56,10 +57,25 @@ export async function sendLeadWhatsappAction(input: SendLeadInput): Promise<Acti
     if (messageRowId) {
       await updateLeadMessage(messageRowId, { providerMessageId: result.providerMessageId, status: result.status, rawPayload: result.payload });
     }
+    let mediaSent = false;
+    let mediaWarning: string | undefined;
+    const firstCar = target.carModels[0];
+    const imageUrl = firstCar ? await getCarModelImageUrl(firstCar) : null;
+    if (imageUrl) {
+      const mediaMessageRowId = await createLeadMessage({ leadId: parsed.data.leadId, direction: "OUTBOUND", status: "PENDING", body: `[Imagen del vehículo] ${firstCar}`, phone: target.phone });
+      try {
+        const mediaResult = await sendWhatsappMedia({ phone: target.phone, mediaUrl: imageUrl, caption: `Información de ${firstCar}`, fileName: `leadflow-${firstCar.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg` });
+        mediaSent = true;
+        if (mediaMessageRowId) await updateLeadMessage(mediaMessageRowId, { providerMessageId: mediaResult.providerMessageId, status: mediaResult.status, rawPayload: mediaResult.payload });
+      } catch (error) {
+        mediaWarning = error instanceof Error ? error.message : "El texto se envió, pero la imagen no pudo enviarse.";
+        if (mediaMessageRowId) await updateLeadMessage(mediaMessageRowId, { status: "FAILED", failedAt: new Date().toISOString() });
+      }
+    }
     return {
       success: true,
-      data: { leadId: parsed.data.leadId, whatsappStatus: result.status, persisted, providerMessageId: result.providerMessageId },
-      warning: !webhookConfigured ? "Mensaje enviado. Evolution no tiene webhook configurado; los estados posteriores no se sincronizarán todavía." : persisted ? undefined : "Mensaje enviado; el lead no confirmó la persistencia en Supabase.",
+      data: { leadId: parsed.data.leadId, whatsappStatus: result.status, persisted, providerMessageId: result.providerMessageId, mediaSent },
+      warning: mediaWarning || (!webhookConfigured ? "Mensaje enviado. Evolution no tiene webhook configurado; los estados posteriores no se sincronizarán todavía." : persisted ? undefined : "Mensaje enviado; el lead no confirmó la persistencia en Supabase."),
     };
   } catch (error) {
     await markLeadAfterOutboundMessage(parsed.data.leadId, "FAILED", error instanceof Error ? error.message : "Evolution API error");
@@ -123,5 +139,5 @@ export async function deleteLeadAction(leadId: string): Promise<ActionResponse<{
   const persisted = await softDeleteLead(leadId);
   return persisted
     ? { success: true, data: { leadId } }
-    : { success: false, error: "No pudimos eliminar este contacto. Actualiza la lista e inténtalo nuevamente." };
+    : { success: false, error: "No pudimos eliminar el contacto en Supabase. Revisa la conexión e inténtalo nuevamente." };
 }

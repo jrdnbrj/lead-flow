@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       x-bake:
         timeout: "600s"
     ports:
@@ -40,7 +43,9 @@ services:
       CORS_CREDENTIALS: "true"
       DEL_INSTANCE: "false"
       DATABASE_PROVIDER: postgresql
-      DATABASE_CONNECTION_URI: ${EVOLUTION_DATABASE_URL}
+      # Evolution uses Prisma; keep its pool below Supabase session-pool limits.
+      # EVOLUTION_DATABASE_URL already contains ?schema=evolution_api.
+      DATABASE_CONNECTION_URI: ${EVOLUTION_DATABASE_URL}&connection_limit=5&pool_timeout=20
       DATABASE_CONNECTION_CLIENT_NAME: leadflow
       DATABASE_SAVE_DATA_INSTANCE: "true"
       DATABASE_SAVE_DATA_NEW_MESSAGE: "true"

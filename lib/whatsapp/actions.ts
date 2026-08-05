@@ -1,6 +1,7 @@
 "use server";
 
 import type { ActionResponse } from "@/lib/domain/lead";
+import { getEvolutionErrorMessage } from "@/lib/whatsapp/service";
 
 export async function unlinkWhatsappInstanceAction(): Promise<ActionResponse<{ disconnected: true }>> {
   const apiUrl = process.env.EVOLUTION_API_URL;
@@ -9,13 +10,50 @@ export async function unlinkWhatsappInstanceAction(): Promise<ActionResponse<{ d
   if (!apiUrl || !apiKey || !instanceName) return { success: false, error: "Evolution API no está configurada para desvincular WhatsApp." };
 
   try {
-    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/instance/logout/${encodeURIComponent(instanceName)}`, {
+    const baseUrl = apiUrl.replace(/\/$/, "");
+    const response = await fetch(`${baseUrl}/instance/logout/${encodeURIComponent(instanceName)}`, {
       method: "DELETE",
       headers: { apikey: apiKey },
       cache: "no-store",
     });
-    if (!response.ok) return { success: false, error: "No pudimos desvincular WhatsApp. Intenta nuevamente en unos segundos." };
-    return { success: true, data: { disconnected: true } };
+    if (response.ok) return { success: true, data: { disconnected: true } };
+
+    const logoutPayload = await response.json().catch(() => null);
+    const logoutError = getEvolutionErrorMessage(response.status, logoutPayload, "Evolution no pudo cerrar la sesión.");
+    // A session removed from WhatsApp can remain in Evolution as a zombie:
+    // logout fails because Baileys is already closed. Delete and recreate that
+    // instance so the next visit can produce a fresh QR.
+    if (logoutError.includes("sesión real") || response.status === 500) {
+      const deleteResponse = await fetch(`${baseUrl}/instance/delete/${encodeURIComponent(instanceName)}`, {
+        method: "DELETE",
+        headers: { apikey: apiKey },
+        cache: "no-store",
+      });
+      if (deleteResponse.ok) {
+        const createResponse = await fetch(`${baseUrl}/instance/create`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: apiKey },
+          body: JSON.stringify({
+            instanceName,
+            integration: "WHATSAPP-BAILEYS",
+            qrcode: true,
+            rejectCall: false,
+            groupsIgnore: true,
+            alwaysOnline: false,
+            readMessages: false,
+            readStatus: false,
+            syncFullHistory: false,
+          }),
+          cache: "no-store",
+        });
+        if (createResponse.ok) return { success: true, data: { disconnected: true } };
+        const createPayload = await createResponse.json().catch(() => null);
+        return { success: false, error: getEvolutionErrorMessage(createResponse.status, createPayload, "La instancia se eliminó, pero Evolution no pudo crearla de nuevo. Revisa la configuración y vuelve a intentarlo.") };
+      }
+      const deletePayload = await deleteResponse.json().catch(() => null);
+      return { success: false, error: getEvolutionErrorMessage(deleteResponse.status, deletePayload, "Evolution no pudo limpiar la sesión cerrada. Reinicia Evolution API y vuelve a intentar desvincularla.") };
+    }
+    return { success: false, error: logoutError };
   } catch {
     return { success: false, error: "No se pudo contactar Evolution API para desvincular WhatsApp." };
   }
