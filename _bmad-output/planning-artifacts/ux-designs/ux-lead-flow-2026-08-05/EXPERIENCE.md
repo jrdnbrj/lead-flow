@@ -7,7 +7,7 @@ sources:
   - ../../brief-lead-flow-2026-08-05/addendum.md
   - ../../../project-context.md
   - ../../../../README.md
-updated: 2026-08-05
+updated: 2026-08-07
 ---
 
 # LeadFlow — Experience Spine
@@ -33,11 +33,11 @@ Principios:
 |---|---|---|---|
 | /dashboard | Realtime, búsqueda, filtros, paginación, métricas, tarjetas expandibles, teléfono, WhatsApp, seguimiento y borrado lógico. | La próxima acción vive dentro de la tarjeta expandida; hay tres filas de filtros antes de la cola. | Mostrar próxima acción, vencimiento, último mensaje y CTA primario en la tarjeta cerrada. Ordenar activas, vencidas/hoy, sin acción y resto. |
 | Lead card | Tiene estados de conversación, WhatsApp, temperatura, score, último mensaje y Hecha/+1 día/Ignorar. | Se confunden estado de conversación, canal y seguimiento; no hay Responder al cliente, sync ni compra. | Separar “qué pasa” de “qué hago”; añadir acciones contextuales. |
-| /nuevo | Captura progresiva, multi-modelo, calificación, nota opcional y CTA sticky. | “Guardar y compartir contacto” redirige automáticamente a QR; el PRD no hace QR obligatorio. | Cambiar el cierre a Guardar lead; después mostrar Ver en resumen y Compartir mi contacto como opción. Mantener nota y acción próxima opcionales. |
+| /nuevo | Captura progresiva, multi-modelo, calificación, nota opcional y CTA sticky. | “Guardar y compartir contacto” redirige automáticamente a QR; el PRD no hace QR obligatorio. | Cambiar el cierre a Guardar lead; después mostrar cuatro caminos: Ir al dashboard, Compartir contacto/QR, Programar acción y Enviar primer contacto por WhatsApp. Programar acción despliega el componente reutilizado sin navegación adicional. Mantener nota y acción próxima opcionales. |
 | /whatsapp | QR Evolution, conexión, perfil, plantilla, preview y guardado persistente. | Es configuración de preparación; los errores técnicos pueden aparecer tarde. | Conservar ruta; si falta conexión, explicar bloqueo y enlazar a configuración. Mantener resultado parcial de texto/imagen. |
 | /qr | vCard, compartir, copiar, descargar y abrir WhatsApp. | El título y paso final pueden hacer creer que siempre sigue a la captura. | Mantener como herramienta secundaria; no interponerla en el flujo principal. |
 | Push | Requisito nuevo. | No existe permiso, suscripción inválida, compatibilidad ni acción observable. | Diseñar habilitación y recuperación sin prometer entrega física. |
-| Sync corporativa | Requisito nuevo sin pantalla. | Riesgo de duplicar o enviar datos inciertos. | Vista previa, confirmación, progreso, sesión caducada, error detenido y resultado verificado. |
+| Sync corporativa | Requisito del objetivo piloto, pero bloqueado por discovery gate AD-14. | Riesgo de duplicar o enviar datos inciertos antes de conocer el flujo real. | Mostrar frontera de descubrimiento; reservar vista previa, confirmación, progreso, sesión caducada, error detenido y resultado verificado para después de superar AD-14. |
 | Compra registrada | No existe. | Puede confundirse lead cerrado con decisión de compra. | Control breve manual, sin formulario ni inferencia. |
 
 ### Brechas de estado críticas
@@ -57,7 +57,7 @@ Principios:
 | Push | Notificación Android | Resolver una acción sin abrir lista. | Estado aplicado y confirmación. |
 | WhatsApp | Navegación o bloqueo al enviar | Preparar canal, perfil y plantilla. | Canal listo o recuperación. |
 | Mi QR | Navegación o elección explícita | Compartir vCard del asesor. | Compartir, copiar, descargar o regreso. |
-| Vista previa corporativa | Sincronizar desde lead | Revisar datos antes de enviar. | Confirmar, cancelar o reautenticar. |
+| Vista previa corporativa | Gate AD-14 superado y sincronización habilitada | Revisar datos antes de enviar. | Confirmar, cancelar o reautenticar. |
 | Progreso/resultado | Confirmar sync | Mostrar etapa y evidencia. | ID verificado, error detenido o reintento seguro. |
 
 La navegación inferior móvil conserva Resumen, Nuevo lead, Mi QR y WhatsApp. No se añade un menú global nuevo.
@@ -85,18 +85,18 @@ La voz es directa, sobria y útil. Usa verbos, datos concretos y una sola idea p
 |---|---|
 | App shell | Mantiene navegación inferior, header sticky y estado En línea/Modo offline. El estado de red no afirma que una mutación se haya guardado. |
 | Work queue | Orden fijo: Conversaciones activas, Vencido/para hoy, Sin próxima acción y Todos los contactos. |
-| Lead card | Contraída muestra nombre, modelo, prioridad, conversación, próxima acción o Sin próxima acción y acciones primarias. Usa el bloque visual {components.lead-card}. Toque abre detalle; controles internos detienen propagación. |
+| Lead card | Contraída muestra nombre, modelo, prioridad, conversación, próxima acción o Sin próxima acción y acciones primarias. Si el teléfono normalizado ya existe, el aviso no bloqueante muestra nombre, vehículo y estado anterior, con Abrir lead existente o Crear nueva oportunidad. Usa el bloque visual {components.lead-card}. Toque abre detalle; controles internos detienen propagación. |
 | Next-action block | Muestra tipo, fecha/hora y origen. Si vence, indica Vencida desde. Si no existe, CTA Programar una. |
-| Inbound response block | Último mensaje, hora y estado. Ofrece Responder al cliente o Marcar respuesta hecha sin nota obligatoria. |
-| Quick action group | Orden estable Hecho / Posponer / Ignorar. Usa {components.action-group}. Hecho aplica una vez; Posponer ofrece una hora o mañana para respuesta; Ignorar cierra solo la acción. |
-| Schedule action | Tipo y fecha/hora son necesarios; nota opcional. Usa America/Guayaquil y confirma fecha. |
+| Inbound response block | Último mensaje, hora y clasificación. `Respuesta pendiente` y `Revisar` ofrecen Responder al cliente; `Revisar` conserva la etiqueta; `Sin respuesta sugerida` no crea acción. `Sí requiere respuesta` deja visible `Respuesta pendiente` y mantiene/crea una única acción abierta; `No requiere respuesta` deja visible `No requiere respuesta` y cierra la acción actual como ignorada. La clasificación automática original permanece como evidencia; no se exige nota. |
+| Quick action group | Orden estable Hecho / Posponer / Ignorar. Usa {components.action-group}. Hecho aplica una vez; Posponer ofrece En 1 hora, Más tarde, Mañana, En 3 días y Elegir fecha y hora; Ignorar cierra solo la acción. |
+| Schedule action | Tipo y fecha/hora son necesarios; nota opcional. Usa `America/Guayaquil` y confirma fecha. En 1 hora es ahora más una hora exacta; Más tarde es hoy a las 16:00 antes de esa hora local o mañana a las 09:00 desde las 16:00; Mañana es mañana a las 09:00; En 3 días es tres días calendario después a las 09:00; Elegir fecha y hora usa la selección explícita del asesor. |
 | Capture form | Mantiene nombre, celular, modelo y calificación actuales. Se puede guardar sin nota y sin próxima acción. |
-| Capture result | Tras guardar, muestra Lead guardado y acciones Ver en resumen y Compartir mi contacto. QR no es automático. |
-| First-contact action | Envío explícito, confirmación ligera, bloqueo de doble toque y resultado separado por texto, imagen y ficha. |
+| Capture result | Tras guardar, muestra Lead guardado y cuatro caminos: Ir al dashboard, Compartir contacto/QR, Programar acción y Enviar primer contacto por WhatsApp. Programar acción despliega el mismo componente reutilizado del dashboard en la pantalla intermedia; no navega a otra ruta. |
+| First-contact action | Envío explícito, confirmación ligera, bloqueo de doble toque y resultado separado por texto, imagen y ficha. `ACCEPTED` nunca se reenvía; `FAILED` permite reintentar manualmente solo ese recurso; `UNKNOWN` exige reconciliación o prueba de no efecto; `NOT_AVAILABLE` no genera efecto hasta una nueva versión verificable. |
 | WhatsApp gate | Sin sesión lista, explica Conecta WhatsApp para enviar y enlaza a /whatsapp. Un fallo deja el lead sin contactar. |
 | Push permission/status | Explica valor antes de pedir permiso. Estados: no solicitado, permitido/suscrito, rechazado, inválido/vencido, incompatible y reactivable. |
-| Push action | Hecho, Posponer e Ignorar son idempotentes. Si ya cambió, devuelve el estado actual sin duplicar. |
-| Sync preview | Lectura y confirmación: datos, faltantes, Confirmar sincronización y Cancelar. La confirmación usa {components.button-primary}; abrir no envía. |
+| Push action | Hecho, Posponer e Ignorar son idempotentes. Posponer ofrece En 1 hora, Más tarde, Mañana y En 3 días con resolución server-side; Elegir fecha y hora solo existe en la PWA autenticada. Si ya cambió, devuelve el estado actual sin duplicar. Una identidad de delivery admite como máximo una solicitud; dos suscripciones válidas pueden mostrar una notificación en cada dispositivo. |
+| Sync preview | Solo después de superar AD-14: lectura y confirmación de datos, faltantes, Confirmar sincronización y Cancelar. La confirmación usa {components.button-primary}; abrir no envía. Mientras el gate está pendiente no hay ejecución ni captura de credenciales. |
 | Sync progress | Etapa única activa: preparando, enviando, verificando. Bloquea una segunda operación. |
 | Sync recovery | Sesión caducada detiene; Reautenticar devuelve a preview y exige confirmar otra vez. |
 | Sync result | Solo éxito con verificación e ID externo. Incertidumbre muestra revisión requerida y no permite reintento ciego. |
@@ -138,10 +138,18 @@ La voz es directa, sobria y útil. Usa verbos, datos concretos y una sola idea p
 | Listo para enviar | CTA Enviar primer contacto; nunca automático al guardar. |
 | Enviando | Bloquear doble toque y conservar contexto. |
 | Completo | Texto, imágenes y ficha disponibles y aceptados; listar recursos. |
-| Parcial | Indicar qué se envió y qué faltó; ofrecer revisión o reintento seguro. |
-| Fallido | “No se envió el primer contacto. El lead sigue sin contactar.” Reintentar o abrir WhatsApp. |
-| Mensaje entrante | Crear/actualizar una sola acción Responder al cliente; mensajes adicionales actualizan preview. |
+| Parcial | Indicar qué se envió y qué faltó. `ACCEPTED` nunca muestra reenvío; `FAILED` ofrece reintento manual solo para ese recurso; `UNKNOWN` muestra Reconciliar o Revisar, sin reintento; `NOT_AVAILABLE` muestra No disponible, sin efecto ni reintento hasta nueva versión verificable. |
+| Fallido | “No se envió este recurso. El lead sigue sin contactar.” Permitir reintentar solo ese recurso o abrir WhatsApp. |
+| Mensaje entrante | Clasificar de forma determinista. `Sin respuesta sugerida` no crea acción; `Respuesta pendiente` crea/actualiza `Responder al cliente`; `Revisar` crea/actualiza la misma acción y conserva la etiqueta `Revisar`. |
 | Respuesta manual | Marcar respuesta hecha; diferenciar de confirmación Evolution. |
+
+#### Clasificación visible de mensajes
+
+La interfaz muestra la categoría y permite corregirla con un toque mediante `Sí requiere respuesta` o `No requiere respuesta`. `Sí requiere respuesta` deja como resultado visible `Respuesta pendiente` y mantiene o crea la única acción abierta `Responder al cliente`; si estaba explícitamente pospuesta, conserva su fecha. `No requiere respuesta` deja como resultado visible `No requiere respuesta` y cierra la acción actual como ignorada, retirando sus recordatorios. La clasificación automática original y la corrección manual permanecen como evidencia separada. La IA no cierra acciones ni cambia la categoría por su cuenta.
+
+- `Sin respuesta sugerida` solo se muestra para coincidencias exactas de la allowlist: `gracias`, `muchas gracias`, `mil gracias`, `te agradezco`, `muy amable`, `ok`, `okay`, `vale`, `listo`, `perfecto`, `de acuerdo`, `entendido`, `recibido`, `confirmado`, `correcto`, `exacto`, `sí`, `si`, `así es`, `tal cual`, `quedamos así`, `nos vemos`, o únicamente los emojis `👍`, `👌`, `🙏`, `✅`, `🙂`, `😊`, `😉`, `💯`.
+- `Respuesta pendiente` se muestra cuando existe una pregunta, un interrogativo reconocible o una solicitud/intención comercial del vocabulario aprobado: `quiero`, `necesito`, `me interesa`, `busco`, `cotizar`, `cotización`, `precio`, `valor`, `disponible`, `disponibilidad`, `cuota`, `financiar`, `financiación`, `agendar`, `separar`, `comprar`, `probar`, `envíame`, `mándame`, `compárteme`, `puedes`, `puede`, `podrías`, `podría`, `tienen` o `tiene` como token independiente.
+- `Revisar` se muestra para cualquier texto que no coincida exactamente con la allowlist ni con una señal suficiente de pregunta, solicitud o intención comercial. La incertidumbre no se presenta como cierre.
 
 ### Push
 
@@ -154,12 +162,14 @@ La voz es directa, sobria y útil. Usa verbos, datos concretos y una sola idea p
 | Generado/aceptado | Registrar evidencia interna; nunca decir entregado o leído. |
 | Acción desde Push | Confirmar estado y reconciliar al volver a la PWA. |
 | Doble toque | Devolver estado actual sin doble aplicación. |
+| Identidad de delivery | Una solicitud como máximo para `(acción, action_version, suscripción, subscription_generation)`. Un cambio de versión solo vuelve a materializar si la acción vigente está habilitada y vencida; no provoca un segundo envío inmediato. |
 
 ### Sync corporativa
 
 | Estado | Tratamiento |
 |---|---|
-| Disponible | Acción Sincronizar visible en detalle. |
+| Discovery pendiente | Mostrar “Sincronización corporativa en descubrimiento”. No ofrecer ejecución, credenciales ni mutación. |
+| Disponible tras AD-14 | Acción Sincronizar visible en detalle. |
 | Preview | Datos y faltantes; Confirmar explícito. |
 | Confirmada/en progreso | Botón bloqueado y etapa visible. |
 | Sesión caducada | Detener, explicar, Reautenticar; sin registro incompleto. |
@@ -183,7 +193,7 @@ La voz es directa, sobria y útil. Usa verbos, datos concretos y una sola idea p
 - La tarjeta se expande por su contenido; botones internos detienen propagación.
 - Orden de foco: lead, próxima acción, último mensaje, acciones, información secundaria.
 - Navegación y CTA sticky respetan área segura.
-- Hecho directo. Posponer ofrece inicialmente una hora y mañana para respuesta; la convergencia con acciones generales se valida con el asesor.
+- Hecho directo. Posponer ofrece En 1 hora, Más tarde, Mañana, En 3 días y Elegir fecha y hora. Los cuatro primeros se resuelven server-side en `America/Guayaquil`; Elegir fecha y hora usa el valor explícito del asesor y solo está disponible en la PWA autenticada.
 - Ignorar nombra el efecto: no volverá a alertar y no cambia el estado comercial.
 - No usar swipe obligatorio, hover, carrusel, drag-and-drop ni modal sobre modal.
 - Push abre el estado o el lead expandido si requiere contexto.
@@ -213,14 +223,9 @@ La voz es directa, sobria y útil. Usa verbos, datos concretos y una sola idea p
 
 1. ¿Cuál es el mínimo real de captura en feria: nombre, celular, modelo y qué calificación puede esperar?
 2. ¿Sin próxima acción debe verse siempre o revisarse al cierre de jornada?
-3. ¿Qué mensajes son realmente no accionables y no necesitan Responder al cliente?
-4. ¿Para respuestas sirven una hora y mañana o hace falta otra opción?
-5. ¿Ignorar se entiende mejor como No requiere respuesta?
-6. ¿El primer contacto parcial debe reintentar solo el recurso faltante?
-7. ¿Qué datos necesita ver antes de confirmar la sync corporativa?
-8. ¿Qué Android y navegador real soportan acciones Push, incluida pantalla bloqueada?
-9. ¿Qué hitos posteriores a Cliente decidió comprar aportan valor sin crear otro CRM?
-10. ¿Qué texto genera confianza en resultado verificado sin confundirlo con una venta?
+3. ¿Qué datos necesita ver antes de confirmar la sync corporativa?
+4. ¿Qué Android y navegador real soportan acciones Push, incluida pantalla bloqueada?
+5. ¿Qué texto genera confianza en resultado verificado sin confundirlo con una venta?
 
 ## Key Flows
 
@@ -232,7 +237,7 @@ Los protagonistas son escenarios de validación; no crean reglas comerciales nue
 2. Escribe nombre y celular; elige modelo y calificación actual.
 3. Deja nota y próxima acción vacías porque debe atender a otra persona.
 4. Toca Guardar lead.
-5. **Clímax:** ve Lead guardado, el resumen mínimo y Sin próxima acción; vuelve al resumen en un toque. Compartir QR es opcional.
+5. **Clímax:** ve Lead guardado, Sin próxima acción y cuatro caminos: Ir al dashboard, Compartir contacto/QR, Programar acción o Enviar primer contacto por WhatsApp. Programar acción abre el componente reutilizado en la misma pantalla; Compartir QR es opcional y ningún camino es obligatorio.
 
 Fallo: el formulario conserva todo y ofrece Reintentar; no redirige a QR ni finge guardado.
 
@@ -257,7 +262,7 @@ Fallo: una mutación fallida conserva el estado anterior y la acción permanece 
 ### Flow 4 — Push: Andrés fuera de la PWA
 
 1. Recibe un Push con lead, tipo y contexto mínimo.
-2. Usa Hecho en una acción, Posponer y elegir mañana en otra, e Ignorar en una tercera.
+2. Usa Hecho en una acción, Posponer y elegir entre En 1 hora, Más tarde, Mañana o En 3 días en otra, e Ignorar en una tercera.
 3. **Clímax:** resuelve trabajo sin abrir lista ni escribir notas.
 
 Fallo: suscripción inválida no se presenta como entrega; la acción sigue en dashboard y se ofrece reactivación. Doble toque no duplica.
@@ -265,9 +270,11 @@ Fallo: suscripción inválida no se presenta como entrega; la acción sigue en d
 ### Flow 5 — Mensaje entrante: Andrés recibe una consulta
 
 1. El cliente responde mientras Andrés atiende a otra persona.
-2. LeadFlow muestra conversación activa y una única acción Responder al cliente con el último mensaje.
-3. Andrés abre WhatsApp, responde y vuelve a marcar respuesta hecha si no hubo confirmación Evolution.
-4. **Clímax:** la acción queda cerrada como confirmación manual, distinta de una respuesta verificada.
+2. LeadFlow clasifica el mensaje con la política determinista y muestra la categoría junto al último mensaje.
+3. Si es `Respuesta pendiente` o `Revisar`, muestra una única acción Responder al cliente; si es `Revisar`, conserva la etiqueta. Si es `Sin respuesta sugerida`, no crea acción.
+4. Andrés puede corregir con Sí requiere respuesta o No requiere respuesta; la pantalla confirma `Respuesta pendiente` o `No requiere respuesta` y la acción queda abierta o ignorada según corresponda; luego abre WhatsApp y marca respuesta hecha si no hubo confirmación Evolution.
+5. Un mensaje nuevo actualiza preview, contexto y versión. Si la acción estaba pospuesta explícitamente, conserva su fecha; si no, queda programada una hora después del mensaje correspondiente.
+6. **Clímax:** ninguna clasificación automática cierra una acción y los mensajes repetidos actualizan preview sin duplicar trabajo.
 
 Fallo: mensajes repetidos actualizan preview sin crear acciones duplicadas; si falla persistencia, la acción sigue abierta.
 
@@ -275,20 +282,20 @@ Fallo: mensajes repetidos actualizan preview sin crear acciones duplicadas; si f
 
 1. Abre un lead nuevo y toca Enviar primer contacto.
 2. Confirma el envío explícito.
-3. Si texto, imagen y ficha se aceptan, ve resultado completo; si falta un recurso, ve resultado parcial.
-4. **Clímax:** sabe qué se envió y qué debe reintentar; el lead solo pasa a contactado con envío aceptado.
+3. Si texto, imagen y ficha se aceptan, ve resultado completo; si un recurso falla o no está disponible, ve resultado parcial con estado por recurso.
+4. **Clímax:** sabe qué se envió y puede reintentar manualmente solo el recurso `FAILED`; `ACCEPTED` nunca se reenvía.
 
-Fallo: rechazo o incertidumbre deja el lead sin contactar y ofrece Reintentar o Abrir WhatsApp.
+Fallo: `UNKNOWN` deja el recurso pendiente de reconciliación sin reintento; `NOT_AVAILABLE` no crea efecto hasta una nueva versión verificable. Un rechazo definitivo permite reintentar solo ese recurso o abrir WhatsApp.
 
-### Flow 7 — Sync corporativa: Andrés registra a Laura
+### Flow 7 — Discovery gate corporativo: Andrés prepara una futura sincronización
 
-1. Toca Sincronizar y revisa preview; abrir no envía.
-2. Confirma y ve preparando, enviando y verificando.
-3. Si la sesión caduca, la operación se detiene y ofrece Reautenticar.
-4. Tras reautenticar, revisa preview y confirma de nuevo.
-5. **Clímax:** resultado verificado muestra ID externo y evita repetir a ciegas.
+1. Ve el estado “Sincronización corporativa en descubrimiento”; no existe todavía una acción ejecutable.
+2. El discovery con el asesor documenta flujo autorizado, mapeo de campos, estados, postcondición, recuperación y validación reversible.
+3. Solo después de superar AD-14 se habilita una preview; abrirla no envía.
+4. La futura implementación conserva confirmación nueva tras reautenticación, detención ante incertidumbre e idempotencia.
+5. **Clímax:** el gate queda aprobado y vuelve a planificación antes de crear historias de implementación.
 
-Fallo: cambio inesperado o resultado incierto detiene, muestra etapa y exige revisión.
+Fallo: mientras el gate no esté aprobado no se capturan credenciales ni se ejecutan mutaciones; después, cualquier cambio inesperado o resultado incierto detiene, muestra etapa y exige revisión.
 
 ### Flow 8 — Cliente decidió comprar: Andrés cruza la frontera
 

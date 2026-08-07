@@ -2,7 +2,7 @@
 title: "PRD: LeadFlow"
 status: final
 created: 2026-08-05
-updated: 2026-08-05
+updated: 2026-08-07
 ---
 
 # PRD: LeadFlow
@@ -40,9 +40,9 @@ No son usuarios del MVP otros asesores, coordinadores, administradores de equipo
 3. El lead se guarda sin obligar al asesor a completar una próxima acción. Si no la configura, queda visible como **Sin próxima acción** y no genera notificaciones.
 4. Cuando tiene tiempo, el asesor puede enviar el primer contacto mediante el botón existente. El envío intenta incluir mensaje, fotos y ficha técnica; si falta algún recurso, se envía lo disponible.
 5. Según la conversación, el asesor puede programar una llamada, un mensaje, una cotización u otra acción para una fecha posterior.
-6. Si el cliente responde, la respuesta debe generar una nueva próxima acción sugerida en lugar de dejar el trabajo futuro cancelado sin reemplazo.
+6. Si el cliente responde, la respuesta debe crear o actualizar la única acción **Responder al cliente**. Si esa acción estaba explícitamente pospuesta por el asesor, conserva su fecha programada; si no estaba pospuesta, su primera alerta queda una hora después del mensaje entrante correspondiente.
 7. El asesor ejecuta la llamada, cotización, mensaje u otra acción. La acción se marca como hecha según la regla de su tipo; si falla, permanece pendiente.
-8. Cada mensaje entrante crea o actualiza como máximo una acción **Responder al cliente** para ese lead. La primera alerta vence una hora después si la acción sigue pendiente. La acción puede posponerse una o varias veces, inicialmente por una hora o para mañana, o cerrarse como **No requiere respuesta** sin cambiar el estado comercial del lead.
+8. Cada mensaje entrante se clasifica de forma determinista. `Respuesta pendiente` y `Revisar` crean o actualizan como máximo una acción **Responder al cliente** para ese lead; `Sin respuesta sugerida` no crea acción. La primera alerta vence una hora después si la acción sigue pendiente. La acción puede posponerse una o varias veces con los atajos aprobados o cerrarse como **No requiere respuesta** sin cambiar el estado comercial del lead.
 
 La definición provisional de **lead útil** es: teléfono válido o verificable, interés identificable en un vehículo y próxima acción definida. **[ASSUMPTION: esta definición representa calidad operativa suficiente para el piloto.]** Se validará con el asesor durante el piloto y no constituye una regla comercial definitiva.
 
@@ -70,6 +70,7 @@ La definición provisional de **lead útil** es: teléfono válido o verificable
 - **Próxima acción:** actividad que el asesor debe realizar para avanzar o mantener el contacto con un lead.
 - **Acción de seguimiento:** registro programado de una próxima acción con tipo, fecha/hora y estado.
 - **Acción de respuesta:** próxima acción creada o actualizada para responder a un mensaje entrante.
+- **Clasificación entrante:** etiqueta determinista `Sin respuesta sugerida`, `Respuesta pendiente` o `Revisar` aplicada a un mensaje entrante antes de converger la acción.
 - **Primer contacto:** envío explícito iniciado por el asesor con mensaje, fotos y ficha técnica disponible.
 - **Push generado:** notificación que LeadFlow prepara para enviar al servicio Push.
 - **Solicitud Push aceptada:** respuesta positiva del servicio Push al recibir la solicitud; no significa entrega física ni lectura.
@@ -94,7 +95,7 @@ La definición provisional de **lead útil** es: teléfono válido o verificable
 ## 4. Decisiones aún abiertas y supuestos controlados
 
 - La selección del proveedor Push, Service Worker, programación server-side, persistencia de suscripciones y estrategia de reintentos pertenece a arquitectura.
-- La automatización corporativa se resolverá en arquitectura entre navegador y solicitudes HTTP internas; el PRD fija la operación segura, no el mecanismo.
+- FR-026–FR-033 siguen formando parte del objetivo del piloto, pero su implementación está discovery-gated por AD-14. No se puede crear implementación de adapter, worker, scraping, Playwright, credenciales ni mutación corporativa hasta que el descubrimiento autorizado cierre sus criterios; el PRD fija la operación segura, no el mecanismo.
 - **[ASSUMPTION: la ficha técnica estará disponible para la mayoría de los modelos.]** La fuente, formato y vigencia de la ficha técnica son una dependencia de contenido; el producto debe enviar lo disponible sin bloquear el primer contacto.
 - La respuesta sugerida del bot, cálculos de financiación y condiciones comerciales requieren reglas verificadas y quedan fuera de este PRD.
 
@@ -104,13 +105,22 @@ La definición provisional de **lead útil** es: teléfono válido o verificable
 
 - **FR-001 — MUST:** El sistema debe permitir guardar un lead sin próxima acción. Debe mostrarlo como **Sin próxima acción** y no debe generar Push mientras no exista una acción programada.
 - **FR-002 — MUST:** El sistema debe permitir programar acciones de llamada, WhatsApp, cotización u otra acción con fecha y hora exactas, respetando la zona horaria `America/Guayaquil`.
-- **FR-003 — MUST:** Un mensaje entrante debe crear o actualizar una única acción abierta **Responder al cliente** para el lead correspondiente.
-- **FR-004 — MUST:** La acción **Responder al cliente** debe generar su primera alerta una hora después del mensaje entrante si permanece pendiente.
+- **FR-003 — MUST:** Un mensaje entrante clasificado como `Respuesta pendiente` o `Revisar` debe crear o actualizar una única acción abierta **Responder al cliente** para el lead correspondiente; `Sin respuesta sugerida` no crea acción.
+- **FR-004 — MUST:** La acción **Responder al cliente** debe generar su primera alerta una hora después del mensaje entrante si permanece pendiente y no estaba explícitamente pospuesta. Si ya estaba pospuesta por el asesor, un nuevo mensaje actualiza el mensaje fuente, el contexto y la versión de la acción, pero conserva exactamente `scheduled_for`; la posposición explícita prevalece.
 - **FR-005 — MUST:** El asesor debe poder marcar una acción como **Hecho**, **Posponer** o **Ignorar/No requiere respuesta** desde el flujo de seguimiento y, cuando el dispositivo lo permita, desde la notificación.
-- **FR-006 — MUST:** Posponer debe conservar la acción, permitir repetición y ofrecer inicialmente **una hora** y **mañana** como opciones rápidas.
+- **FR-006 — MUST:** Posponer debe conservar la acción, permitir repetición y ofrecer `En 1 hora`, `Más tarde`, `Mañana`, `En 3 días` y `Elegir fecha y hora` como opciones rápidas. `En 1 hora` resuelve a la hora actual más una hora exacta; `Más tarde` resuelve a hoy a las 16:00 si la hora local actual es anterior a las 16:00 y, en caso contrario, a mañana a las 09:00; `Mañana` resuelve a mañana a las 09:00; `En 3 días` resuelve a tres días calendario después a las 09:00; `Elegir fecha y hora` usa el instante explícito elegido por el asesor. Todas las resoluciones interpretan la hora en `America/Guayaquil` y persisten un instante UTC.
 - **FR-007 — MUST:** Ignorar o **No requiere respuesta** debe cerrar únicamente la acción actual, retirar sus recordatorios y no cambiar el lead a Perdido o Cerrado.
-- **FR-008 — MUST:** La llegada de varios mensajes mientras existe una acción abierta de respuesta no debe crear acciones ni notificaciones duplicadas para el mismo lead.
+- **FR-008 — MUST:** La llegada de varios mensajes mientras existe una acción abierta de respuesta debe actualizar la única acción y su contexto sin crear acciones duplicadas. Si la acción está explícitamente pospuesta, esos mensajes no adelantan `scheduled_for`; si no lo está, la acción conserva la regla de alerta una hora después del mensaje entrante correspondiente.
 - **FR-009 — SHOULD:** La acción de respuesta debe mostrar el mensaje entrante más reciente y conservar el historial de cambios relevante sin pedir una nota manual obligatoria.
+- **FR-038 — MUST:** Cada mensaje entrante debe clasificarse mediante una política determinista, sin IA ni autoridad automática para cerrar acciones, como `Sin respuesta sugerida`, `Respuesta pendiente` o `Revisar`. `Respuesta pendiente` y `Revisar` crean o actualizan la única acción abierta `Responder al cliente`; `Revisar` conserva su etiqueta visible; `Sin respuesta sugerida` no crea acción. El asesor puede corregir la decisión con un toque mediante `Sí requiere respuesta` o `No requiere respuesta`: `Sí requiere respuesta` deja como resultado visible `Respuesta pendiente` y asegura la acción única abierta en `PENDING`, salvo que una posposición explícita conserve `POSTPONED`; `No requiere respuesta` deja como resultado visible `No requiere respuesta` y cierra manualmente la acción actual como `IGNORED` con decisión `NO_RESPONSE_REQUIRED`. La clasificación automática original y la corrección manual quedan en la evidencia; ninguna IA puede ejecutar el cierre.
+
+#### Política determinista de clasificación de mensajes
+
+La clasificación se ejecuta después de normalizar el texto con Unicode NFKC, convertirlo a minúsculas, recortar espacios, colapsar espacios internos y retirar puntuación periférica sin retirar `¿`, `?` ni el contenido emoji. No se usan modelos, embeddings, intención inferida ni respuestas generadas para decidir la categoría.
+
+- **Sin respuesta sugerida:** solo coincide cuando el texto normalizado es exactamente una entrada de la allowlist siguiente, sin URL, número adicional, pregunta ni texto fuera de la entrada: `gracias`, `muchas gracias`, `mil gracias`, `te agradezco`, `muy amable`, `ok`, `okay`, `vale`, `listo`, `perfecto`, `de acuerdo`, `entendido`, `recibido`, `confirmado`, `correcto`, `exacto`, `sí`, `si`, `así es`, `tal cual`, `quedamos así`, `nos vemos`. También aplica cuando el mensaje contiene únicamente uno o más emojis de la allowlist `👍`, `👌`, `🙏`, `✅`, `🙂`, `😊`, `😉`, `💯`, ignorando variación de tono y selectores Unicode.
+- **Respuesta pendiente:** si no coincide con la allowlist y contiene `¿` o `?`, comienza con un interrogativo (`qué`, `cual`, `cuál`, `cómo`, `cuándo`, `dónde`, `cuánto`, `cuántos`, `quién`) o contiene una solicitud/intención comercial de la lista cerrada `quiero`, `necesito`, `me interesa`, `busco`, `cotizar`, `cotización`, `precio`, `valor`, `disponible`, `disponibilidad`, `cuota`, `financiar`, `financiación`, `agendar`, `separar`, `comprar`, `probar`, `envíame`, `mándame`, `compárteme`, `puedes`, `puede`, `podrías`, `podría`, `tienen` o `tiene` como token independiente.
+- **Revisar:** cualquier mensaje que no coincida con la allowlist ni con una señal inequívoca de pregunta, solicitud o intención comercial. La incertidumbre favorece `Revisar`, no `Sin respuesta sugerida`.
 
 ### Estados y errores
 
@@ -124,7 +134,18 @@ La definición provisional de **lead útil** es: teléfono válido o verificable
 - **FR-014 — MUST:** Guardar un lead no debe enviar automáticamente el primer contacto. El asesor debe iniciar explícitamente el envío.
 - **FR-015 — MUST:** El primer contacto debe intentar enviar el mensaje configurado, las fotos del vehículo y la ficha técnica disponible; si un recurso falta, debe enviarse lo disponible sin bloquear todo el contacto.
 - **FR-016 — MUST:** Un envío aceptado por Evolution debe registrar el resultado y no debe poder repetirse accidentalmente por doble toque, reintento o recarga.
-- **FR-017 — SHOULD:** El resultado del primer contacto debe mostrar qué recursos se enviaron y cuáles no estaban disponibles.
+- **FR-017 — MUST:** El resultado del primer contacto debe mostrar qué recursos se enviaron y cuáles no estaban disponibles, y debe permitir el reintento manual limitado a recursos `FAILED` conforme al contrato de resultado por recurso.
+
+#### Contrato de resultado por recurso del primer contacto
+
+Cada recurso del primer contacto usa exactamente uno de estos resultados funcionales:
+
+- `ACCEPTED`: Evolution aceptó ese recurso; nunca se reenvía.
+- `FAILED`: el proveedor produjo un resultado negativo definitivo para ese recurso; solo ese recurso puede recibir un reintento manual identificado por operación, tipo y versión.
+- `UNKNOWN`: no se conoce con seguridad si ocurrió el efecto; no se reintenta hasta reconciliarlo o demostrar que no ocurrió.
+- `NOT_AVAILABLE`: el recurso no tiene una fuente verificable; no genera efecto ni reintento hasta que exista una nueva versión verificable del recurso.
+
+Un reintento manual de `FAILED` no reabre ni reenvía recursos `ACCEPTED`, no incluye recursos `UNKNOWN` y no crea efectos para `NOT_AVAILABLE`.
 
 ### Web Push
 
@@ -132,10 +153,15 @@ La definición provisional de **lead útil** es: teléfono válido o verificable
 - **FR-019 — MUST:** La notificación debe ofrecer acciones directas de **Hecho**, **Posponer** e **Ignorar/No requiere respuesta** cuando el Android y navegador objetivo las soporten.
 - **FR-020 — MUST:** El sistema debe registrar por separado la notificación generada, la solicitud Push aceptada o rechazada por el servicio, la suscripción inválida o vencida, la acción realizada desde la notificación, el tiempo entre envío y acción, los duplicados y los errores.
 - **FR-021 — MUST:** Una solicitud Push aceptada por el servicio no debe presentarse como evidencia de entrega física al dispositivo ni como evidencia de lectura.
-- **FR-022 — MUST:** Reintentos de backend, doble toque o reconexión no deben generar notificaciones duplicadas ni aplicar dos veces la misma acción.
+- **FR-022 — MUST:** Reintentos de backend, doble toque o reconexión no deben generar más de una solicitud Push para la misma identidad canónica `(action_id, action_version, subscription_id, subscription_generation)` ni aplicar dos veces la misma acción. Dos suscripciones activas válidas pueden producir una solicitud por dispositivo y eso no constituye duplicación.
 - **FR-023 — SHOULD:** La notificación debe incluir el contexto mínimo para que el asesor identifique el lead y la acción sin abrir una lista general.
-- **FR-024 — MUST:** Cuando varias acciones distintas venzan al mismo tiempo, el sistema debe generar una notificación separada por acción, sin duplicar una misma acción.
+- **FR-024 — MUST:** Cuando varias acciones distintas venzan al mismo tiempo, el sistema debe materializar una delivery por cada combinación vigente de acción, `action_version`, suscripción y `subscription_generation`, sin más de una solicitud para una misma identidad canónica. Un cambio de `action_version` no autoriza por sí solo un segundo envío inmediato: la nueva delivery debe volver a cumplir las reglas de materialización y fecha programada.
 - **FR-025 — COULD:** El sistema podrá escalar una acción prioritaria por WhatsApp al asesor cuando no exista una suscripción Push utilizable o se defina una regla posterior de escalamiento; no será el canal principal del piloto.
+
+### Resultado de captura y matching de teléfono
+
+- **FR-039 — MUST:** Después de guardar correctamente un lead, la pantalla intermedia debe ofrecer cuatro caminos: ir al dashboard, compartir contacto/QR, programar acción y enviar primer contacto por WhatsApp. Programar acción debe desplegar el componente reutilizado del dashboard en la misma pantalla, sin navegación adicional.
+- **FR-040 — MUST:** Cuando el teléfono normalizado ya exista en leads no eliminados, la captura debe mostrar un aviso no bloqueante con nombre, vehículo y estado anterior, y permitir abrir el lead existente o crear una nueva oportunidad. Los registros no se fusionan automáticamente; para matching de mensajes, el lead no eliminado más reciente por `(created_at DESC, id DESC)` sigue siendo el destino operativo y los matches múltiples emiten `inbound_lead_match_ambiguous`.
 
 ## 6. Instrumentación sin carga administrativa
 
@@ -151,23 +177,25 @@ La instrumentación debe ejecutarse automáticamente a partir de eventos que el 
 | `next_action_done` | La acción se cierra como hecha. | `lead_id`, `action_id`, tipo, origen automático o confirmación manual. |
 | `next_action_postponed` | La acción se reprograma. | `lead_id`, `action_id`, fecha anterior y nueva fecha. |
 | `next_action_ignored` | La acción se cierra como ignorada o no requerida. | `lead_id`, `action_id`, tipo y fecha/hora. |
-| `inbound_message_received` | Se persiste un mensaje entrante asociado a un lead. | `lead_id`, identificador del proveedor, fecha/hora y estado de asociación. |
-| `response_action_upserted` | Se crea o actualiza la única acción de respuesta. | `lead_id`, `action_id`, fecha/hora objetivo y si fue deduplicada. |
+| `next_action_canceled` | La acción se elimina lógicamente y pasa a `CANCELED`. | `lead_id`, `action_id`, `action_version`, motivo, actor, fuente y fecha/hora. |
+| `inbound_message_received` | Se persiste un mensaje entrante asociado a un lead. | `lead_id`, identificador del proveedor, fecha/hora, estado de asociación y clasificación determinista. |
+| `response_action_upserted` | Se crea o actualiza la única acción de respuesta. | `lead_id`, `action_id`, fecha/hora objetivo, clasificación, etiqueta `Revisar` si aplica y si fue deduplicada. |
 | `first_contact_requested` | El asesor solicita el primer envío. | `lead_id`, recursos solicitados y configuración utilizada. |
 | `first_contact_result` | El proveedor acepta, rechaza o falla el envío. | `lead_id`, resultado, identificador del proveedor, recursos enviados y error funcional. |
-| `push_generated` | Se genera una notificación para una acción. | `lead_id`, `action_id`, tipo y fecha/hora objetivo. |
-| `push_service_result` | El servicio Push acepta o rechaza la solicitud. | `action_id`, resultado, proveedor y código de error si existe. |
+| `push_delivery_scheduled` | Se materializa una delivery para una identidad canónica vigente. | `lead_id`, `action_id`, `action_version`, `subscription_id`, `subscription_generation`, fecha/hora objetivo y fecha de materialización. |
+| `push_generated` | Una delivery vencida cruza el fence pre-I/O y genera payload/capabilities; no afirma entrega física. | `lead_id`, `action_id`, `action_version`, `subscription_id`, `subscription_generation`, `delivery_version`, tipo y fecha/hora objetivo. |
+| `push_service_result` | El servicio Push acepta, rechaza o deja incierta la solicitud de una identidad canónica. | `action_id`, `action_version`, `subscription_id`, `subscription_generation`, `delivery_version`, resultado, proveedor y código de error si existe. |
 | `push_subscription_invalid` | Una suscripción no puede usarse o vence. | identificador técnico de suscripción, fecha/hora y causa disponible. |
 | `push_action_taken` | El asesor actúa desde la notificación. | `action_id`, acción elegida y fecha/hora. |
-| `push_duplicate_suppressed` | Se evita generar una notificación duplicada. | `action_id`, motivo y fecha/hora. |
+| `push_duplicate_suppressed` | Se evita generar una segunda solicitud para una identidad canónica ya existente. | `action_id`, `action_version`, `subscription_id`, `subscription_generation`, motivo y fecha/hora. |
 | `corporate_sync_*` | Se inicia, confirma, rechaza, expira, duplica, valida o falla la operación controlada. | `lead_id`, resultado, identificador externo si existe, etapa y código de error. |
 | `purchase_decision_recorded` | El asesor registra manualmente que el cliente decidió comprar. | `lead_id`, fecha/hora del registro y origen manual. |
 
-La ausencia de interacción con una notificación no debe registrarse como “no entregada”. El sistema solo puede afirmar que la generó, que el servicio aceptó o rechazó la solicitud, que la suscripción era válida o inválida y que el usuario ejecutó o no una acción observable.
+La ausencia de interacción con una notificación no debe registrarse como “no entregada”. El sistema solo puede afirmar que la generó, que el servicio aceptó o rechazó la solicitud, que la suscripción era válida o inválida y que el usuario ejecutó o no una acción observable. Aceptación del servicio nunca significa entrega física ni lectura.
 
-## 7. Sincronización corporativa controlada
+## 7. Sincronización corporativa controlada — objetivo del piloto con gate AD-14
 
-La empresa autorizó probar automatización del navegador y web scraping, y no existe una API oficial. El PRD define el resultado seguro que debe lograr la operación; no fija si la implementación usará automatización de navegador o reproducción de solicitudes HTTP internas. Esa selección pertenece a arquitectura.
+La empresa autorizó explorar automatización del navegador y web scraping, y no existe una API oficial. FR-026–FR-033 permanecen dentro del objetivo del piloto, pero la operación está bloqueada por el discovery gate AD-14: primero deben documentarse el flujo autorizado, el mapeo, los estados, la postcondición, la recuperación y la validación reversible. El PRD define el resultado seguro; no fija el mecanismo ni autoriza todavía adapter, worker, scraping, Playwright, credenciales o mutaciones corporativas.
 
 - **FR-026 — MUST:** El piloto debe limitarse a una sola operación controlada para sincronizar un lead.
 - **FR-027 — MUST:** Antes de ejecutar, el asesor debe ver una vista previa de los datos que se enviarán y confirmar explícitamente.
@@ -178,12 +206,12 @@ La empresa autorizó probar automatización del navegador y web scraping, y no e
 - **FR-032 — MUST:** El sistema debe registrar el resultado, la etapa en la que falló, la fecha/hora, el lead involucrado y el identificador externo, sin almacenar credenciales en el repositorio ni exponerlas al navegador de LeadFlow.
 - **FR-033 — SHOULD:** Ante cambios inesperados en la interfaz o respuesta del sistema corporativo, la operación debe detenerse y requerir revisión humana en lugar de continuar con datos inciertos.
 
-## 8. Registro ligero del proceso de compra y entrega
+## 8. Registro manual de decisión de compra
 
 - **FR-034 — MUST:** El asesor debe poder marcar manualmente **Cliente decidió comprar** desde la tarjeta del lead, sin que el sistema intente inferirlo desde chats.
 - **FR-035 — MUST:** El registro debe guardar la fecha y hora en que el asesor lo marcó, entendida como fecha de registro operativo y no necesariamente como momento real de decisión del cliente.
-- **FR-036 — SHOULD:** El sistema debe permitir registrar, con carga mínima, hitos o bloqueos relevantes del proceso posterior y el momento de entrega cuando el asesor tenga esa información.
-- **FR-037 — COULD:** El piloto podrá calcular el tiempo entre el registro de decisión de compra y el registro de entrega cuando existan ambos datos.
+- **FR-036 — DEFERRED:** El registro de hitos, bloqueos y entrega pertenece a un bloque futuro; queda fuera del alcance implementable actual y no se expone en Epic 6.
+- **FR-037 — DEFERRED:** El cálculo entre decisión y entrega pertenece a un bloque futuro; queda fuera del alcance implementable actual y no se expone en Epic 6.
 
 La optimización completa de pagos, financiación, promociones, accesorios, documentos, matrícula y entrega permanece fuera del MVP.
 
@@ -191,7 +219,7 @@ La optimización completa de pagos, financiación, promociones, accesorios, docu
 
 ### Confiabilidad y consistencia
 
-- **NFR-001 — MUST:** El sistema debe conservar una acción pendiente hasta que se marque como hecha, pospuesta o ignorada; un fallo de Push no debe hacerla desaparecer.
+- **NFR-001 — MUST:** El sistema debe conservar una acción pendiente hasta que se marque como hecha, pospuesta, ignorada o cancelada mediante eliminación lógica; un fallo de Push no debe hacerla desaparecer.
 - **NFR-002 — MUST:** Las operaciones de acciones, notificaciones y sincronización corporativa deben ser idempotentes frente a reintentos, doble toque, recarga y reconexión.
 - **NFR-003 — MUST:** El sistema debe distinguir notificación generada, solicitud Push aceptada/rechazada, suscripción inválida y acción observable del asesor. No debe afirmar entrega física ni lectura cuando no existe esa evidencia.
 - **NFR-004 — MUST:** La solicitud Push debe generarse dentro de un margen de un minuto respecto a la hora programada; este criterio no afirma una precisión equivalente de entrega o visualización en el dispositivo.
@@ -222,14 +250,14 @@ Los umbrales de tiempo concretos, retención de eventos, proveedor Push, almacen
 
 ### Éxito
 
-- **SM-001:** Al menos 90% de los leads activos debe tener próxima acción definida. Valida FR-001, FR-002 y FR-003.
+- **SM-001:** Al menos 90% de los leads activos debe tener próxima acción definida. Valida FR-001, FR-002, FR-003 y FR-039.
 - **SM-002:** El porcentaje de acciones cumplidas en fecha debe mejorar frente a la línea base de las primeras dos semanas. Valida FR-005, FR-006 y FR-007.
 - **SM-003:** Debe medirse el tiempo entre captura y primer contacto por percentiles, sin imponer una meta única mientras existan leads curiosos y oportunidades reales mezclados. Valida FR-014 y FR-015.
-- **SM-004:** Deben medirse las acciones de respuesta realizadas o cerradas como no requeridas, junto con el tiempo hasta la decisión. Valida FR-003 a FR-009 y FR-013.
+- **SM-004:** Deben medirse las acciones de respuesta realizadas o cerradas como no requeridas, las clasificaciones y correcciones manuales, junto con el tiempo hasta la decisión. Valida FR-003 a FR-009, FR-013 y FR-038.
 - **SM-005:** Deben medirse solicitudes Push aceptadas/rechazadas, suscripciones inválidas y acciones realizadas desde notificación, sin inferir entrega física. Valida FR-018 a FR-025 y NFR-003.
-- **SM-006:** El primer contacto no debe producir duplicados aceptados; deben medirse envíos aceptados, fallidos, parciales y bloqueados por duplicación. Valida FR-014 a FR-017.
+- **SM-006:** El primer contacto no debe producir duplicados aceptados; deben medirse envíos aceptados, fallidos, parciales, inciertos, no disponibles y reintentos manuales por recurso bloqueados por duplicación. Valida FR-014 a FR-017.
 - **SM-007:** La operación corporativa controlada debe dejar evidencia de vista previa, confirmación, resultado, postcondición e identificador externo, sin duplicar el lead. Valida FR-026 a FR-033.
-- **SM-008:** Deben medirse tiempo y pasos manuales empleados por lead y el momento en que se registra la decisión de compra. Valida FR-034 a FR-037 y NFR-010.
+- **SM-008:** Deben medirse tiempo y pasos manuales empleados por lead y el momento en que se registra la decisión de compra. Valida FR-034–FR-035 y NFR-010. FR-036–FR-037 no se instrumentan en el piloto implementable actual.
 - **SM-009:** Las ventas, cotizaciones y cierres mensuales se observarán como resultados empresariales y no como efecto demostrado de LeadFlow.
 
 ### Contramétricas
@@ -267,7 +295,7 @@ Este PRD se apoya en una aplicación operativa. No redefine ni reemplaza sus cap
 - Las migraciones existentes mantienen `leads`, `lead_messages`, `lead_follow_up_actions`, configuración persistente, catálogo Changan, imágenes y borrado lógico; incluyen RLS y Realtime para las entidades actuales.
 - El modo operativo actual es de un solo vendedor, sin autenticación multiusuario ni aislamiento de equipos como requisito del MVP; las columnas preparatorias existentes no se convierten en alcance de producto.
 
-Las capacidades nuevas o ampliadas que este PRD define son Push server-side para Android, acciones desde notificaciones, instrumentación automática, una frontera manual de decisión de compra, descubrimiento ligero del proceso de entrega y una operación corporativa controlada. La implementación debe extender los patrones existentes y conservar compatibilidad con el flujo actual.
+Las capacidades nuevas o ampliadas que este PRD define son clasificación determinista de mensajes entrantes, captura con cuatro caminos posteriores al guardado, aviso no bloqueante de teléfono existente, reparación manual limitada de recursos WhatsApp fallidos, Push server-side para Android, acciones desde notificaciones, instrumentación automática, una frontera manual de decisión de compra, descubrimiento ligero del proceso de entrega y una operación corporativa controlada. La implementación debe extender los patrones existentes y conservar compatibilidad con el flujo actual.
 
 ## 13. Preguntas abiertas
 

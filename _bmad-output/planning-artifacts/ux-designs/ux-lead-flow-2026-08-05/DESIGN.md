@@ -2,6 +2,7 @@
 name: LeadFlow
 description: Identidad visual incremental para un asistente móvil-first de seguimiento comercial automotriz.
 status: final
+updated: 2026-08-07
 colors:
   surface-base: '#F6F3ED'
   surface-raised: '#FFFFFF'
@@ -169,12 +170,14 @@ Las esquinas existentes se conservan, pero no se mezclan radios arbitrarios en u
 | Work queue | Lista vertical de tarjetas blancas; success para activo, warning para vencido y texto explícito para sin próxima acción. |
 | Lead card | Radio rounded.lg, padding móvil spacing.4. Cabecera con nombre, modelo, próxima acción o excepción, conversación y canal. |
 | State badge | rounded.full, texto breve y contraste suficiente; color más etiqueta. |
-| Action group | Tres acciones de igual altura y orden estable: Hecho, Posponer, Ignorar. |
+| Action group | Tres acciones de igual altura y orden estable: Hecho, Posponer, Ignorar. La hoja de Posponer ofrece En 1 hora, Más tarde, Mañana, En 3 días y Elegir fecha y hora; esta última solo existe en la PWA autenticada. |
 | Capture form | Secciones blancas existentes, selección táctil y CTA sticky. |
-| First-contact result | Panel con resumen y lista enviado/faltó; success completo, warning parcial, error fallido. |
-| Inbound response block | Último mensaje, hora y CTA Responder al cliente o Marcar respuesta hecha. |
-| Push notification | Nombre del lead, tipo y contexto mínimo; acciones Hecho, Posponer e Ignorar. |
-| Sync preview/result | Una columna, campos a enviar, confirmación explícita, etapa, ID externo verificado o error funcional. |
+| Capture result | Panel posterior al guardado con cuatro caminos: Ir al dashboard, Compartir contacto/QR, Programar acción y Enviar primer contacto por WhatsApp. Programar acción reutiliza el componente de seguimiento sin navegación adicional. |
+| First-contact result | Panel con resumen por recurso y estados `ACCEPTED`, `FAILED`, `UNKNOWN` y `NOT_AVAILABLE`; success completo, warning parcial, error fallido e incertidumbre explícita. Solo `FAILED` muestra reintento manual del mismo recurso. |
+| Inbound response block | Último mensaje, hora, categoría visible y CTA contextual. `Respuesta pendiente` y `Revisar` muestran Responder al cliente; `Sin respuesta sugerida` no crea acción. `Sí requiere respuesta` muestra la etiqueta `Respuesta pendiente` y deja/crea la acción abierta; `No requiere respuesta` muestra la etiqueta `No requiere respuesta` y cierra la acción actual como ignorada. La clasificación original queda en evidencia. Un nuevo mensaje actualiza contexto y versión; si la acción estaba pospuesta explícitamente, conserva su fecha. |
+| Existing-phone warning | Aviso no bloqueante con nombre, vehículo y estado anterior; acciones Abrir lead existente y Crear nueva oportunidad. Nunca fusiona registros. |
+| Push notification | Nombre del lead, tipo y contexto mínimo; acciones Hecho, Posponer e Ignorar. Posponer ofrece En 1 hora, Más tarde, Mañana y En 3 días con fechas resueltas por servidor. Una identidad canónica admite una sola solicitud; suscripciones válidas distintas pueden recibir una cada una, sin afirmar entrega o lectura. |
+| Sync preview/result | Solo después de superar AD-14: una columna, campos a enviar, confirmación explícita, etapa, ID externo verificado o error funcional. Mientras el discovery gate está pendiente no hay ejecución ni captura de credenciales. |
 | Purchase marker | Acción textual Cliente decidió comprar; después Compra registrada con fecha. |
 | Feedback | Inline junto al control; toast solo para confirmaciones breves. |
 
