@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["evidence_id", "story", "gate", "iteration", "input_artifact", "reviewer_result", "blockers", "resolution", "timestamp", "final_verdict"],
+  "properties": {
+    "evidence_id": {"type": "string"},
+    "story": {"pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+    "gate": {"type": "string"},
+    "iteration": {"type": "integer", "minimum": 0},
+    "blockers": {"type": "array"},
+    "resolution": {"type": "array"},
+    "final_verdict": {"enum": ["PASS", "FAIL", "ESCALATED", "PENDING"]}
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "import_id": "BASELINE-E4-20260810-001",
+  "origin": "MANUAL_BASELINE_IMPORT",
+  "approved_by": "Jordan",
+  "approved_at": "2026-08-10T17:47:17Z",
+  "approval_note": "Importación explícita del baseline aprobado para habilitar el piloto de E4-S5b.",
+  "stories": [
+    {
+      "story_id": "E4-S1",
+      "status": "READY_FOR_DEV",
+      "evidence_refs": [
+        "_bmad-output/implementation-artifacts/4-1-backup-and-restore-baseline.md#Status",
+        "_bmad-output/implementation-artifacts/4-1-backup-and-restore-baseline.md#Acceptance Criteria"
+      ],
+      "source_refs": [
+        "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md#AD-2",
+        "_bmad-output/planning-artifacts/epics.md#Epic-4",
+        "_bmad-output/project-context.md"
+      ],
+      "dependencies_checked": true
+    },
+    {
+      "story_id": "E4-S2",
+      "status": "READY_FOR_DEV",
+      "evidence_refs": [
+        "_bmad-output/implementation-artifacts/4-2-singleton-identity-and-settings-ownership.md#Status",
+        "_bmad-output/implementation-artifacts/4-2-singleton-identity-and-settings-ownership.md#Acceptance Criteria"
+      ],
+      "source_refs": [
+        "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md#AD-3",
+        "_bmad-output/planning-artifacts/epics.md#Epic-4",
+        "_bmad-output/project-context.md"
+      ],
+      "dependencies_checked": true
+    },
+    {
+      "story_id": "E4-S3",
+      "status": "READY_FOR_DEV",
+      "evidence_refs": [
+        "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md#Status",
+        "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md#Acceptance Criteria"
+      ],
+      "source_refs": [
+        "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md#AD-3",
+        "_bmad-output/planning-artifacts/prds/prd-lead-flow-2026-08-05/prd.md#4.-Alcance-del-primer-bloque",
+        "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md#Entrypoint and AUTH_REQUIRED Matrix"
+      ],
+      "dependencies_checked": true
+    },
+    {
+      "story_id": "E4-S4",
+      "status": "READY_FOR_DEV",
+      "evidence_refs": [
+        "_bmad-output/implementation-artifacts/4-4-backfill-dry-run.md#Status",
+        "_bmad-output/implementation-artifacts/4-4-backfill-dry-run.md#Acceptance Criteria"
+      ],
+      "source_refs": [
+        "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md#AD-3",
+        "_bmad-output/planning-artifacts/epics.md#Epic-4",
+        "_bmad-output/project-context.md"
+      ],
+      "dependencies_checked": true
+    },
+    {
+      "story_id": "E4-S5a",
+      "status": "READY_FOR_DEV",
+      "evidence_refs": [
+        "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md#Status",
+        "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md#Acceptance Criteria"
+      ],
+      "source_refs": [
+        "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md#AD-10",
+        "_bmad-output/planning-artifacts/epics.md#Epic-4",
+        "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md#Scope and ownership boundary"
+      ],
+      "dependencies_checked": true
+    }
+  ]
+}

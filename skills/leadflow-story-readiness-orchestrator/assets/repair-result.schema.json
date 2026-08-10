@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "story_id", "target_story_file", "expected_fingerprint", "changes"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "story_id": {"pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+    "target_story_file": {"type": "string"},
+    "expected_fingerprint": {"pattern": "^[0-9a-f]{64}$"},
+    "changes": {"type": "array", "minItems": 1}
+  }
+}

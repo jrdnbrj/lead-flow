@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["decision_id", "timestamp", "story_id", "source", "category", "question_or_finding", "recommendation", "user_decision", "resulting_action", "artifacts_affected"],
+  "properties": {
+    "decision_id": {"type": "string"},
+    "category": {"enum": ["TECHNICAL_DETERMINISTIC", "PRODUCT_DECISION", "ARCHITECTURAL_CONTRADICTION", "HIGH_RISK_ACCEPTANCE", "REVIEW_OVERRIDE"]},
+    "artifacts_affected": {"type": "array", "items": {"type": "string"}}
+  }
+}

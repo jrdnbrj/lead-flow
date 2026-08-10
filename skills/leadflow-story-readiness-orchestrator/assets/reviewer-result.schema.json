@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "story_id", "review_id", "verdict", "findings"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "story_id": {"pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+    "verdict": {"enum": ["PASS", "FAIL"]},
+    "findings": {"type": "array"}
+  }
+}

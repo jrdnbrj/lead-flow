@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "entries": 5,
+  "by_story": {
+    "E4-S1": [
+      "EV-BASELINE-E4-S1-001"
+    ],
+    "E4-S2": [
+      "EV-BASELINE-E4-S2-001"
+    ],
+    "E4-S3": [
+      "EV-BASELINE-E4-S3-001"
+    ],
+    "E4-S4": [
+      "EV-BASELINE-E4-S4-001"
+    ],
+    "E4-S5a": [
+      "EV-BASELINE-E4-S5a-001"
+    ]
+  },
+  "rebuilt_at": "2026-08-10T17:48:04Z"
+}

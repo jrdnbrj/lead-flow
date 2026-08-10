@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "workflow", "epic", "state_revision", "stories"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "workflow": {"const": "leadflow-story-readiness-orchestrator"},
+    "epic": {"type": "string", "pattern": "^E[0-9]+$"},
+    "state_revision": {"type": "integer", "minimum": 0},
+    "stories": {"type": "array", "items": {"$ref": "#/$defs/story"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "nullableTimestamp": {"type": ["string", "null"], "format": "date-time"},
+    "fingerprint": {
+      "type": "object",
+      "required": ["algorithm", "value", "captured_at"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "value": {"$ref": "#/$defs/sha256"},
+        "captured_at": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "nullableFingerprint": {
+      "type": ["object", "null"],
+      "required": ["algorithm", "value", "captured_at"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "value": {"$ref": "#/$defs/sha256"},
+        "captured_at": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "authoritativeFingerprint": {
+      "type": "object",
+      "required": ["kind", "path", "sha256"],
+      "properties": {
+        "kind": {"type": "string"},
+        "path": {"type": "string"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "dependencyFingerprint": {
+      "type": "object",
+      "required": ["story_id", "sha256"],
+      "properties": {
+        "story_id": {"type": "string", "pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "timestamps": {
+      "type": "object",
+      "required": ["created_at", "updated_at", "last_gate_at", "last_pass_at"],
+      "properties": {
+        "created_at": {"$ref": "#/$defs/timestamp"},
+        "updated_at": {"$ref": "#/$defs/timestamp"},
+        "last_gate_at": {"$ref": "#/$defs/nullableTimestamp"},
+        "last_pass_at": {"$ref": "#/$defs/nullableTimestamp"}
+      }
+    },
+    "lastResult": {
+      "type": "object",
+      "required": ["gate", "verdict", "iteration", "evidence_refs", "timestamp"],
+      "properties": {
+        "gate": {"enum": ["MANUAL_BASELINE_IMPORT", "SELECT_STORY", "VALIDATE", "TRIAGE", "AUTO_FIX", "REVALIDATING", "FULL_STORY_AUDIT", "FINAL_REVALIDATION", "MARK_READY_FOR_DEV", "STOP_AND_ASK_USER", "ESCALATE"]},
+        "verdict": {"enum": ["PASS", "FAIL", "APPLIED", "ESCALATED", "PENDING"]},
+        "iteration": {"type": "integer", "minimum": 0},
+        "evidence_refs": {"type": "array", "items": {"type": "string"}},
+        "timestamp": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "statusProjection": {
+      "type": "object",
+      "required": ["field", "from", "to", "validated_hash", "final_hash", "evidence_ref", "timestamp"],
+      "properties": {
+        "field": {"const": "Status"},
+        "from": {"type": "string"},
+        "to": {"const": "ready-for-dev"},
+        "validated_hash": {"$ref": "#/$defs/sha256"},
+        "final_hash": {"$ref": "#/$defs/sha256"},
+        "evidence_ref": {"type": "string"},
+        "timestamp": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "story": {
+      "type": "object",
+      "required": [
+        "story_id", "story_file", "dependencies", "source_status_observed", "status", "current_gate",
+        "review_round", "repair_round", "last_result", "blockers_open", "blockers_resolved",
+        "decision_required", "pending_decision_ref", "timestamps", "fingerprint",
+        "authoritative_fingerprints", "dependency_fingerprints", "evidence_refs"
+      ],
+      "properties": {
+        "story_id": {"type": "string", "pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+        "story_file": {"type": "string"},
+        "dependencies": {"type": "array", "items": {"type": "string", "pattern": "^E[0-9]+-S[0-9]+[a-z]?$"}},
+        "source_status_observed": {"type": ["string", "null"]},
+        "status": {"enum": ["PENDING", "VALIDATING", "NEEDS_TECHNICAL_FIX", "NEEDS_USER_DECISION", "REVALIDATING", "NEEDS_REVALIDATION", "READY_FOR_DEV", "ESCALATED"]},
+        "current_gate": {"enum": ["MANUAL_BASELINE_IMPORT", "SELECT_STORY", "VALIDATE", "TRIAGE", "AUTO_FIX", "REVALIDATING", "FULL_STORY_AUDIT", "FINAL_REVALIDATION", "MARK_READY_FOR_DEV", "STOP_AND_ASK_USER", "ESCALATE"]},
+        "review_round": {"type": "integer", "minimum": 0, "maximum": 2},
+        "repair_round": {"type": "integer", "minimum": 0, "maximum": 3},
+        "last_result": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/lastResult"}]},
+        "blockers_open": {"type": "array"},
+        "blockers_resolved": {"type": "array"},
+        "decision_required": {"type": "boolean"},
+        "pending_decision_ref": {"type": ["string", "null"]},
+        "timestamps": {"$ref": "#/$defs/timestamps"},
+        "fingerprint": {"$ref": "#/$defs/fingerprint"},
+        "validation_fingerprint": {"$ref": "#/$defs/nullableFingerprint"},
+        "status_projection": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/statusProjection"}]},
+        "authoritative_fingerprints": {"type": "array", "items": {"$ref": "#/$defs/authoritativeFingerprint"}},
+        "dependency_fingerprints": {"type": "array", "items": {"$ref": "#/$defs/dependencyFingerprint"}},
+        "evidence_refs": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

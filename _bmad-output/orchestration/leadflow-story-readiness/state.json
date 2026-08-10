@@ -1,0 +1,693 @@
+{
+  "schema_version": "1.0",
+  "workflow": "leadflow-story-readiness-orchestrator",
+  "epic": "E4",
+  "state_revision": 1,
+  "pilot_story_id": "E4-S5b",
+  "bootstrap_import": {
+    "import_id": "BASELINE-E4-20260810-001",
+    "origin": "MANUAL_BASELINE_IMPORT",
+    "approved_by": "Jordan",
+    "approved_at": "2026-08-10T17:47:17Z",
+    "imported_at": "2026-08-10T17:48:04Z",
+    "baseline_sha256": "542e146f1a0ef486406588fd50ea956dcfeebffc7ac0b549fc1a25bbd613e009"
+  },
+  "stories": [
+    {
+      "story_id": "E4-S1",
+      "story_file": "_bmad-output/implementation-artifacts/4-1-backup-and-restore-baseline.md",
+      "dependencies": [],
+      "source_status_observed": "ready-for-revalidation",
+      "status": "READY_FOR_DEV",
+      "current_gate": "MANUAL_BASELINE_IMPORT",
+      "review_round": 0,
+      "repair_round": 0,
+      "last_result": {
+        "gate": "MANUAL_BASELINE_IMPORT",
+        "verdict": "PASS",
+        "iteration": 0,
+        "source": "MANUAL_BASELINE_IMPORT",
+        "import_id": "BASELINE-E4-20260810-001",
+        "timestamp": "2026-08-10T17:48:04Z",
+        "evidence_refs": [
+          "EV-BASELINE-E4-S1-001"
+        ]
+      },
+      "blockers_open": [],
+      "blockers_resolved": [],
+      "decision_required": false,
+      "pending_decision_ref": null,
+      "resolved_decision_id": null,
+      "timestamps": {
+        "created_at": "2026-08-10T17:48:04Z",
+        "updated_at": "2026-08-10T17:48:04Z",
+        "last_gate_at": "2026-08-10T17:48:04Z",
+        "last_pass_at": "2026-08-10T17:48:04Z"
+      },
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "e9c9fe9175673d7532d188415cc4e230be5efe4c7bbd1cc5791b29d2eff1827e",
+        "captured_at": "2026-08-10T17:48:04Z"
+      },
+      "authoritative_fingerprints": [
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md",
+          "sha256": "f67c1f9a3052a25999925cb60fa635ec7df486ae1a49e62e5d76f1f41d8ec5a8"
+        },
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/planning-artifacts/epics.md",
+          "sha256": "d15d790fd4a75a6cb6ec472506d8c160f9e43cd70fee557737c20a1723027c4c"
+        },
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/project-context.md",
+          "sha256": "490a2f141f4a150ce845e088c8d0567428b1c98061c9b363187e08bd3d35dcbb"
+        }
+      ],
+      "dependency_fingerprints": [],
+      "evidence_refs": [
+        "EV-BASELINE-E4-S1-001"
+      ],
+      "baseline_import": {
+        "import_id": "BASELINE-E4-20260810-001",
+        "origin": "MANUAL_BASELINE_IMPORT",
+        "approved_by": "Jordan",
+        "approved_at": "2026-08-10T17:47:17Z",
+        "evidence_refs": [
+          "_bmad-output/implementation-artifacts/4-1-backup-and-restore-baseline.md#Status",
+          "_bmad-output/implementation-artifacts/4-1-backup-and-restore-baseline.md#Acceptance Criteria"
+        ],
+        "source_refs": [
+          "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md#AD-2",
+          "_bmad-output/planning-artifacts/epics.md#Epic-4",
+          "_bmad-output/project-context.md"
+        ],
+        "dependencies_checked": true,
+        "imported_at": "2026-08-10T17:48:04Z"
+      },
+      "validation_reference_fingerprints": [
+        {
+          "kind": "validation_reference",
+          "path": "_bmad-output/implementation-artifacts/4-1-backup-and-restore-baseline.md",
+          "sha256": "e9c9fe9175673d7532d188415cc4e230be5efe4c7bbd1cc5791b29d2eff1827e"
+        },
+        {
+          "kind": "validation_reference",
+          "path": "_bmad-output/implementation-artifacts/4-1-backup-and-restore-baseline.md",
+          "sha256": "e9c9fe9175673d7532d188415cc4e230be5efe4c7bbd1cc5791b29d2eff1827e"
+        }
+      ]
+    },
+    {
+      "story_id": "E4-S2",
+      "story_file": "_bmad-output/implementation-artifacts/4-2-singleton-identity-and-settings-ownership.md",
+      "dependencies": [
+        "E4-S1"
+      ],
+      "source_status_observed": "ready-for-revalidation",
+      "status": "READY_FOR_DEV",
+      "current_gate": "MANUAL_BASELINE_IMPORT",
+      "review_round": 0,
+      "repair_round": 0,
+      "last_result": {
+        "gate": "MANUAL_BASELINE_IMPORT",
+        "verdict": "PASS",
+        "iteration": 0,
+        "source": "MANUAL_BASELINE_IMPORT",
+        "import_id": "BASELINE-E4-20260810-001",
+        "timestamp": "2026-08-10T17:48:04Z",
+        "evidence_refs": [
+          "EV-BASELINE-E4-S2-001"
+        ]
+      },
+      "blockers_open": [],
+      "blockers_resolved": [],
+      "decision_required": false,
+      "pending_decision_ref": null,
+      "resolved_decision_id": null,
+      "timestamps": {
+        "created_at": "2026-08-10T17:48:04Z",
+        "updated_at": "2026-08-10T17:48:04Z",
+        "last_gate_at": "2026-08-10T17:48:04Z",
+        "last_pass_at": "2026-08-10T17:48:04Z"
+      },
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "fc2caf9a48685d9df58e4dde2127f7013a568e3194986caef17eb2583c97b183",
+        "captured_at": "2026-08-10T17:48:04Z"
+      },
+      "authoritative_fingerprints": [
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md",
+          "sha256": "f67c1f9a3052a25999925cb60fa635ec7df486ae1a49e62e5d76f1f41d8ec5a8"
+        },
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/planning-artifacts/epics.md",
+          "sha256": "d15d790fd4a75a6cb6ec472506d8c160f9e43cd70fee557737c20a1723027c4c"
+        },
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/project-context.md",
+          "sha256": "490a2f141f4a150ce845e088c8d0567428b1c98061c9b363187e08bd3d35dcbb"
+        }
+      ],
+      "dependency_fingerprints": [
+        {
+          "story_id": "E4-S1",
+          "sha256": "e9c9fe9175673d7532d188415cc4e230be5efe4c7bbd1cc5791b29d2eff1827e"
+        }
+      ],
+      "evidence_refs": [
+        "EV-BASELINE-E4-S2-001"
+      ],
+      "baseline_import": {
+        "import_id": "BASELINE-E4-20260810-001",
+        "origin": "MANUAL_BASELINE_IMPORT",
+        "approved_by": "Jordan",
+        "approved_at": "2026-08-10T17:47:17Z",
+        "evidence_refs": [
+          "_bmad-output/implementation-artifacts/4-2-singleton-identity-and-settings-ownership.md#Status",
+          "_bmad-output/implementation-artifacts/4-2-singleton-identity-and-settings-ownership.md#Acceptance Criteria"
+        ],
+        "source_refs": [
+          "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md#AD-3",
+          "_bmad-output/planning-artifacts/epics.md#Epic-4",
+          "_bmad-output/project-context.md"
+        ],
+        "dependencies_checked": true,
+        "imported_at": "2026-08-10T17:48:04Z"
+      },
+      "validation_reference_fingerprints": [
+        {
+          "kind": "validation_reference",
+          "path": "_bmad-output/implementation-artifacts/4-2-singleton-identity-and-settings-ownership.md",
+          "sha256": "fc2caf9a48685d9df58e4dde2127f7013a568e3194986caef17eb2583c97b183"
+        },
+        {
+          "kind": "validation_reference",
+          "path": "_bmad-output/implementation-artifacts/4-2-singleton-identity-and-settings-ownership.md",
+          "sha256": "fc2caf9a48685d9df58e4dde2127f7013a568e3194986caef17eb2583c97b183"
+        }
+      ]
+    },
+    {
+      "story_id": "E4-S3",
+      "story_file": "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md",
+      "dependencies": [
+        "E4-S2"
+      ],
+      "source_status_observed": "ready-for-dev",
+      "status": "READY_FOR_DEV",
+      "current_gate": "MANUAL_BASELINE_IMPORT",
+      "review_round": 0,
+      "repair_round": 0,
+      "last_result": {
+        "gate": "MANUAL_BASELINE_IMPORT",
+        "verdict": "PASS",
+        "iteration": 0,
+        "source": "MANUAL_BASELINE_IMPORT",
+        "import_id": "BASELINE-E4-20260810-001",
+        "timestamp": "2026-08-10T17:48:04Z",
+        "evidence_refs": [
+          "EV-BASELINE-E4-S3-001"
+        ]
+      },
+      "blockers_open": [],
+      "blockers_resolved": [],
+      "decision_required": false,
+      "pending_decision_ref": null,
+      "resolved_decision_id": null,
+      "timestamps": {
+        "created_at": "2026-08-10T17:48:04Z",
+        "updated_at": "2026-08-10T17:48:04Z",
+        "last_gate_at": "2026-08-10T17:48:04Z",
+        "last_pass_at": "2026-08-10T17:48:04Z"
+      },
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1",
+        "captured_at": "2026-08-10T17:48:04Z"
+      },
+      "authoritative_fingerprints": [
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md",
+          "sha256": "f67c1f9a3052a25999925cb60fa635ec7df486ae1a49e62e5d76f1f41d8ec5a8"
+        },
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/planning-artifacts/prds/prd-lead-flow-2026-08-05/prd.md",
+          "sha256": "f0ef320cef6e8ec2905f7b71503aeef2d70ebda5f7dc8e247c96c0edb2380f4d"
+        },
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md",
+          "sha256": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1"
+        }
+      ],
+      "dependency_fingerprints": [
+        {
+          "story_id": "E4-S2",
+          "sha256": "fc2caf9a48685d9df58e4dde2127f7013a568e3194986caef17eb2583c97b183"
+        }
+      ],
+      "evidence_refs": [
+        "EV-BASELINE-E4-S3-001"
+      ],
+      "baseline_import": {
+        "import_id": "BASELINE-E4-20260810-001",
+        "origin": "MANUAL_BASELINE_IMPORT",
+        "approved_by": "Jordan",
+        "approved_at": "2026-08-10T17:47:17Z",
+        "evidence_refs": [
+          "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md#Status",
+          "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md#Acceptance Criteria"
+        ],
+        "source_refs": [
+          "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md#AD-3",
+          "_bmad-output/planning-artifacts/prds/prd-lead-flow-2026-08-05/prd.md#4.-Alcance-del-primer-bloque",
+          "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md#Entrypoint and AUTH_REQUIRED Matrix"
+        ],
+        "dependencies_checked": true,
+        "imported_at": "2026-08-10T17:48:04Z"
+      },
+      "validation_reference_fingerprints": [
+        {
+          "kind": "validation_reference",
+          "path": "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md",
+          "sha256": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1"
+        },
+        {
+          "kind": "validation_reference",
+          "path": "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md",
+          "sha256": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1"
+        }
+      ]
+    },
+    {
+      "story_id": "E4-S4",
+      "story_file": "_bmad-output/implementation-artifacts/4-4-backfill-dry-run.md",
+      "dependencies": [
+        "E4-S1",
+        "E4-S2"
+      ],
+      "source_status_observed": "ready-for-dev",
+      "status": "READY_FOR_DEV",
+      "current_gate": "MANUAL_BASELINE_IMPORT",
+      "review_round": 0,
+      "repair_round": 0,
+      "last_result": {
+        "gate": "MANUAL_BASELINE_IMPORT",
+        "verdict": "PASS",
+        "iteration": 0,
+        "source": "MANUAL_BASELINE_IMPORT",
+        "import_id": "BASELINE-E4-20260810-001",
+        "timestamp": "2026-08-10T17:48:04Z",
+        "evidence_refs": [
+          "EV-BASELINE-E4-S4-001"
+        ]
+      },
+      "blockers_open": [],
+      "blockers_resolved": [],
+      "decision_required": false,
+      "pending_decision_ref": null,
+      "resolved_decision_id": null,
+      "timestamps": {
+        "created_at": "2026-08-10T17:48:04Z",
+        "updated_at": "2026-08-10T17:48:04Z",
+        "last_gate_at": "2026-08-10T17:48:04Z",
+        "last_pass_at": "2026-08-10T17:48:04Z"
+      },
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "d022219bce0fc6b28f734cead6ab9b1ff7d3743e93b00cc61b18d691e7218a3f",
+        "captured_at": "2026-08-10T17:48:04Z"
+      },
+      "authoritative_fingerprints": [
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md",
+          "sha256": "f67c1f9a3052a25999925cb60fa635ec7df486ae1a49e62e5d76f1f41d8ec5a8"
+        },
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/planning-artifacts/epics.md",
+          "sha256": "d15d790fd4a75a6cb6ec472506d8c160f9e43cd70fee557737c20a1723027c4c"
+        },
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/project-context.md",
+          "sha256": "490a2f141f4a150ce845e088c8d0567428b1c98061c9b363187e08bd3d35dcbb"
+        }
+      ],
+      "dependency_fingerprints": [
+        {
+          "story_id": "E4-S1",
+          "sha256": "e9c9fe9175673d7532d188415cc4e230be5efe4c7bbd1cc5791b29d2eff1827e"
+        },
+        {
+          "story_id": "E4-S2",
+          "sha256": "fc2caf9a48685d9df58e4dde2127f7013a568e3194986caef17eb2583c97b183"
+        }
+      ],
+      "evidence_refs": [
+        "EV-BASELINE-E4-S4-001"
+      ],
+      "baseline_import": {
+        "import_id": "BASELINE-E4-20260810-001",
+        "origin": "MANUAL_BASELINE_IMPORT",
+        "approved_by": "Jordan",
+        "approved_at": "2026-08-10T17:47:17Z",
+        "evidence_refs": [
+          "_bmad-output/implementation-artifacts/4-4-backfill-dry-run.md#Status",
+          "_bmad-output/implementation-artifacts/4-4-backfill-dry-run.md#Acceptance Criteria"
+        ],
+        "source_refs": [
+          "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md#AD-3",
+          "_bmad-output/planning-artifacts/epics.md#Epic-4",
+          "_bmad-output/project-context.md"
+        ],
+        "dependencies_checked": true,
+        "imported_at": "2026-08-10T17:48:04Z"
+      },
+      "validation_reference_fingerprints": [
+        {
+          "kind": "validation_reference",
+          "path": "_bmad-output/implementation-artifacts/4-4-backfill-dry-run.md",
+          "sha256": "d022219bce0fc6b28f734cead6ab9b1ff7d3743e93b00cc61b18d691e7218a3f"
+        },
+        {
+          "kind": "validation_reference",
+          "path": "_bmad-output/implementation-artifacts/4-4-backfill-dry-run.md",
+          "sha256": "d022219bce0fc6b28f734cead6ab9b1ff7d3743e93b00cc61b18d691e7218a3f"
+        }
+      ]
+    },
+    {
+      "story_id": "E4-S5a",
+      "story_file": "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md",
+      "dependencies": [
+        "E4-S2"
+      ],
+      "source_status_observed": "ready-for-dev",
+      "status": "READY_FOR_DEV",
+      "current_gate": "MANUAL_BASELINE_IMPORT",
+      "review_round": 0,
+      "repair_round": 0,
+      "last_result": {
+        "gate": "MANUAL_BASELINE_IMPORT",
+        "verdict": "PASS",
+        "iteration": 0,
+        "source": "MANUAL_BASELINE_IMPORT",
+        "import_id": "BASELINE-E4-20260810-001",
+        "timestamp": "2026-08-10T17:48:04Z",
+        "evidence_refs": [
+          "EV-BASELINE-E4-S5a-001"
+        ]
+      },
+      "blockers_open": [],
+      "blockers_resolved": [],
+      "decision_required": false,
+      "pending_decision_ref": null,
+      "resolved_decision_id": null,
+      "timestamps": {
+        "created_at": "2026-08-10T17:48:04Z",
+        "updated_at": "2026-08-10T17:48:04Z",
+        "last_gate_at": "2026-08-10T17:48:04Z",
+        "last_pass_at": "2026-08-10T17:48:04Z"
+      },
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208",
+        "captured_at": "2026-08-10T17:48:04Z"
+      },
+      "authoritative_fingerprints": [
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md",
+          "sha256": "f67c1f9a3052a25999925cb60fa635ec7df486ae1a49e62e5d76f1f41d8ec5a8"
+        },
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/planning-artifacts/epics.md",
+          "sha256": "d15d790fd4a75a6cb6ec472506d8c160f9e43cd70fee557737c20a1723027c4c"
+        },
+        {
+          "kind": "authoritative",
+          "path": "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md",
+          "sha256": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208"
+        }
+      ],
+      "dependency_fingerprints": [
+        {
+          "story_id": "E4-S2",
+          "sha256": "fc2caf9a48685d9df58e4dde2127f7013a568e3194986caef17eb2583c97b183"
+        }
+      ],
+      "evidence_refs": [
+        "EV-BASELINE-E4-S5a-001"
+      ],
+      "baseline_import": {
+        "import_id": "BASELINE-E4-20260810-001",
+        "origin": "MANUAL_BASELINE_IMPORT",
+        "approved_by": "Jordan",
+        "approved_at": "2026-08-10T17:47:17Z",
+        "evidence_refs": [
+          "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md#Status",
+          "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md#Acceptance Criteria"
+        ],
+        "source_refs": [
+          "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md#AD-10",
+          "_bmad-output/planning-artifacts/epics.md#Epic-4",
+          "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md#Scope and ownership boundary"
+        ],
+        "dependencies_checked": true,
+        "imported_at": "2026-08-10T17:48:04Z"
+      },
+      "validation_reference_fingerprints": [
+        {
+          "kind": "validation_reference",
+          "path": "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md",
+          "sha256": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208"
+        },
+        {
+          "kind": "validation_reference",
+          "path": "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md",
+          "sha256": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208"
+        }
+      ]
+    },
+    {
+      "story_id": "E4-S5b",
+      "story_file": "_bmad-output/implementation-artifacts/4-5b-event-enforcement-and-atomicity.md",
+      "dependencies": [
+        "E4-S5a"
+      ],
+      "source_status_observed": "ready-for-dev",
+      "status": "PENDING",
+      "current_gate": "SELECT_STORY",
+      "review_round": 0,
+      "repair_round": 0,
+      "last_result": null,
+      "blockers_open": [],
+      "blockers_resolved": [],
+      "decision_required": false,
+      "pending_decision_ref": null,
+      "resolved_decision_id": null,
+      "timestamps": {
+        "created_at": "2026-08-10T17:48:04Z",
+        "updated_at": "2026-08-10T17:48:04Z",
+        "last_gate_at": null,
+        "last_pass_at": null
+      },
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60",
+        "captured_at": "2026-08-10T17:48:04Z"
+      },
+      "authoritative_fingerprints": [],
+      "dependency_fingerprints": [],
+      "evidence_refs": [],
+      "baseline_import": null
+    },
+    {
+      "story_id": "E4-S6",
+      "story_file": "_bmad-output/implementation-artifacts/4-6-evolution-webhook-brownfield-boundary.md",
+      "dependencies": [
+        "E4-S3",
+        "E4-S5b"
+      ],
+      "source_status_observed": "ready-for-dev",
+      "status": "PENDING",
+      "current_gate": "SELECT_STORY",
+      "review_round": 0,
+      "repair_round": 0,
+      "last_result": null,
+      "blockers_open": [],
+      "blockers_resolved": [],
+      "decision_required": false,
+      "pending_decision_ref": null,
+      "resolved_decision_id": null,
+      "timestamps": {
+        "created_at": "2026-08-10T17:48:04Z",
+        "updated_at": "2026-08-10T17:48:04Z",
+        "last_gate_at": null,
+        "last_pass_at": null
+      },
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "a651d771c6b411bce47dd1c286270c34a9cbdf86468e1a752781e01b4b348627",
+        "captured_at": "2026-08-10T17:48:04Z"
+      },
+      "authoritative_fingerprints": [],
+      "dependency_fingerprints": [],
+      "evidence_refs": [],
+      "baseline_import": null
+    },
+    {
+      "story_id": "E4-S7",
+      "story_file": "_bmad-output/implementation-artifacts/4-7-rls-grants-target-matrix.md",
+      "dependencies": [
+        "E4-S2",
+        "E4-S3",
+        "E4-S5b"
+      ],
+      "source_status_observed": "ready-for-dev",
+      "status": "PENDING",
+      "current_gate": "SELECT_STORY",
+      "review_round": 0,
+      "repair_round": 0,
+      "last_result": null,
+      "blockers_open": [],
+      "blockers_resolved": [],
+      "decision_required": false,
+      "pending_decision_ref": null,
+      "resolved_decision_id": null,
+      "timestamps": {
+        "created_at": "2026-08-10T17:48:04Z",
+        "updated_at": "2026-08-10T17:48:04Z",
+        "last_gate_at": null,
+        "last_pass_at": null
+      },
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "95a57eb3d549cd8cfa5edc9e44edcaa70b1a9c2227598677949df5cec493b0fa",
+        "captured_at": "2026-08-10T17:48:04Z"
+      },
+      "authoritative_fingerprints": [],
+      "dependency_fingerprints": [],
+      "evidence_refs": [],
+      "baseline_import": null
+    },
+    {
+      "story_id": "E4-S8",
+      "story_file": "_bmad-output/implementation-artifacts/4-8-phase-b-cutover-and-backfill.md",
+      "dependencies": [
+        "E4-S1",
+        "E4-S2",
+        "E4-S3",
+        "E4-S4",
+        "E4-S5a",
+        "E4-S5b",
+        "E4-S6",
+        "E4-S7"
+      ],
+      "source_status_observed": "ready-for-dev",
+      "status": "PENDING",
+      "current_gate": "SELECT_STORY",
+      "review_round": 0,
+      "repair_round": 0,
+      "last_result": null,
+      "blockers_open": [],
+      "blockers_resolved": [],
+      "decision_required": false,
+      "pending_decision_ref": null,
+      "resolved_decision_id": null,
+      "timestamps": {
+        "created_at": "2026-08-10T17:48:04Z",
+        "updated_at": "2026-08-10T17:48:04Z",
+        "last_gate_at": null,
+        "last_pass_at": null
+      },
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "17061abe2ddba745bed112a79586c6e7a0a848061385c2b96170a1cea390e43b",
+        "captured_at": "2026-08-10T17:48:04Z"
+      },
+      "authoritative_fingerprints": [],
+      "dependency_fingerprints": [],
+      "evidence_refs": [],
+      "baseline_import": null
+    },
+    {
+      "story_id": "E4-S9",
+      "story_file": "_bmad-output/implementation-artifacts/4-9-brownfield-readiness-smoke.md",
+      "dependencies": [
+        "E4-S8"
+      ],
+      "source_status_observed": "ready-for-dev",
+      "status": "PENDING",
+      "current_gate": "SELECT_STORY",
+      "review_round": 0,
+      "repair_round": 0,
+      "last_result": null,
+      "blockers_open": [],
+      "blockers_resolved": [],
+      "decision_required": false,
+      "pending_decision_ref": null,
+      "resolved_decision_id": null,
+      "timestamps": {
+        "created_at": "2026-08-10T17:48:04Z",
+        "updated_at": "2026-08-10T17:48:04Z",
+        "last_gate_at": null,
+        "last_pass_at": null
+      },
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "9fb4f9432d92b6737ba86f1cf4ddd365134d80560fa7054f13d6851dd0a0fd0b",
+        "captured_at": "2026-08-10T17:48:04Z"
+      },
+      "authoritative_fingerprints": [],
+      "dependency_fingerprints": [],
+      "evidence_refs": [],
+      "baseline_import": null
+    },
+    {
+      "story_id": "E4-S10",
+      "story_file": "_bmad-output/implementation-artifacts/4-10-safe-reopen-and-fix-forward.md",
+      "dependencies": [
+        "E4-S9"
+      ],
+      "source_status_observed": "ready-for-dev",
+      "status": "PENDING",
+      "current_gate": "SELECT_STORY",
+      "review_round": 0,
+      "repair_round": 0,
+      "last_result": null,
+      "blockers_open": [],
+      "blockers_resolved": [],
+      "decision_required": false,
+      "pending_decision_ref": null,
+      "resolved_decision_id": null,
+      "timestamps": {
+        "created_at": "2026-08-10T17:48:04Z",
+        "updated_at": "2026-08-10T17:48:04Z",
+        "last_gate_at": null,
+        "last_pass_at": null
+      },
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "6e24939d704c6dfeb35c7e5c3109fc928cf8dad638d79b517f0b6a83214947e8",
+        "captured_at": "2026-08-10T17:48:04Z"
+      },
+      "authoritative_fingerprints": [],
+      "dependency_fingerprints": [],
+      "evidence_refs": [],
+      "baseline_import": null
+    }
+  ]
+}

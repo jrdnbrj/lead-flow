@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "request_id", "story_id", "category", "problem", "evidence", "recommendation", "alternatives", "artifacts_affected", "question"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "request_id": {"type": "string"},
+    "story_id": {"pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+    "category": {"const": "PRODUCT_DECISION"},
+    "problem": {"type": "string", "minLength": 1},
+    "evidence": {"type": "array", "minItems": 1},
+    "recommendation": {"type": "string", "minLength": 1},
+    "alternatives": {"type": "array", "minItems": 1, "maxItems": 2},
+    "artifacts_affected": {"type": "array", "minItems": 1},
+    "question": {"type": "string", "minLength": 1}
+  }
+}
