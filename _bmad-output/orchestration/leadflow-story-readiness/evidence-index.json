@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "entries": 5,
+  "entries": 31,
   "by_story": {
     "E4-S1": [
       "EV-BASELINE-E4-S1-001"
@@ -16,7 +16,45 @@
     ],
     "E4-S5a": [
       "EV-BASELINE-E4-S5a-001"
+    ],
+    "E4-S5b": [
+      "EV-VALIDATE-E4-S5b-001",
+      "EV-TRIAGE-E4-S5b-001",
+      "EV-REVALIDATING-E4-S5b-001",
+      "EV-STATUS-PROJECTION-E4-S5b-005"
+    ],
+    "E4-S6": [
+      "EV-VALIDATE-E4-S6-001",
+      "EV-REVALIDATING-E4-S6-002",
+      "EV-REVALIDATING-E4-S6-003",
+      "EV-STATUS-PROJECTION-E4-S6-016"
+    ],
+    "E4-S7": [
+      "EV-VALIDATE-E4-S7-001",
+      "EV-TRIAGE-E4-S7-001",
+      "EV-REVALIDATING-E4-S7-001",
+      "EV-REVALIDATING-E4-S7-002",
+      "EV-REVALIDATING-E4-S7-003",
+      "EV-STATUS-PROJECTION-E4-S7-025"
+    ],
+    "E4-S8": [
+      "EV-VALIDATE-E4-S8-001",
+      "EV-TRIAGE-E4-S8-001",
+      "EV-REVALIDATING-E4-S8-001",
+      "EV-STATUS-PROJECTION-E4-S8-031"
+    ],
+    "E4-S9": [
+      "EV-VALIDATE-E4-S9-001",
+      "EV-TRIAGE-E4-S9-001",
+      "EV-REVALIDATING-E4-S9-001",
+      "EV-STATUS-PROJECTION-E4-S9-037"
+    ],
+    "E4-S10": [
+      "EV-VALIDATE-E4-S10-001",
+      "EV-TRIAGE-E4-S10-001",
+      "EV-REVALIDATING-E4-S10-001",
+      "EV-STATUS-PROJECTION-E4-S10-043"
     ]
   },
-  "rebuilt_at": "2026-08-10T17:48:04Z"
+  "rebuilt_at": "2026-08-10T20:26:48Z"
 }

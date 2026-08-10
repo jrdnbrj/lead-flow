@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "workflow": "leadflow-story-readiness-orchestrator",
   "epic": "E4",
-  "state_revision": 1,
+  "state_revision": 43,
   "pilot_story_id": "E4-S5b",
   "bootstrap_import": {
     "import_id": "BASELINE-E4-20260810-001",
@@ -488,11 +488,25 @@
         "E4-S5a"
       ],
       "source_status_observed": "ready-for-dev",
-      "status": "PENDING",
-      "current_gate": "SELECT_STORY",
-      "review_round": 0,
+      "status": "READY_FOR_DEV",
+      "current_gate": "MARK_READY_FOR_DEV",
+      "review_round": 1,
       "repair_round": 0,
-      "last_result": null,
+      "last_result": {
+        "schema_version": "1.0",
+        "story_id": "E4-S5b",
+        "review_id": "REVIEW-REVALIDATING-E4-S5b-001",
+        "gate": "REVALIDATING",
+        "verdict": "PASS",
+        "iteration": 1,
+        "evidence_refs": [
+          "EV-REVALIDATING-E4-S5b-001"
+        ],
+        "timestamp": "2020-01-01T00:00:00Z",
+        "findings": [],
+        "validated_story_fingerprint": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60",
+        "final_story_fingerprint": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60"
+      },
       "blockers_open": [],
       "blockers_resolved": [],
       "decision_required": false,
@@ -500,19 +514,84 @@
       "resolved_decision_id": null,
       "timestamps": {
         "created_at": "2026-08-10T17:48:04Z",
-        "updated_at": "2026-08-10T17:48:04Z",
-        "last_gate_at": null,
-        "last_pass_at": null
+        "updated_at": "2026-08-10T18:49:10Z",
+        "last_gate_at": "2026-08-10T18:49:10Z",
+        "last_pass_at": "2026-08-10T18:49:10Z"
       },
       "fingerprint": {
         "algorithm": "sha256",
         "value": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60",
-        "captured_at": "2026-08-10T17:48:04Z"
+        "captured_at": "2026-08-10T18:49:10Z"
       },
-      "authoritative_fingerprints": [],
-      "dependency_fingerprints": [],
-      "evidence_refs": [],
-      "baseline_import": null
+      "authoritative_fingerprints": [
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md",
+          "sha256": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208"
+        },
+        {
+          "kind": "prd",
+          "path": "_bmad-output/planning-artifacts/prds/prd-lead-flow-2026-08-05/prd.md",
+          "sha256": "f0ef320cef6e8ec2905f7b71503aeef2d70ebda5f7dc8e247c96c0edb2380f4d"
+        },
+        {
+          "kind": "architecture",
+          "path": "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md",
+          "sha256": "f67c1f9a3052a25999925cb60fa635ec7df486ae1a49e62e5d76f1f41d8ec5a8"
+        },
+        {
+          "kind": "ux_design",
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-lead-flow-2026-08-05/DESIGN.md",
+          "sha256": "4acf9699556151502d7b52017024d9c402d7a9823ca8c30335cfbe2ea4508c2b"
+        },
+        {
+          "kind": "ux_experience",
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-lead-flow-2026-08-05/EXPERIENCE.md",
+          "sha256": "02de8c3de989e94c95f9835fd43e30ec1419b10a5ab517d7a757f9147cc5254b"
+        },
+        {
+          "kind": "epics",
+          "path": "_bmad-output/planning-artifacts/epics.md",
+          "sha256": "d15d790fd4a75a6cb6ec472506d8c160f9e43cd70fee557737c20a1723027c4c"
+        },
+        {
+          "kind": "project_context",
+          "path": "_bmad-output/project-context.md",
+          "sha256": "490a2f141f4a150ce845e088c8d0567428b1c98061c9b363187e08bd3d35dcbb"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/004_leadflow_follow_up_actions.sql",
+          "sha256": "78404d92658955ed41a15270c736e428d7c2d7c49367a9341bef3cdaa638073f"
+        }
+      ],
+      "dependency_fingerprints": [
+        {
+          "story_id": "E4-S5a",
+          "sha256": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208"
+        }
+      ],
+      "evidence_refs": [
+        "EV-VALIDATE-E4-S5b-001",
+        "EV-TRIAGE-E4-S5b-001",
+        "EV-REVALIDATING-E4-S5b-001",
+        "EV-STATUS-PROJECTION-E4-S5b-005"
+      ],
+      "baseline_import": null,
+      "validation_fingerprint": {
+        "algorithm": "sha256",
+        "value": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60",
+        "captured_at": "2020-01-01T00:00:00Z"
+      },
+      "status_projection": {
+        "field": "Status",
+        "from": "ready-for-dev",
+        "to": "ready-for-dev",
+        "validated_hash": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60",
+        "final_hash": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60",
+        "evidence_ref": "EV-STATUS-PROJECTION-E4-S5b-005",
+        "timestamp": "2026-08-10T18:49:10Z"
+      }
     },
     {
       "story_id": "E4-S6",
@@ -522,31 +601,147 @@
         "E4-S5b"
       ],
       "source_status_observed": "ready-for-dev",
-      "status": "PENDING",
-      "current_gate": "SELECT_STORY",
+      "status": "READY_FOR_DEV",
+      "current_gate": "MARK_READY_FOR_DEV",
       "review_round": 0,
-      "repair_round": 0,
-      "last_result": null,
+      "repair_round": 2,
+      "last_result": {
+        "schema_version": "1.0",
+        "story_id": "E4-S6",
+        "review_id": "REVIEW-REVALIDATING-E4-S6-003",
+        "gate": "REVALIDATING",
+        "verdict": "PASS",
+        "iteration": 3,
+        "findings": [
+          {
+            "finding_id": "S6-T-001",
+            "location": "4-6-evolution-webhook-brownfield-boundary.md:40",
+            "classification": "TECHNICAL_DETERMINISTIC",
+            "blocking": false,
+            "closure": "Cerrado por repair-001; la receta raw-body cumple AD-10."
+          },
+          {
+            "finding_id": "S6-D-001",
+            "location": "4-6-evolution-webhook-brownfield-boundary.md:21, 23, 31, 40, 49",
+            "classification": "PRODUCT_DECISION",
+            "blocking": false,
+            "closure": "Cerrado por DEC-REQ-E4-S6-INBOUND-OWNERSHIP-001 y repair-002; E4-S6 conserva el boundary, no habilita ni emite inbound_message_rejected, no agrega dependencia de Epic 2 y delega la auditoría canónica a Epic 2/inbound."
+          }
+        ],
+        "evidence_refs": [
+          "EV-VALIDATE-E4-S6-001",
+          "EV-REVALIDATING-E4-S6-002",
+          "EV-REVALIDATING-E4-S6-003"
+        ],
+        "timestamp": "2026-08-10T19:30:54Z",
+        "validated_story_fingerprint": "518639ac99dd34be82075a30c59107dfb655f3a3f6ecf97b714b9368f75c2f66",
+        "final_story_fingerprint": "518639ac99dd34be82075a30c59107dfb655f3a3f6ecf97b714b9368f75c2f66"
+      },
       "blockers_open": [],
       "blockers_resolved": [],
       "decision_required": false,
       "pending_decision_ref": null,
-      "resolved_decision_id": null,
+      "resolved_decision_id": "DEC-REQ-E4-S6-INBOUND-OWNERSHIP-001",
       "timestamps": {
         "created_at": "2026-08-10T17:48:04Z",
-        "updated_at": "2026-08-10T17:48:04Z",
-        "last_gate_at": null,
-        "last_pass_at": null
+        "updated_at": "2026-08-10T19:31:02Z",
+        "last_gate_at": "2026-08-10T19:31:02Z",
+        "last_pass_at": "2026-08-10T19:31:02Z"
       },
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "a651d771c6b411bce47dd1c286270c34a9cbdf86468e1a752781e01b4b348627",
-        "captured_at": "2026-08-10T17:48:04Z"
+        "value": "518639ac99dd34be82075a30c59107dfb655f3a3f6ecf97b714b9368f75c2f66",
+        "captured_at": "2026-08-10T19:31:02Z"
       },
-      "authoritative_fingerprints": [],
-      "dependency_fingerprints": [],
-      "evidence_refs": [],
-      "baseline_import": null
+      "authoritative_fingerprints": [
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md",
+          "sha256": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1"
+        },
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-5b-event-enforcement-and-atomicity.md",
+          "sha256": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60"
+        },
+        {
+          "kind": "prd",
+          "path": "_bmad-output/planning-artifacts/prds/prd-lead-flow-2026-08-05/prd.md",
+          "sha256": "f0ef320cef6e8ec2905f7b71503aeef2d70ebda5f7dc8e247c96c0edb2380f4d"
+        },
+        {
+          "kind": "architecture",
+          "path": "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md",
+          "sha256": "f67c1f9a3052a25999925cb60fa635ec7df486ae1a49e62e5d76f1f41d8ec5a8"
+        },
+        {
+          "kind": "ux_design",
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-lead-flow-2026-08-05/DESIGN.md",
+          "sha256": "4acf9699556151502d7b52017024d9c402d7a9823ca8c30335cfbe2ea4508c2b"
+        },
+        {
+          "kind": "ux_experience",
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-lead-flow-2026-08-05/EXPERIENCE.md",
+          "sha256": "02de8c3de989e94c95f9835fd43e30ec1419b10a5ab517d7a757f9147cc5254b"
+        },
+        {
+          "kind": "epics",
+          "path": "_bmad-output/planning-artifacts/epics.md",
+          "sha256": "d15d790fd4a75a6cb6ec472506d8c160f9e43cd70fee557737c20a1723027c4c"
+        },
+        {
+          "kind": "project_context",
+          "path": "_bmad-output/project-context.md",
+          "sha256": "490a2f141f4a150ce845e088c8d0567428b1c98061c9b363187e08bd3d35dcbb"
+        },
+        {
+          "kind": "brownfield",
+          "path": "app/api/webhooks/evolution/route.ts",
+          "sha256": "e57c22c5677528fa230faa5aa63f6f3d564de99151a0da41d298e9f15126577f"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/003_leadflow_follow_up_and_messages.sql",
+          "sha256": "599e7397b53159c190f93fb20db53cecc65961249af17325e4de204712c1e204"
+        },
+        {
+          "kind": "active_decision",
+          "decision_id": "DEC-REQ-E4-S6-INBOUND-OWNERSHIP-001",
+          "path": "_bmad-output/orchestration/leadflow-story-readiness/decision-ledger.jsonl",
+          "sha256": "f9f9846c663ae364680f496179a3ad52c0f667d5a8dab67d87026df14d4508d7"
+        }
+      ],
+      "dependency_fingerprints": [
+        {
+          "story_id": "E4-S3",
+          "sha256": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1"
+        },
+        {
+          "story_id": "E4-S5b",
+          "sha256": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60"
+        }
+      ],
+      "evidence_refs": [
+        "EV-VALIDATE-E4-S6-001",
+        "EV-REVALIDATING-E4-S6-002",
+        "EV-REVALIDATING-E4-S6-003",
+        "EV-STATUS-PROJECTION-E4-S6-016"
+      ],
+      "baseline_import": null,
+      "validation_fingerprint": {
+        "algorithm": "sha256",
+        "value": "518639ac99dd34be82075a30c59107dfb655f3a3f6ecf97b714b9368f75c2f66",
+        "captured_at": "2026-08-10T19:30:54Z"
+      },
+      "status_projection": {
+        "field": "Status",
+        "from": "ready-for-dev",
+        "to": "ready-for-dev",
+        "validated_hash": "518639ac99dd34be82075a30c59107dfb655f3a3f6ecf97b714b9368f75c2f66",
+        "final_hash": "518639ac99dd34be82075a30c59107dfb655f3a3f6ecf97b714b9368f75c2f66",
+        "evidence_ref": "EV-STATUS-PROJECTION-E4-S6-016",
+        "timestamp": "2026-08-10T19:31:02Z"
+      }
     },
     {
       "story_id": "E4-S7",
@@ -557,11 +752,26 @@
         "E4-S5b"
       ],
       "source_status_observed": "ready-for-dev",
-      "status": "PENDING",
-      "current_gate": "SELECT_STORY",
-      "review_round": 0,
-      "repair_round": 0,
-      "last_result": null,
+      "status": "READY_FOR_DEV",
+      "current_gate": "MARK_READY_FOR_DEV",
+      "review_round": 2,
+      "repair_round": 1,
+      "last_result": {
+        "schema_version": "1.0",
+        "story_id": "E4-S7",
+        "review_id": "REVIEW-REVALIDATING-E4-S7-003",
+        "gate": "REVALIDATING",
+        "verdict": "PASS",
+        "iteration": 2,
+        "evidence_refs": [
+          "EV-REVALIDATING-E4-S7-003"
+        ],
+        "timestamp": "2026-08-10T19:53:37Z",
+        "findings": [],
+        "resolution": "PASS: revalidación objetiva del contexto fresco; los cuatro blockers técnicos permanecen cerrados y no hay blockers nuevos.",
+        "validated_story_fingerprint": "569a18392f8e04de9cbf7345fe982b0fd120e7a8b22915e26c241779d3a07e8e",
+        "final_story_fingerprint": "569a18392f8e04de9cbf7345fe982b0fd120e7a8b22915e26c241779d3a07e8e"
+      },
       "blockers_open": [],
       "blockers_resolved": [],
       "decision_required": false,
@@ -569,19 +779,144 @@
       "resolved_decision_id": null,
       "timestamps": {
         "created_at": "2026-08-10T17:48:04Z",
-        "updated_at": "2026-08-10T17:48:04Z",
-        "last_gate_at": null,
-        "last_pass_at": null
+        "updated_at": "2026-08-10T19:54:04Z",
+        "last_gate_at": "2026-08-10T19:54:04Z",
+        "last_pass_at": "2026-08-10T19:54:04Z"
       },
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "95a57eb3d549cd8cfa5edc9e44edcaa70b1a9c2227598677949df5cec493b0fa",
-        "captured_at": "2026-08-10T17:48:04Z"
+        "value": "569a18392f8e04de9cbf7345fe982b0fd120e7a8b22915e26c241779d3a07e8e",
+        "captured_at": "2026-08-10T19:54:04Z"
       },
-      "authoritative_fingerprints": [],
-      "dependency_fingerprints": [],
-      "evidence_refs": [],
-      "baseline_import": null
+      "authoritative_fingerprints": [
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-2-singleton-identity-and-settings-ownership.md",
+          "sha256": "fc2caf9a48685d9df58e4dde2127f7013a568e3194986caef17eb2583c97b183"
+        },
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md",
+          "sha256": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1"
+        },
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-5b-event-enforcement-and-atomicity.md",
+          "sha256": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60"
+        },
+        {
+          "kind": "prd",
+          "path": "_bmad-output/planning-artifacts/prds/prd-lead-flow-2026-08-05/prd.md",
+          "sha256": "f0ef320cef6e8ec2905f7b71503aeef2d70ebda5f7dc8e247c96c0edb2380f4d"
+        },
+        {
+          "kind": "architecture",
+          "path": "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md",
+          "sha256": "f67c1f9a3052a25999925cb60fa635ec7df486ae1a49e62e5d76f1f41d8ec5a8"
+        },
+        {
+          "kind": "ux_design",
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-lead-flow-2026-08-05/DESIGN.md",
+          "sha256": "4acf9699556151502d7b52017024d9c402d7a9823ca8c30335cfbe2ea4508c2b"
+        },
+        {
+          "kind": "ux_experience",
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-lead-flow-2026-08-05/EXPERIENCE.md",
+          "sha256": "02de8c3de989e94c95f9835fd43e30ec1419b10a5ab517d7a757f9147cc5254b"
+        },
+        {
+          "kind": "epics",
+          "path": "_bmad-output/planning-artifacts/epics.md",
+          "sha256": "d15d790fd4a75a6cb6ec472506d8c160f9e43cd70fee557737c20a1723027c4c"
+        },
+        {
+          "kind": "project_context",
+          "path": "_bmad-output/project-context.md",
+          "sha256": "490a2f141f4a150ce845e088c8d0567428b1c98061c9b363187e08bd3d35dcbb"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/001_leadflow_core_schema.sql",
+          "sha256": "5bc64baeaeabe0c9513649b4a877c9bdba73fadf8e036ac58f7ce58ea9cb9841"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/002_leadflow_anonymous_dashboard_and_whatsapp.sql",
+          "sha256": "12474af5fb423aa6bfe35c6a45122260aab5bec235ea2ab71ebe66dd86ca4650"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/003_leadflow_follow_up_and_messages.sql",
+          "sha256": "599e7397b53159c190f93fb20db53cecc65961249af17325e4de204712c1e204"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/004_leadflow_follow_up_actions.sql",
+          "sha256": "78404d92658955ed41a15270c736e428d7c2d7c49367a9341bef3cdaa638073f"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/005_leadflow_backfill_contacted_status.sql",
+          "sha256": "b3d721ddddedd845276908d083f16b021ebe0c9de5120fe27bc0bd87bc341192"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/006_leadflow_persistent_config_realtime_and_soft_delete.sql",
+          "sha256": "a5877e375058ffb3ef8841fe65417a58c25495d39442dd3b7cd7bea22fd74067"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/007_changan_catalog_and_multi_car_leads.sql",
+          "sha256": "e769d1cc5a70afb0d9c28923b7e73be935f57defd2bd85acad4fc1bd15c00bf2"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/008_soft_delete_lead_rpc.sql",
+          "sha256": "74ec366eb54f63a0b3ff8c5c04bc0a8a2e37440475a5467699a7d5eeedcf6bef"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/009_complete_car_model_images.sql",
+          "sha256": "1aebaaff0b5c3cf6a9d4dddb93212b29f4f0262ed22fdf33677e1705a455f371"
+        }
+      ],
+      "dependency_fingerprints": [
+        {
+          "story_id": "E4-S2",
+          "sha256": "fc2caf9a48685d9df58e4dde2127f7013a568e3194986caef17eb2583c97b183"
+        },
+        {
+          "story_id": "E4-S3",
+          "sha256": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1"
+        },
+        {
+          "story_id": "E4-S5b",
+          "sha256": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60"
+        }
+      ],
+      "evidence_refs": [
+        "EV-VALIDATE-E4-S7-001",
+        "EV-TRIAGE-E4-S7-001",
+        "EV-REVALIDATING-E4-S7-001",
+        "EV-REVALIDATING-E4-S7-002",
+        "EV-REVALIDATING-E4-S7-003",
+        "EV-STATUS-PROJECTION-E4-S7-025"
+      ],
+      "baseline_import": null,
+      "validation_fingerprint": {
+        "algorithm": "sha256",
+        "value": "569a18392f8e04de9cbf7345fe982b0fd120e7a8b22915e26c241779d3a07e8e",
+        "captured_at": "2026-08-10T19:53:37Z"
+      },
+      "status_projection": {
+        "field": "Status",
+        "from": "ready-for-dev",
+        "to": "ready-for-dev",
+        "validated_hash": "569a18392f8e04de9cbf7345fe982b0fd120e7a8b22915e26c241779d3a07e8e",
+        "final_hash": "569a18392f8e04de9cbf7345fe982b0fd120e7a8b22915e26c241779d3a07e8e",
+        "evidence_ref": "EV-STATUS-PROJECTION-E4-S7-025",
+        "timestamp": "2026-08-10T19:54:04Z"
+      }
     },
     {
       "story_id": "E4-S8",
@@ -597,11 +932,76 @@
         "E4-S7"
       ],
       "source_status_observed": "ready-for-dev",
-      "status": "PENDING",
-      "current_gate": "SELECT_STORY",
+      "status": "READY_FOR_DEV",
+      "current_gate": "MARK_READY_FOR_DEV",
       "review_round": 0,
-      "repair_round": 0,
-      "last_result": null,
+      "repair_round": 1,
+      "last_result": {
+        "schema_version": "1.0",
+        "story_id": "E4-S8",
+        "review_id": "REVIEW-REVALIDATING-E4-S8-001",
+        "gate": "REVALIDATING",
+        "verdict": "PASS",
+        "iteration": 1,
+        "evidence_refs": [
+          "EV-REVALIDATING-E4-S8-001"
+        ],
+        "timestamp": "2026-08-10T20:10:03Z",
+        "findings": [
+          {
+            "finding_id": "S8-T-001",
+            "location": "4-8-phase-b-cutover-and-backfill.md:17",
+            "classification": "TECHNICAL_DETERMINISTIC",
+            "blocking": false,
+            "authority_reference": "4-3-auth-entry-modes-and-required-auth.md:34-40",
+            "summary": "AC1 now includes E4-S3 among the required PASS gates.",
+            "closure_criterion": "E4-S3 PASS is a mandatory precondition.",
+            "resolution": "Cerrado por repair-001."
+          },
+          {
+            "finding_id": "S8-T-002",
+            "location": "4-8-phase-b-cutover-and-backfill.md:17, 20",
+            "classification": "TECHNICAL_DETERMINISTIC",
+            "blocking": false,
+            "authority_reference": "4-4-backfill-dry-run.md:18-41",
+            "summary": "The backfill is bound to the current PASS dry-run and to direct roots only.",
+            "closure_criterion": "The E4-S4 report is immutable input; derived relations, tenant_id and future N/A roots are not mutated.",
+            "resolution": "Cerrado por repair-001."
+          },
+          {
+            "finding_id": "S8-T-003",
+            "location": "4-8-phase-b-cutover-and-backfill.md:18, 48",
+            "classification": "TECHNICAL_DETERMINISTIC",
+            "blocking": false,
+            "authority_reference": "4-4-backfill-dry-run.md:25",
+            "summary": "Writer coverage now has a versioned artifact and fail-closed behavior for unlisted writers.",
+            "closure_criterion": "Every root writer is FROZEN or SHARED_LOCK and unlisted/uncovered writers fail the cutover.",
+            "resolution": "Cerrado por repair-001."
+          },
+          {
+            "finding_id": "S8-T-004",
+            "location": "4-8-phase-b-cutover-and-backfill.md:22, 69",
+            "classification": "TECHNICAL_DETERMINISTIC",
+            "blocking": false,
+            "authority_reference": "4-7-rls-grants-target-matrix.md:19-25",
+            "summary": "The final phase is bound to E4-S7 versioned targets and explicitly revokes the temporary Phase A soft-delete grant while preserving behavior.",
+            "closure_criterion": "Only the PASS target from E4-S7 is applied; soft_delete_lead grant transition is owned by E4-S8.",
+            "resolution": "Cerrado por repair-001."
+          },
+          {
+            "finding_id": "S8-T-005",
+            "location": "4-8-phase-b-cutover-and-backfill.md:25",
+            "classification": "TECHNICAL_DETERMINISTIC",
+            "blocking": false,
+            "authority_reference": "4-5b-event-enforcement-and-atomicity.md:17-22",
+            "summary": "Bulk ownership mutation now has a versioned operational evidence contract and prohibits unregistered product events.",
+            "closure_criterion": "The cutover report carries correlation_id, counts, affected roots, event/audit refs, assertions and rollback result; failures abort.",
+            "resolution": "Cerrado por repair-001."
+          }
+        ],
+        "validated_story_fingerprint": "2f08f59d434b847ab90669cd2e41403daa964de8871fa34f6ffba7bafbaad877",
+        "final_story_fingerprint": "2f08f59d434b847ab90669cd2e41403daa964de8871fa34f6ffba7bafbaad877"
+      },
       "blockers_open": [],
       "blockers_resolved": [],
       "decision_required": false,
@@ -609,19 +1009,142 @@
       "resolved_decision_id": null,
       "timestamps": {
         "created_at": "2026-08-10T17:48:04Z",
-        "updated_at": "2026-08-10T17:48:04Z",
-        "last_gate_at": null,
-        "last_pass_at": null
+        "updated_at": "2026-08-10T20:10:50Z",
+        "last_gate_at": "2026-08-10T20:10:50Z",
+        "last_pass_at": "2026-08-10T20:10:50Z"
       },
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "17061abe2ddba745bed112a79586c6e7a0a848061385c2b96170a1cea390e43b",
-        "captured_at": "2026-08-10T17:48:04Z"
+        "value": "2f08f59d434b847ab90669cd2e41403daa964de8871fa34f6ffba7bafbaad877",
+        "captured_at": "2026-08-10T20:10:50Z"
       },
-      "authoritative_fingerprints": [],
-      "dependency_fingerprints": [],
-      "evidence_refs": [],
-      "baseline_import": null
+      "authoritative_fingerprints": [
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-1-backup-and-restore-baseline.md",
+          "sha256": "e9c9fe9175673d7532d188415cc4e230be5efe4c7bbd1cc5791b29d2eff1827e"
+        },
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-2-singleton-identity-and-settings-ownership.md",
+          "sha256": "fc2caf9a48685d9df58e4dde2127f7013a568e3194986caef17eb2583c97b183"
+        },
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md",
+          "sha256": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1"
+        },
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-4-backfill-dry-run.md",
+          "sha256": "d022219bce0fc6b28f734cead6ab9b1ff7d3743e93b00cc61b18d691e7218a3f"
+        },
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md",
+          "sha256": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208"
+        },
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-5b-event-enforcement-and-atomicity.md",
+          "sha256": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60"
+        },
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-6-evolution-webhook-brownfield-boundary.md",
+          "sha256": "518639ac99dd34be82075a30c59107dfb655f3a3f6ecf97b714b9368f75c2f66"
+        },
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-7-rls-grants-target-matrix.md",
+          "sha256": "569a18392f8e04de9cbf7345fe982b0fd120e7a8b22915e26c241779d3a07e8e"
+        },
+        {
+          "kind": "prd",
+          "path": "_bmad-output/planning-artifacts/prds/prd-lead-flow-2026-08-05/prd.md",
+          "sha256": "f0ef320cef6e8ec2905f7b71503aeef2d70ebda5f7dc8e247c96c0edb2380f4d"
+        },
+        {
+          "kind": "architecture",
+          "path": "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md",
+          "sha256": "f67c1f9a3052a25999925cb60fa635ec7df486ae1a49e62e5d76f1f41d8ec5a8"
+        },
+        {
+          "kind": "ux_design",
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-lead-flow-2026-08-05/DESIGN.md",
+          "sha256": "4acf9699556151502d7b52017024d9c402d7a9823ca8c30335cfbe2ea4508c2b"
+        },
+        {
+          "kind": "ux_experience",
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-lead-flow-2026-08-05/EXPERIENCE.md",
+          "sha256": "02de8c3de989e94c95f9835fd43e30ec1419b10a5ab517d7a757f9147cc5254b"
+        },
+        {
+          "kind": "epics",
+          "path": "_bmad-output/planning-artifacts/epics.md",
+          "sha256": "d15d790fd4a75a6cb6ec472506d8c160f9e43cd70fee557737c20a1723027c4c"
+        },
+        {
+          "kind": "project_context",
+          "path": "_bmad-output/project-context.md",
+          "sha256": "490a2f141f4a150ce845e088c8d0567428b1c98061c9b363187e08bd3d35dcbb"
+        }
+      ],
+      "dependency_fingerprints": [
+        {
+          "story_id": "E4-S1",
+          "sha256": "e9c9fe9175673d7532d188415cc4e230be5efe4c7bbd1cc5791b29d2eff1827e"
+        },
+        {
+          "story_id": "E4-S2",
+          "sha256": "fc2caf9a48685d9df58e4dde2127f7013a568e3194986caef17eb2583c97b183"
+        },
+        {
+          "story_id": "E4-S3",
+          "sha256": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1"
+        },
+        {
+          "story_id": "E4-S4",
+          "sha256": "d022219bce0fc6b28f734cead6ab9b1ff7d3743e93b00cc61b18d691e7218a3f"
+        },
+        {
+          "story_id": "E4-S5a",
+          "sha256": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208"
+        },
+        {
+          "story_id": "E4-S5b",
+          "sha256": "c094ed7dd7d2880bfb2afbfa9648ff0f4d6486ca2f0b0e5f543130238527fb60"
+        },
+        {
+          "story_id": "E4-S6",
+          "sha256": "518639ac99dd34be82075a30c59107dfb655f3a3f6ecf97b714b9368f75c2f66"
+        },
+        {
+          "story_id": "E4-S7",
+          "sha256": "569a18392f8e04de9cbf7345fe982b0fd120e7a8b22915e26c241779d3a07e8e"
+        }
+      ],
+      "evidence_refs": [
+        "EV-VALIDATE-E4-S8-001",
+        "EV-TRIAGE-E4-S8-001",
+        "EV-REVALIDATING-E4-S8-001",
+        "EV-STATUS-PROJECTION-E4-S8-031"
+      ],
+      "baseline_import": null,
+      "validation_fingerprint": {
+        "algorithm": "sha256",
+        "value": "2f08f59d434b847ab90669cd2e41403daa964de8871fa34f6ffba7bafbaad877",
+        "captured_at": "2026-08-10T20:10:03Z"
+      },
+      "status_projection": {
+        "field": "Status",
+        "from": "ready-for-dev",
+        "to": "ready-for-dev",
+        "validated_hash": "2f08f59d434b847ab90669cd2e41403daa964de8871fa34f6ffba7bafbaad877",
+        "final_hash": "2f08f59d434b847ab90669cd2e41403daa964de8871fa34f6ffba7bafbaad877",
+        "evidence_ref": "EV-STATUS-PROJECTION-E4-S8-031",
+        "timestamp": "2026-08-10T20:10:50Z"
+      }
     },
     {
       "story_id": "E4-S9",
@@ -630,11 +1153,53 @@
         "E4-S8"
       ],
       "source_status_observed": "ready-for-dev",
-      "status": "PENDING",
-      "current_gate": "SELECT_STORY",
+      "status": "READY_FOR_DEV",
+      "current_gate": "MARK_READY_FOR_DEV",
       "review_round": 0,
-      "repair_round": 0,
-      "last_result": null,
+      "repair_round": 1,
+      "last_result": {
+        "schema_version": "1.0",
+        "story_id": "E4-S9",
+        "review_id": "REVIEW-REVALIDATING-E4-S9-001",
+        "gate": "REVALIDATING",
+        "iteration": 1,
+        "verdict": "PASS",
+        "input_manifest": "_bmad-output/orchestration/leadflow-story-readiness/runs/E4-S9/input-manifest-002.json",
+        "findings": [
+          {
+            "finding_id": "S9-T-001",
+            "blocking": false,
+            "resolution": "Cerrado: AUTH_REQUIRED=true, superficie anónima cerrada y reporte versionado con esquema obligatorio."
+          },
+          {
+            "finding_id": "S9-T-002",
+            "blocking": false,
+            "resolution": "Cerrado: entorno controlado, fixture aislado, probes incorrecto/anónimo, cleanup y destino WhatsApp mock/controlado."
+          },
+          {
+            "finding_id": "S9-T-003",
+            "blocking": false,
+            "resolution": "Cerrado: dedupe exacto por (evolution_instance, provider_message_id) y matriz inbound/outbound/duplicate/no-ID sin mutación."
+          },
+          {
+            "finding_id": "S9-T-004",
+            "blocking": false,
+            "resolution": "Cerrado: evidencia de estados Realtime, fallback manual, RPC, cancelación, conservación y no re-asociación."
+          },
+          {
+            "finding_id": "S9-T-005",
+            "blocking": false,
+            "resolution": "Cerrado: fail-closed explícito y trazabilidad de E4-S8, E4-S10 y superficies brownfield requeridas."
+          }
+        ],
+        "blockers": [],
+        "evidence_refs": [
+          "EV-REVALIDATING-E4-S9-001"
+        ],
+        "timestamp": "2026-08-10T20:17:31Z",
+        "validated_story_fingerprint": "4446eb79dc2a38767a0004f88a4566964035f3e9817f34eb38a50c64a575e1c5",
+        "final_story_fingerprint": "4446eb79dc2a38767a0004f88a4566964035f3e9817f34eb38a50c64a575e1c5"
+      },
       "blockers_open": [],
       "blockers_resolved": [],
       "decision_required": false,
@@ -642,19 +1207,139 @@
       "resolved_decision_id": null,
       "timestamps": {
         "created_at": "2026-08-10T17:48:04Z",
-        "updated_at": "2026-08-10T17:48:04Z",
-        "last_gate_at": null,
-        "last_pass_at": null
+        "updated_at": "2026-08-10T20:18:06Z",
+        "last_gate_at": "2026-08-10T20:18:06Z",
+        "last_pass_at": "2026-08-10T20:18:06Z"
       },
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "9fb4f9432d92b6737ba86f1cf4ddd365134d80560fa7054f13d6851dd0a0fd0b",
-        "captured_at": "2026-08-10T17:48:04Z"
+        "value": "4446eb79dc2a38767a0004f88a4566964035f3e9817f34eb38a50c64a575e1c5",
+        "captured_at": "2026-08-10T20:18:06Z"
       },
-      "authoritative_fingerprints": [],
-      "dependency_fingerprints": [],
-      "evidence_refs": [],
-      "baseline_import": null
+      "authoritative_fingerprints": [
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-8-phase-b-cutover-and-backfill.md",
+          "sha256": "2f08f59d434b847ab90669cd2e41403daa964de8871fa34f6ffba7bafbaad877"
+        },
+        {
+          "kind": "prd",
+          "path": "_bmad-output/planning-artifacts/prds/prd-lead-flow-2026-08-05/prd.md",
+          "sha256": "f0ef320cef6e8ec2905f7b71503aeef2d70ebda5f7dc8e247c96c0edb2380f4d"
+        },
+        {
+          "kind": "architecture",
+          "path": "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md",
+          "sha256": "f67c1f9a3052a25999925cb60fa635ec7df486ae1a49e62e5d76f1f41d8ec5a8"
+        },
+        {
+          "kind": "ux_design",
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-lead-flow-2026-08-05/DESIGN.md",
+          "sha256": "4acf9699556151502d7b52017024d9c402d7a9823ca8c30335cfbe2ea4508c2b"
+        },
+        {
+          "kind": "ux_experience",
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-lead-flow-2026-08-05/EXPERIENCE.md",
+          "sha256": "02de8c3de989e94c95f9835fd43e30ec1419b10a5ab517d7a757f9147cc5254b"
+        },
+        {
+          "kind": "epics",
+          "path": "_bmad-output/planning-artifacts/epics.md",
+          "sha256": "d15d790fd4a75a6cb6ec472506d8c160f9e43cd70fee557737c20a1723027c4c"
+        },
+        {
+          "kind": "project_context",
+          "path": "_bmad-output/project-context.md",
+          "sha256": "490a2f141f4a150ce845e088c8d0567428b1c98061c9b363187e08bd3d35dcbb"
+        },
+        {
+          "kind": "brownfield",
+          "path": "app/api/webhooks/evolution/route.ts",
+          "sha256": "e57c22c5677528fa230faa5aa63f6f3d564de99151a0da41d298e9f15126577f"
+        },
+        {
+          "kind": "brownfield",
+          "path": "app/dashboard/page.tsx",
+          "sha256": "274f40b408c1df96dae2b248a588a3fe8a0890ceb173d9357f4d0faab01cbf6b"
+        },
+        {
+          "kind": "brownfield",
+          "path": "app/nuevo/page.tsx",
+          "sha256": "9371f103f527d250c162e9a19d30681d98be81376fcb8482dc0f9cc34041e7a1"
+        },
+        {
+          "kind": "brownfield",
+          "path": "app/whatsapp/page.tsx",
+          "sha256": "c1322b389bcd5813a97e01d484aa787ebab4a602e66505819e215a250b64b899"
+        },
+        {
+          "kind": "brownfield",
+          "path": "components/dashboard/dashboard-client.tsx",
+          "sha256": "d410755cd93783c6316a73beca56473230e8f327729fbc4e7d1114d6eff820c2"
+        },
+        {
+          "kind": "brownfield",
+          "path": "components/leads/lead-capture-form.tsx",
+          "sha256": "52f811de5e9a249bc5101ee9c186a49843c4e952903efff1a52a890d5c0c4e75"
+        },
+        {
+          "kind": "brownfield",
+          "path": "lib/leads/actions.ts",
+          "sha256": "9e52c43cfe334519e4a830691d9c575950bba89aa4ba42f1cf25962f47c27628"
+        },
+        {
+          "kind": "brownfield",
+          "path": "lib/leads/repository.ts",
+          "sha256": "428594cb478ba4bcdfc1549ff0b8e8bf8ebef717cd0335e23c327c4986db04b5"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/003_leadflow_follow_up_and_messages.sql",
+          "sha256": "599e7397b53159c190f93fb20db53cecc65961249af17325e4de204712c1e204"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/004_leadflow_follow_up_actions.sql",
+          "sha256": "78404d92658955ed41a15270c736e428d7c2d7c49367a9341bef3cdaa638073f"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/006_leadflow_persistent_config_realtime_and_soft_delete.sql",
+          "sha256": "a5877e375058ffb3ef8841fe65417a58c25495d39442dd3b7cd7bea22fd74067"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/008_soft_delete_lead_rpc.sql",
+          "sha256": "74ec366eb54f63a0b3ff8c5c04bc0a8a2e37440475a5467699a7d5eeedcf6bef"
+        }
+      ],
+      "dependency_fingerprints": [
+        {
+          "story_id": "E4-S8",
+          "sha256": "2f08f59d434b847ab90669cd2e41403daa964de8871fa34f6ffba7bafbaad877"
+        }
+      ],
+      "evidence_refs": [
+        "EV-VALIDATE-E4-S9-001",
+        "EV-TRIAGE-E4-S9-001",
+        "EV-REVALIDATING-E4-S9-001",
+        "EV-STATUS-PROJECTION-E4-S9-037"
+      ],
+      "baseline_import": null,
+      "validation_fingerprint": {
+        "algorithm": "sha256",
+        "value": "4446eb79dc2a38767a0004f88a4566964035f3e9817f34eb38a50c64a575e1c5",
+        "captured_at": "2026-08-10T20:17:31Z"
+      },
+      "status_projection": {
+        "field": "Status",
+        "from": "ready-for-dev",
+        "to": "ready-for-dev",
+        "validated_hash": "4446eb79dc2a38767a0004f88a4566964035f3e9817f34eb38a50c64a575e1c5",
+        "final_hash": "4446eb79dc2a38767a0004f88a4566964035f3e9817f34eb38a50c64a575e1c5",
+        "evidence_ref": "EV-STATUS-PROJECTION-E4-S9-037",
+        "timestamp": "2026-08-10T20:18:06Z"
+      }
     },
     {
       "story_id": "E4-S10",
@@ -663,11 +1348,53 @@
         "E4-S9"
       ],
       "source_status_observed": "ready-for-dev",
-      "status": "PENDING",
-      "current_gate": "SELECT_STORY",
+      "status": "READY_FOR_DEV",
+      "current_gate": "MARK_READY_FOR_DEV",
       "review_round": 0,
-      "repair_round": 0,
-      "last_result": null,
+      "repair_round": 1,
+      "last_result": {
+        "schema_version": "1.0",
+        "story_id": "E4-S10",
+        "review_id": "REVIEW-REVALIDATING-E4-S10-001",
+        "gate": "REVALIDATING",
+        "iteration": 1,
+        "verdict": "PASS",
+        "input_manifest": "_bmad-output/orchestration/leadflow-story-readiness/runs/E4-S10/input-manifest-002.json",
+        "findings": [
+          {
+            "finding_id": "S10-T-001",
+            "blocking": false,
+            "resolution": "Cerrado: runbook versionado con PASS/fingerprints de E4-S1, S4, S7, S8 y S9, health/readiness, singleton, entorno y correlation ID."
+          },
+          {
+            "finding_id": "S10-T-002",
+            "blocking": false,
+            "resolution": "Cerrado: secuencia registrada de precondiciones, mantenimiento, lock/reintento, AUTH_REQUIRED=true, probes y liberación posterior de writers."
+          },
+          {
+            "finding_id": "S10-T-003",
+            "blocking": false,
+            "resolution": "Cerrado: assertions fail-closed, callback reintentable, correlation ID y prohibición explícita de restaurar policies/grants anónimos."
+          },
+          {
+            "finding_id": "S10-T-004",
+            "blocking": false,
+            "resolution": "Cerrado: reporte final con probes positivos/negativos, fallback, no-rematching, ventana de observación y control de secretos."
+          },
+          {
+            "finding_id": "S10-T-005",
+            "blocking": false,
+            "resolution": "Cerrado: referencias de stories precondición y superficies brownfield autenticadas, webhook, Realtime y soft delete."
+          }
+        ],
+        "blockers": [],
+        "evidence_refs": [
+          "EV-REVALIDATING-E4-S10-001"
+        ],
+        "timestamp": "2026-08-10T20:26:19Z",
+        "validated_story_fingerprint": "0e87b0df28f879c0208f8e5f1b0a93b7c036b3636af49e7b4a19af72cbb42b33",
+        "final_story_fingerprint": "0e87b0df28f879c0208f8e5f1b0a93b7c036b3636af49e7b4a19af72cbb42b33"
+      },
       "blockers_open": [],
       "blockers_resolved": [],
       "decision_required": false,
@@ -675,19 +1402,212 @@
       "resolved_decision_id": null,
       "timestamps": {
         "created_at": "2026-08-10T17:48:04Z",
-        "updated_at": "2026-08-10T17:48:04Z",
-        "last_gate_at": null,
-        "last_pass_at": null
+        "updated_at": "2026-08-10T20:26:48Z",
+        "last_gate_at": "2026-08-10T20:26:48Z",
+        "last_pass_at": "2026-08-10T20:26:48Z"
       },
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "6e24939d704c6dfeb35c7e5c3109fc928cf8dad638d79b517f0b6a83214947e8",
-        "captured_at": "2026-08-10T17:48:04Z"
+        "value": "0e87b0df28f879c0208f8e5f1b0a93b7c036b3636af49e7b4a19af72cbb42b33",
+        "captured_at": "2026-08-10T20:26:48Z"
       },
-      "authoritative_fingerprints": [],
-      "dependency_fingerprints": [],
-      "evidence_refs": [],
-      "baseline_import": null
+      "authoritative_fingerprints": [
+        {
+          "kind": "dependency",
+          "path": "_bmad-output/implementation-artifacts/4-9-brownfield-readiness-smoke.md",
+          "sha256": "4446eb79dc2a38767a0004f88a4566964035f3e9817f34eb38a50c64a575e1c5"
+        },
+        {
+          "kind": "prd",
+          "path": "_bmad-output/planning-artifacts/prds/prd-lead-flow-2026-08-05/prd.md",
+          "sha256": "f0ef320cef6e8ec2905f7b71503aeef2d70ebda5f7dc8e247c96c0edb2380f4d"
+        },
+        {
+          "kind": "architecture",
+          "path": "_bmad-output/planning-artifacts/architecture/architecture-lead-flow-2026-08-06/ARCHITECTURE-SPINE.md",
+          "sha256": "f67c1f9a3052a25999925cb60fa635ec7df486ae1a49e62e5d76f1f41d8ec5a8"
+        },
+        {
+          "kind": "ux_design",
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-lead-flow-2026-08-05/DESIGN.md",
+          "sha256": "4acf9699556151502d7b52017024d9c402d7a9823ca8c30335cfbe2ea4508c2b"
+        },
+        {
+          "kind": "ux_experience",
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-lead-flow-2026-08-05/EXPERIENCE.md",
+          "sha256": "02de8c3de989e94c95f9835fd43e30ec1419b10a5ab517d7a757f9147cc5254b"
+        },
+        {
+          "kind": "epics",
+          "path": "_bmad-output/planning-artifacts/epics.md",
+          "sha256": "d15d790fd4a75a6cb6ec472506d8c160f9e43cd70fee557737c20a1723027c4c"
+        },
+        {
+          "kind": "project_context",
+          "path": "_bmad-output/project-context.md",
+          "sha256": "490a2f141f4a150ce845e088c8d0567428b1c98061c9b363187e08bd3d35dcbb"
+        },
+        {
+          "kind": "brownfield",
+          "path": "app/api/webhooks/evolution/route.ts",
+          "sha256": "e57c22c5677528fa230faa5aa63f6f3d564de99151a0da41d298e9f15126577f"
+        },
+        {
+          "kind": "brownfield",
+          "path": "app/dashboard/page.tsx",
+          "sha256": "274f40b408c1df96dae2b248a588a3fe8a0890ceb173d9357f4d0faab01cbf6b"
+        },
+        {
+          "kind": "brownfield",
+          "path": "components/dashboard/dashboard-client.tsx",
+          "sha256": "d410755cd93783c6316a73beca56473230e8f327729fbc4e7d1114d6eff820c2"
+        },
+        {
+          "kind": "brownfield",
+          "path": "lib/leads/actions.ts",
+          "sha256": "9e52c43cfe334519e4a830691d9c575950bba89aa4ba42f1cf25962f47c27628"
+        },
+        {
+          "kind": "brownfield",
+          "path": "lib/leads/repository.ts",
+          "sha256": "428594cb478ba4bcdfc1549ff0b8e8bf8ebef717cd0335e23c327c4986db04b5"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/006_leadflow_persistent_config_realtime_and_soft_delete.sql",
+          "sha256": "a5877e375058ffb3ef8841fe65417a58c25495d39442dd3b7cd7bea22fd74067"
+        },
+        {
+          "kind": "brownfield",
+          "path": "supabase/migrations/008_soft_delete_lead_rpc.sql",
+          "sha256": "74ec366eb54f63a0b3ff8c5c04bc0a8a2e37440475a5467699a7d5eeedcf6bef"
+        }
+      ],
+      "dependency_fingerprints": [
+        {
+          "story_id": "E4-S9",
+          "sha256": "4446eb79dc2a38767a0004f88a4566964035f3e9817f34eb38a50c64a575e1c5"
+        }
+      ],
+      "evidence_refs": [
+        "EV-VALIDATE-E4-S10-001",
+        "EV-TRIAGE-E4-S10-001",
+        "EV-REVALIDATING-E4-S10-001",
+        "EV-STATUS-PROJECTION-E4-S10-043"
+      ],
+      "baseline_import": null,
+      "validation_fingerprint": {
+        "algorithm": "sha256",
+        "value": "0e87b0df28f879c0208f8e5f1b0a93b7c036b3636af49e7b4a19af72cbb42b33",
+        "captured_at": "2026-08-10T20:26:19Z"
+      },
+      "status_projection": {
+        "field": "Status",
+        "from": "ready-for-dev",
+        "to": "ready-for-dev",
+        "validated_hash": "0e87b0df28f879c0208f8e5f1b0a93b7c036b3636af49e7b4a19af72cbb42b33",
+        "final_hash": "0e87b0df28f879c0208f8e5f1b0a93b7c036b3636af49e7b4a19af72cbb42b33",
+        "evidence_ref": "EV-STATUS-PROJECTION-E4-S10-043",
+        "timestamp": "2026-08-10T20:26:48Z"
+      }
+    }
+  ],
+  "operations": [
+    {
+      "operation_id": "OP-E4-S5b-TRIAGE-001",
+      "story_id": "E4-S5b",
+      "to": "REVALIDATING",
+      "timestamp": "2026-08-10T18:47:36Z"
+    },
+    {
+      "operation_id": "OP-E4-S5b-REVALIDATION-EVIDENCE-001",
+      "story_id": "E4-S5b",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T18:49:05Z"
+    },
+    {
+      "operation_id": "OP-E4-S6-VALIDATE-001",
+      "story_id": "E4-S6",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T19:02:17Z"
+    },
+    {
+      "operation_id": "OP-E4-S6-REVALIDATING-002",
+      "story_id": "E4-S6",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T19:03:09Z"
+    },
+    {
+      "operation_id": "OP-E4-S6-REVALIDATING-003",
+      "story_id": "E4-S6",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T19:30:54Z"
+    },
+    {
+      "operation_id": "OP-E4-S7-TRIAGE-001",
+      "story_id": "E4-S7",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T19:50:01Z"
+    },
+    {
+      "operation_id": "OP-E4-S7-REVALIDATION-EVIDENCE-001",
+      "story_id": "E4-S7",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T19:51:44Z"
+    },
+    {
+      "operation_id": "OP-E4-S7-REVALIDATION-PASS-002",
+      "story_id": "E4-S7",
+      "to": "REVALIDATING",
+      "timestamp": "2026-08-10T19:52:10Z"
+    },
+    {
+      "operation_id": "OP-E4-S7-REVALIDATION-PASS-003",
+      "story_id": "E4-S7",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T19:53:06Z"
+    },
+    {
+      "operation_id": "OP-E4-S7-REVALIDATION-PASS-004",
+      "story_id": "E4-S7",
+      "to": "REVALIDATING",
+      "timestamp": "2026-08-10T19:54:00Z"
+    },
+    {
+      "operation_id": "OP-E4-S8-TRIAGE-001",
+      "story_id": "E4-S8",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T20:08:13Z"
+    },
+    {
+      "operation_id": "OP-E4-S8-REVALIDATION-EVIDENCE-001",
+      "story_id": "E4-S8",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T20:10:44Z"
+    },
+    {
+      "operation_id": "E4-S9-validate-triage-001",
+      "story_id": "E4-S9",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T20:17:02Z"
+    },
+    {
+      "operation_id": "E4-S9-revalidate-pass-001",
+      "story_id": "E4-S9",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T20:17:58Z"
+    },
+    {
+      "operation_id": "E4-S10-validate-triage-001",
+      "story_id": "E4-S10",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T20:26:03Z"
+    },
+    {
+      "operation_id": "E4-S10-revalidate-pass-001",
+      "story_id": "E4-S10",
+      "to": "NEEDS_TECHNICAL_FIX",
+      "timestamp": "2026-08-10T20:26:45Z"
     }
   ]
 }

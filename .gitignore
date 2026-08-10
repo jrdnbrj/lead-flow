@@ -49,3 +49,12 @@ next-env.d.ts
 *.xlsx
 *.log
 .docker/
+
+# LeadFlow readiness runtime artifacts
+_bmad-output/orchestration/leadflow-story-readiness/decision-ledger.jsonl
+_bmad-output/orchestration/leadflow-story-readiness/pending-decision.json
+_bmad-output/orchestration/leadflow-story-readiness/runs/
+
+# Python bytecode
+__pycache__/
+*.py[cod]

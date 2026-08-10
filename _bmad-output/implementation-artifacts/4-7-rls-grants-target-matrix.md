@@ -16,11 +16,11 @@ para que Phase B pueda aplicar el enforcement sin permisos implícitos ni acceso
 
 ## Acceptance Criteria
 
-1. Existe una matriz versionada que lista por tabla, función/RPC y operación los actores `anon`, `authenticated`, server privilegiado, webhook autenticado por token y scheduler autenticado.
-2. La matriz objetivo establece: `anon` no tiene select/insert/update/delete sobre datos privados; `authenticated` opera únicamente sobre el grafo del singleton mediante `auth.uid()`; los RPC privilegiados no son ejecutables por `public`, `anon` ni `authenticated`; webhook y scheduler no pasan owner en el payload y derivan el owner internamente.
+1. Existe una matriz versionada, con versión y fecha, en `supabase/verification/e4-s7-rls-grants-target-matrix.md`, que lista por tabla, función/RPC y operación los actores `anon`, `authenticated`, server privilegiado, webhook autenticado por token y scheduler autenticado. La matriz separa permisos observados en Phase A de permisos objetivo de Phase B.
+2. Para datos privados, la matriz objetivo establece: `anon` no tiene select/insert/update/delete; `authenticated` opera únicamente sobre el grafo del singleton mediante `auth.uid()`; car_models y car_model_images conservan sólo la lectura pública de catálogo definida en AC3 y no mutaciones fuera de ese grafo; los RPC privilegiados no son ejecutables por `public`, `anon` ni `authenticated`; webhook y scheduler no pasan owner en el payload y derivan el owner internamente.
 3. `car_models` y `car_model_images` son las únicas tablas que pueden conservar lectura pública, conforme a AD-3. `leads`, `lead_messages`, `lead_follow_up_actions`, `leadflow_settings`, singleton, events y cualquier ownership root presente quedan privados.
-4. La matriz cubre explícitamente el RPC de soft delete y sus efectos sobre leads/acciones, Realtime autenticado y los clientes server/admin. No crea permisos para la lógica de futuras capabilities.
-5. Una suite SQL/RPC de verificación ejecuta la matriz en modo de preparación y produce PASS/FAIL por actor, tabla, operación, owner match/mismatch y función. La suite no revoca todavía políticas/grants de Phase A ni activa el enforcement final.
+4. La matriz cubre explícitamente el RPC de soft delete y sus efectos sobre leads/acciones, Realtime autenticado y los clientes server/admin. Registra el grant actual de `soft_delete_lead(uuid)` a `anon, authenticated` como permiso temporal observado de Phase A, incompatible con el objetivo Phase B, no lo aprueba como target ni lo revoca en esta story; E4-S8 es el único lugar que corrige ese grant sin eliminar el borrado lógico. No crea permisos para la lógica de futuras capabilities.
+5. Una suite SQL/RPC versionada en `supabase/verification/e4-s7-rls-grants-verification.sql` ejecuta la matriz en modo de preparación y produce `supabase/verification/e4-s7-rls-grants-verification-report.md` con PASS/FAIL por actor, tabla, operación, owner match/mismatch y función. Toda policy/grant/operación no listada produce FAIL o queda marcada como fuera de alcance explícito. La suite no revoca todavía políticas/grants de Phase A ni activa el enforcement final.
 6. La matriz se entrega como precondición de E4-S8. E4-S8 es el único lugar donde se aplican RLS/grants finales, revocación de anon y cierre de la ventana compatible.
 7. Cualquier operación no incluida en la matriz falla cerrada o queda explícitamente fuera del alcance; no se resuelve con una policy amplia `public`.
 
@@ -59,7 +59,11 @@ para que Phase B pueda aplicar el enforcement sin permisos implícitos ni acceso
 - [Source: supabase/migrations/002_leadflow_anonymous_dashboard_and_whatsapp.sql]
 - [Source: supabase/migrations/003_leadflow_follow_up_and_messages.sql]
 - [Source: supabase/migrations/004_leadflow_follow_up_actions.sql]
+- [Source: supabase/migrations/005_leadflow_backfill_contacted_status.sql]
+- [Source: supabase/migrations/006_leadflow_persistent_config_realtime_and_soft_delete.sql]
+- [Source: supabase/migrations/007_changan_catalog_and_multi_car_leads.sql]
 - [Source: supabase/migrations/008_soft_delete_lead_rpc.sql]
+- [Source: supabase/migrations/009_complete_car_model_images.sql]
 
 ## Dev Agent Record
 
