@@ -215,6 +215,42 @@
       "run_id": "RUN-E4-S4-20260811-001",
       "story_fingerprint": "d022219bce0fc6b28f734cead6ab9b1ff7d3743e93b00cc61b18d691e7218a3f",
       "story_id": "E4-S4"
+    },
+    "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S5a/RUN-E4-S5a-20260811-001/scope-manifest.json": {
+      "file_sha256": "ec484dc762f24c5ba5f51d484340b4b6710911ffba801834338f19f548a1af38",
+      "fingerprint": "1e25bf870749e346d9cdb5fc2ba7ac6a42887361c716f353e40cbc5df4d569a3",
+      "frozen_at": "2026-08-11T21:14:58Z",
+      "generation": 1,
+      "input_fingerprint": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208",
+      "iteration": 1,
+      "kind": "scope_manifest",
+      "run_id": "RUN-E4-S5a-20260811-001",
+      "story_fingerprint": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208",
+      "story_id": "E4-S5A"
+    },
+    "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S5a/RUN-E4-S5a-20260811-001/story_execution_type.json": {
+      "file_sha256": "160d5abae884afb07c757fa234758dea38262c465abf2844898582c2171f5717",
+      "fingerprint": "2ea74ce620c1cdb8594c0d1d609c2c7ac32f3192bb29afc1144623954217771d",
+      "frozen_at": "2026-08-11T21:14:32Z",
+      "generation": 1,
+      "input_fingerprint": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208",
+      "iteration": 1,
+      "kind": "story_execution_type",
+      "run_id": "RUN-E4-S5a-20260811-001",
+      "story_fingerprint": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208",
+      "story_id": "E4-S5A"
+    },
+    "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S5a/RUN-E4-S5a-20260811-001/validation-plan.json": {
+      "file_sha256": "97aa57186ee0f6a16871567c82bf8b218fc995b1cd047e83269cd6126affd012",
+      "fingerprint": "4bd2c7c5610b2c065b0d995a3e834e9cba843c33e36c288ef9251215a33bbc84",
+      "frozen_at": "2026-08-11T21:14:32Z",
+      "generation": 1,
+      "input_fingerprint": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208",
+      "iteration": 1,
+      "kind": "validation_plan",
+      "run_id": "RUN-E4-S5a-20260811-001",
+      "story_fingerprint": "18dc359603775e2deac6fbdc808e56432beb0ca3b5088977ea8b411206c3b208",
+      "story_id": "E4-S5A"
     }
   },
   "schema_version": "1.0"

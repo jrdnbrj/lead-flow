@@ -20,10 +20,10 @@ def evaluate(readiness_state_path: Path, implementation_state_path: Path, story_
     dependencies = readiness_story.get("dependencies", [])
     if not isinstance(dependencies, list):
         raise ContractError("readiness dependencies must be an array")
-    implementation_stories = {item.get("story_id"): item for item in implementation.get("stories", []) if isinstance(item, dict)}
+    implementation_stories = {str(item.get("story_id")).casefold(): item for item in implementation.get("stories", []) if isinstance(item, dict) and isinstance(item.get("story_id"), str)}
     blockers = []
     for dependency in dependencies:
-        dep = implementation_stories.get(dependency)
+        dep = implementation_stories.get(str(dependency).casefold())
         if dep is None or dep.get("status") != "DONE":
             blockers.append({"story_id": dependency, "status": dep.get("status") if dep else "MISSING"})
     return {"status": "PASS" if not blockers else "FAIL", "story_id": story_id, "dependencies": dependencies, "blockers": blockers}

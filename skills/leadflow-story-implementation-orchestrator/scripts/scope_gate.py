@@ -39,7 +39,11 @@ def _registry_snapshot(root: Path, snapshot_path: Path, expected: dict[str, Any]
     if not required.issubset(snapshot):
         raise ContractError("baseline snapshot is missing provenance fields")
     for key in ("story_id", "run_id", "iteration", "generation"):
-        if snapshot.get(key) != expected[key]:
+        if key == "story_id" and isinstance(snapshot.get(key), str) and isinstance(expected[key], str):
+            matches = snapshot[key].casefold() == expected[key].casefold()
+        else:
+            matches = snapshot.get(key) == expected[key]
+        if not matches:
             raise ContractError(f"baseline snapshot mismatch for {key}")
     if snapshot["file_map_fingerprint"] != canonical_hash(snapshot["files"]):
         raise ContractError("baseline file map fingerprint mismatch")
@@ -54,7 +58,11 @@ def _registry_snapshot(root: Path, snapshot_path: Path, expected: dict[str, Any]
     if entry.get("artifact_ref") != relative or entry.get("artifact_sha256") != sha256_file(snapshot_path):
         raise ContractError("registered baseline snapshot hash/reference mismatch")
     for key in ("story_id", "run_id", "iteration", "generation", "baseline_commit", "file_map_fingerprint"):
-        if entry.get(key) != snapshot.get(key):
+        if key == "story_id" and isinstance(entry.get(key), str) and isinstance(snapshot.get(key), str):
+            matches = entry[key].casefold() == snapshot[key].casefold()
+        else:
+            matches = entry.get(key) == snapshot.get(key)
+        if not matches:
             raise ContractError(f"registered baseline mismatch for {key}")
     return snapshot
 

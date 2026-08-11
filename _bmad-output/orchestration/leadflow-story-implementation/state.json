@@ -1,8 +1,8 @@
 {
-  "active_story_id": null,
+  "active_story_id": "E4-S5a",
   "created_at": "2026-08-10T00:00:00Z",
-  "revision": 62,
-  "runtime_status": "IDLE",
+  "revision": 72,
+  "runtime_status": "RUNNING",
   "schema_version": "1.0",
   "stories": [
     {
@@ -290,6 +290,42 @@
       "status": "DONE",
       "story_file": "_bmad-output/implementation-artifacts/4-4-backfill-dry-run.md",
       "story_id": "E4-S4"
+    },
+    {
+      "blockers_open": [],
+      "dependencies": [
+        "E4-S2"
+      ],
+      "execution_type": "IMPLEMENTATION",
+      "generation": 1,
+      "iteration": 1,
+      "last_transition": {
+        "from": "REVIEWING",
+        "reason": "Follow-up review still reports unresolved P1 contract and executable SQL findings; S5a remains blocked",
+        "timestamp": "2026-08-11T21:35:31Z",
+        "to": "NEEDS_TECHNICAL_FIX"
+      },
+      "repair_round": 0,
+      "review_round": 0,
+      "run_id": "RUN-E4-S5a-20260811-001",
+      "status": "NEEDS_TECHNICAL_FIX",
+      "story_file": "_bmad-output/implementation-artifacts/4-5a-event-registry-and-append-infrastructure.md",
+      "story_id": "E4-S5a"
+    },
+    {
+      "blockers_open": [],
+      "dependencies": [
+        "E4-S5a"
+      ],
+      "execution_type": "IMPLEMENTATION",
+      "generation": 1,
+      "iteration": 1,
+      "repair_round": 0,
+      "review_round": 0,
+      "run_id": "RUN-E4-S5b-20260811-001",
+      "status": "PENDING",
+      "story_file": "_bmad-output/implementation-artifacts/4-5b-event-enforcement-and-atomicity.md",
+      "story_id": "E4-S5b"
     }
   ],
   "workflow": "leadflow-story-implementation-orchestrator"

@@ -20,7 +20,7 @@ def verify(root: Path, readiness_runtime: Path, story_id: str, story_file: Path)
     stories = state.get("stories")
     if not isinstance(stories, list):
         raise ContractError("readiness state stories must be an array")
-    story = next((item for item in stories if item.get("story_id") == story_id), None)
+    story = next((item for item in stories if isinstance(item.get("story_id"), str) and item.get("story_id").casefold() == story_id.casefold()), None)
     if not isinstance(story, dict):
         return {"status": "ESCALATED", "reason": "STORY_NOT_IN_READINESS_RUNTIME"}
     if story.get("status") != "READY_FOR_DEV":

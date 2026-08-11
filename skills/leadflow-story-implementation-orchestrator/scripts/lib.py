@@ -585,7 +585,7 @@ def discover_protected_paths(root: Path, story_id: str) -> list[dict[str, Any]]:
     for story_path in sorted(story_dir.glob("*.md")):
         story_match = re.match(r"^(\d+)-(\d+)([a-z]?)-", story_path.name, re.I)
         current_id = f"E{int(story_match.group(1))}-S{int(story_match.group(2))}{story_match.group(3).lower()}" if story_match else None
-        if current_id == story_id:
+        if current_id and current_id.casefold() == story_id.casefold():
             continue
         add(story_path, "NORMATIVE_FORBIDDEN", "other story is outside the active scope", "other-story")
 
@@ -760,7 +760,7 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def ensure_story_in_state(state: dict[str, Any], story_id: str) -> dict[str, Any]:
     for story in state.get("stories", []):
-        if story.get("story_id") == story_id:
+        if isinstance(story.get("story_id"), str) and story.get("story_id").casefold() == story_id.casefold():
             return story
     raise ContractError(f"story is not registered in implementation state: {story_id}")
 
