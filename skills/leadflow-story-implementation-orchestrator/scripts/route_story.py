@@ -10,7 +10,7 @@ import argparse
 import json
 from pathlib import Path
 
-from lib import ContractError, classify_workflow_mode, load_json, require_story_id
+from lib import ContractError, classify_workflow_mode, extract_story_id, load_json, require_story_id
 
 
 def route(
@@ -41,17 +41,8 @@ def route(
         scope_paths=scope_paths,
         external_evidence_required=external_required,
     )
-    result.update({"status": "PASS", "story_id": require_story_id(_story_id(story_text))})
+    result.update({"status": "PASS", "story_id": extract_story_id(story_text)})
     return result
-
-
-def _story_id(content: str) -> str:
-    import re
-
-    match = re.search(r"^\s*#\s*(?:Story\s+)?(E\d+-S\d+[a-z]?)", content, re.I | re.M)
-    if not match:
-        raise ContractError("story file does not contain a canonical story heading")
-    return match.group(1)
 
 
 def main() -> int:

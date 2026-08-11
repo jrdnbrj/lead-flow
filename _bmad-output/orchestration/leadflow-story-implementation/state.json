@@ -1,7 +1,7 @@
 {
   "active_story_id": null,
   "created_at": "2026-08-10T00:00:00Z",
-  "revision": 52,
+  "revision": 62,
   "runtime_status": "IDLE",
   "schema_version": "1.0",
   "stories": [
@@ -222,6 +222,74 @@
       "status": "DONE",
       "story_file": "_bmad-output/implementation-artifacts/4-3-auth-entry-modes-and-required-auth.md",
       "story_id": "E4-S3"
+    },
+    {
+      "blockers_open": [],
+      "dependencies": [
+        "E4-S1",
+        "E4-S2"
+      ],
+      "done_at": "2026-08-11T21:02:16Z",
+      "done_evidence": {
+        "evidence_id": "EV-DONE-E4-S4-RUN-E4-S4-20260811-001-1-1",
+        "frozen_artifacts": {
+          "scope_manifest": {
+            "file_sha256": "c13f2ad2e6855d8cdde314f0a59f356cb2ac54f295e0db9f0e19862361caabc6",
+            "fingerprint": "2a0f6791e75e62b2e9d14460e5878e049aba2b89c1369d9fc8efd064dc3771a3",
+            "generation": 1,
+            "input_fingerprint": "d022219bce0fc6b28f734cead6ab9b1ff7d3743e93b00cc61b18d691e7218a3f",
+            "iteration": 1,
+            "kind": "scope_manifest",
+            "path": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S4/RUN-E4-S4-20260811-001/scope-manifest.json",
+            "run_id": "RUN-E4-S4-20260811-001",
+            "story_fingerprint": "d022219bce0fc6b28f734cead6ab9b1ff7d3743e93b00cc61b18d691e7218a3f",
+            "story_id": "E4-S4"
+          },
+          "story_execution_type": {
+            "file_sha256": "d902bde1bbbedf0b60bd5270a49b1246e6c86ae20ef8c60cad89737cb4cc7c19",
+            "fingerprint": "684257e0cfd598b998c0568958f7f9391a62f30112b7a46e4ad9bdbf642e0e3b",
+            "generation": 1,
+            "input_fingerprint": "d022219bce0fc6b28f734cead6ab9b1ff7d3743e93b00cc61b18d691e7218a3f",
+            "iteration": 1,
+            "kind": "story_execution_type",
+            "path": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S4/RUN-E4-S4-20260811-001/story_execution_type.json",
+            "run_id": "RUN-E4-S4-20260811-001",
+            "story_fingerprint": "d022219bce0fc6b28f734cead6ab9b1ff7d3743e93b00cc61b18d691e7218a3f",
+            "story_id": "E4-S4"
+          },
+          "validation_plan": {
+            "file_sha256": "24f19722084245ad5670cdf9c31fc5cbd841ef63e1bb402daceb822369f104de",
+            "fingerprint": "694c45195a3e7649908eb78fc6174ef73b499a1f62aaf08557da1beda460f94d",
+            "generation": 1,
+            "input_fingerprint": "d022219bce0fc6b28f734cead6ab9b1ff7d3743e93b00cc61b18d691e7218a3f",
+            "iteration": 1,
+            "kind": "validation_plan",
+            "path": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S4/RUN-E4-S4-20260811-001/validation-plan.json",
+            "run_id": "RUN-E4-S4-20260811-001",
+            "story_fingerprint": "d022219bce0fc6b28f734cead6ab9b1ff7d3743e93b00cc61b18d691e7218a3f",
+            "story_id": "E4-S4"
+          }
+        },
+        "status": "PASS"
+      },
+      "evidence_refs": [
+        "EV-DONE-E4-S4-RUN-E4-S4-20260811-001-1-1"
+      ],
+      "execution_type": "IMPLEMENTATION",
+      "generation": 1,
+      "iteration": 1,
+      "last_transition": {
+        "from": "REVALIDATING",
+        "reason": "Revalidation PASS after exact constraint fixes.",
+        "timestamp": "2026-08-11T21:01:23Z",
+        "to": "REVIEWING"
+      },
+      "repair_round": 0,
+      "review_round": 0,
+      "run_id": "RUN-E4-S4-20260811-001",
+      "status": "DONE",
+      "story_file": "_bmad-output/implementation-artifacts/4-4-backfill-dry-run.md",
+      "story_id": "E4-S4"
     }
   ],
   "workflow": "leadflow-story-implementation-orchestrator"

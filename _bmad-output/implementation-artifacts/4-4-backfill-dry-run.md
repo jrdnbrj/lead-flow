@@ -1,6 +1,6 @@
 # Story 4.4: Preparación y dry-run verificable del backfill
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
