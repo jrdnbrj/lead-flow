@@ -1,0 +1,74 @@
+{
+  "active_story_id": null,
+  "created_at": "2026-08-10T00:00:00Z",
+  "revision": 17,
+  "runtime_status": "IDLE",
+  "schema_version": "1.0",
+  "stories": [
+    {
+      "dependencies": [],
+      "done_at": "2026-08-11T04:23:25Z",
+      "done_evidence": {
+        "evidence_id": "EV-DONE-E4-S1-RUN-E4-S1-20260810-001-1-2",
+        "frozen_artifacts": {
+          "scope_manifest": {
+            "file_sha256": "028251c64288e2fc5a901e2b453ad2af48c46eb90ed5494d1bf5fd11e8b44b34",
+            "fingerprint": "695eb5764b9c15719c32b5e5bfa74197fba31f1cb01d21c4b618a1904b823d72",
+            "generation": 2,
+            "input_fingerprint": "f53e10766e267456d23a3cee41ac4c371e780e70ad068b9aee4902a1133aeaed",
+            "iteration": 1,
+            "kind": "scope_manifest",
+            "path": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S1/RUN-E4-S1-20260810-001/generation-2/scope-manifest.json",
+            "run_id": "RUN-E4-S1-20260810-001",
+            "story_fingerprint": "d2f49b83da674a37ec64448e49d9b4a9c829d89fa8dc525d2825636e2cee19eb",
+            "story_id": "E4-S1"
+          },
+          "story_execution_type": {
+            "file_sha256": "0f9105335ada6c4a42f7f3505a76bf721bfab8f4408b6c46da207bd16f0d37fb",
+            "fingerprint": "56f75cbd92df92d3d4bf2c6d07346b6e46df86489bc4c2727ede1724fe78d6ba",
+            "generation": 2,
+            "input_fingerprint": "f53e10766e267456d23a3cee41ac4c371e780e70ad068b9aee4902a1133aeaed",
+            "iteration": 1,
+            "kind": "story_execution_type",
+            "path": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S1/RUN-E4-S1-20260810-001/generation-2/story_execution_type.json",
+            "run_id": "RUN-E4-S1-20260810-001",
+            "story_fingerprint": "d2f49b83da674a37ec64448e49d9b4a9c829d89fa8dc525d2825636e2cee19eb",
+            "story_id": "E4-S1"
+          },
+          "validation_plan": {
+            "file_sha256": "528f3bde79f6ccec0dc1a3610ced83b8b6e76aea324b1afc2b9647284a73eedb",
+            "fingerprint": "4e4bb7e17bd299eb41b2c65c75c2ef417b6d356026e10ebe5ececfebe880389e",
+            "generation": 2,
+            "input_fingerprint": "f53e10766e267456d23a3cee41ac4c371e780e70ad068b9aee4902a1133aeaed",
+            "iteration": 1,
+            "kind": "validation_plan",
+            "path": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S1/RUN-E4-S1-20260810-001/generation-2/validation-plan.json",
+            "run_id": "RUN-E4-S1-20260810-001",
+            "story_fingerprint": "d2f49b83da674a37ec64448e49d9b4a9c829d89fa8dc525d2825636e2cee19eb",
+            "story_id": "E4-S1"
+          }
+        },
+        "status": "PASS"
+      },
+      "evidence_refs": [
+        "EV-DONE-E4-S1-RUN-E4-S1-20260810-001-1-2"
+      ],
+      "execution_type": "OPERATIONAL",
+      "generation": 2,
+      "generation_lineage_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S1/RUN-E4-S1-20260810-001/generation-2/generation-lineage.json",
+      "iteration": 1,
+      "last_transition": {
+        "from": "REVIEWING",
+        "reason": "Operational evidence review and final controller scope gate passed.",
+        "timestamp": "2026-08-11T04:23:24Z",
+        "to": "CANDIDATE_DONE"
+      },
+      "run_id": "RUN-E4-S1-20260810-001",
+      "status": "DONE",
+      "story_file": "_bmad-output/implementation-artifacts/4-1-backup-and-restore-baseline.md",
+      "story_id": "E4-S1",
+      "supersedes_generation": 1
+    }
+  ],
+  "workflow": "leadflow-story-implementation-orchestrator"
+}

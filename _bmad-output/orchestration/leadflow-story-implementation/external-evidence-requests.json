@@ -1,0 +1,18 @@
+{
+  "requests": {
+    "REQ-E4-S1-RUN-E4-S1-20260810-001": {
+      "artifact_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S1/RUN-E4-S1-20260810-001/external-evidence-request.json",
+      "created_at": "2026-08-10T23:17:50Z",
+      "evidence_id": "EV-EXTERNAL-REQUEST-E4-S1-RUN-E4-S1-20260810-001-1-1",
+      "file_sha256": "736b6d0f1152aa61f26bce95725476a11b666916d6d068279d70238f4ccf2f2f",
+      "generation": 1,
+      "iteration": 1,
+      "ledger_ref": "_bmad-output/orchestration/leadflow-story-implementation/evidence-ledger.jsonl",
+      "request_fingerprint": "28cd36e3a6363a90a8befb5577d017f8bc3b8e8c01bbe822936198cbd73bc2e7",
+      "request_id": "REQ-E4-S1-RUN-E4-S1-20260810-001",
+      "run_id": "RUN-E4-S1-20260810-001",
+      "story_id": "E4-S1"
+    }
+  },
+  "schema_version": "1.0"
+}

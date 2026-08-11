@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["story_id", "run_id", "iteration", "generation", "input_fingerprint", "story_fingerprint", "frozen_artifacts", "evidence_ledger", "evidence_refs", "producer", "gate", "result_artifact_ref", "result_fingerprint"],
+  "properties": {
+    "story_id": {"type": "string", "pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+    "run_id": {"type": "string", "minLength": 1},
+    "iteration": {"type": "integer", "minimum": 0},
+    "generation": {"type": "integer", "minimum": 0},
+    "input_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "story_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "frozen_artifacts": {"type": "object"},
+    "evidence_ledger": {"type": "string"},
+    "evidence_refs": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "producer": {"type": "string", "minLength": 1},
+    "gate": {"type": "string", "minLength": 1},
+    "result_artifact_ref": {"type": "string", "minLength": 1},
+    "result_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

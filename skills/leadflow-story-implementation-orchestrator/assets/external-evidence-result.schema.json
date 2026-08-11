@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "story_id", "run_id", "iteration", "generation", "request_fingerprint", "result_fingerprint", "performed_by", "performed_at", "environment", "evidence_items", "postcondition_results", "redaction_declaration", "notes"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "request_id": {"type": "string", "minLength": 1},
+    "story_id": {"type": "string", "pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+    "run_id": {"type": "string", "minLength": 1},
+    "iteration": {"type": "integer", "minimum": 0},
+    "generation": {"type": "integer", "minimum": 0},
+    "request_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "result_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "performed_by": {"type": "string", "minLength": 1},
+    "performed_at": {"type": "string", "format": "date-time"},
+    "environment": {"type": ["string", "object"]},
+    "evidence_items": {"type": "array", "items": {"type": "object", "required": ["id", "references"], "properties": {"id": {"type": "string"}, "references": {"type": "array", "items": {"type": "object", "required": ["type", "ref"]}}}}},
+    "postcondition_results": {"type": "array", "items": {"type": "object"}},
+    "redaction_declaration": {"type": "object"},
+    "notes": {"type": "string"}
+  }
+}

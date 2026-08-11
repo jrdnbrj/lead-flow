@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "story_id", "execution_type", "classification_source", "classification_basis", "required_gates", "run_id", "iteration", "generation", "input_fingerprint", "story_fingerprint"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "story_id": {"type": "string", "pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+    "execution_type": {"enum": ["IMPLEMENTATION", "OPERATIONAL", "HYBRID"]},
+    "classification_source": {"type": "string", "minLength": 1},
+    "classification_basis": {"type": "object"},
+    "required_gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementation", "external_evidence", "validation", "review"],
+      "properties": {
+        "implementation": {"type": "boolean"},
+        "external_evidence": {"type": "boolean"},
+        "validation": {"type": "boolean"},
+        "review": {"type": "boolean"}
+      }
+    },
+    "run_id": {"type": "string", "minLength": 1},
+    "iteration": {"type": "integer", "minimum": 0},
+    "generation": {"type": "integer", "minimum": 0},
+    "input_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_refs": {"type": "array", "items": {"type": "string"}},
+    "story_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "readiness_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "frozen": {"const": true},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

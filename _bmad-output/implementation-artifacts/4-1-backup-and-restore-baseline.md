@@ -1,6 +1,6 @@
 # Story 4.1: Línea base de backup y restore antes del cutover
 
-Status: ready-for-revalidation
+Status: done
 
 ## Story
 

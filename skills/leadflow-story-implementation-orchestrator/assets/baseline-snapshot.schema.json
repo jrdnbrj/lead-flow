@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "snapshot_id", "story_id", "run_id", "iteration", "generation", "baseline_commit", "created_at", "files", "file_map_fingerprint", "artifact_ref"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "snapshot_id": {"type": "string"},
+    "story_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "iteration": {"type": "integer"},
+    "generation": {"type": "integer"},
+    "baseline_commit": {"type": "string"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+    "file_map_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "artifact_ref": {"type": "string"}
+  }
+}

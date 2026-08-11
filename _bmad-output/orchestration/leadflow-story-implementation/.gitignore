@@ -1,0 +1,5 @@
+# Runtime evidence may contain operational metadata and is not committed by default.
+runs/*
+!runs/.gitkeep
+locks/*
+!locks/.gitkeep

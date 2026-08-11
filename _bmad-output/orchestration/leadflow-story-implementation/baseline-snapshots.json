@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "snapshots": {
+    "SNAP-E4-S1-RUN-E4-S1-20260810-001-1-1": {
+      "artifact_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S1/RUN-E4-S1-20260810-001/baseline-snapshot.json",
+      "artifact_sha256": "45e6f5125798a4e8b0bcdc07cb1259d6c45715ee44115d351519d73501b6c6f1",
+      "baseline_commit": "d5f90ee30b516418d1f3439cc60c8293a9c8c870",
+      "created_at": "2026-08-10T23:16:52Z",
+      "file_map_fingerprint": "595ab139630ddb230e9a0d00671d883445ffcbbf22feb854f86ff9de877a7a00",
+      "generation": 1,
+      "iteration": 1,
+      "run_id": "RUN-E4-S1-20260810-001",
+      "snapshot_id": "SNAP-E4-S1-RUN-E4-S1-20260810-001-1-1",
+      "story_id": "E4-S1"
+    },
+    "SNAP-E4-S1-RUN-E4-S1-20260810-001-1-2": {
+      "artifact_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S1/RUN-E4-S1-20260810-001/generation-2/baseline-snapshot.json",
+      "artifact_sha256": "df2ee17a170a129dc9121ad2be6be2dbb80926d917dc9a7436153dfaa4872698",
+      "baseline_commit": "d5f90ee30b516418d1f3439cc60c8293a9c8c870",
+      "created_at": "2026-08-11T04:09:05Z",
+      "file_map_fingerprint": "cdcc430269f5a3a8cdf1ce136aad36842719430994cd89bbe5d57228b9cab257",
+      "generation": 2,
+      "iteration": 1,
+      "run_id": "RUN-E4-S1-20260810-001",
+      "snapshot_id": "SNAP-E4-S1-RUN-E4-S1-20260810-001-1-2",
+      "story_id": "E4-S1"
+    }
+  }
+}

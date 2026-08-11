@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "story_id", "run_id", "iteration", "generation", "fingerprint", "acceptance_criteria", "evidence_items", "human_operations", "orchestrator_forbidden_operations", "postconditions", "sensitive_fields_prohibited", "environment_policy", "staleness_policy", "local_artifact_policy"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "request_id": {"type": "string", "minLength": 1},
+    "story_id": {"type": "string", "pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+    "run_id": {"type": "string", "minLength": 1},
+    "iteration": {"type": "integer", "minimum": 0},
+    "generation": {"type": "integer", "minimum": 0},
+    "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "acceptance_criteria": {"type": "array", "items": {"type": "object"}},
+    "evidence_items": {"type": "array", "items": {"type": "object"}},
+    "human_operations": {"type": "array", "items": {"type": "string"}},
+    "orchestrator_forbidden_operations": {"type": "array", "items": {"type": "string"}},
+    "postconditions": {"type": "array", "items": {"type": "object"}},
+    "sensitive_fields_prohibited": {"type": "array", "items": {"type": "string"}},
+    "environment_policy": {"type": "object"},
+    "staleness_policy": {"type": "object"},
+    "local_artifact_policy": {"type": "object"}
+  }
+}

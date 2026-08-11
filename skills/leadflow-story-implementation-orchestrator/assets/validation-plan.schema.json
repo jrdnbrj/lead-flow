@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "story_id", "execution_type", "checks", "run_id", "iteration", "generation", "input_fingerprint", "story_fingerprint"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "story_id": {"type": "string", "pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+    "execution_type": {"enum": ["IMPLEMENTATION", "OPERATIONAL", "HYBRID"]},
+    "run_id": {"type": "string", "minLength": 1},
+    "iteration": {"type": "integer", "minimum": 0},
+    "generation": {"type": "integer", "minimum": 0},
+    "input_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "story_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "scope_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check_id", "name", "category", "requirement", "justification", "destructive"],
+        "properties": {
+          "check_id": {"type": "string", "minLength": 1},
+          "name": {"type": "string", "minLength": 1},
+          "category": {"type": "string", "minLength": 1},
+          "requirement": {"enum": ["REQUIRED", "CONDITIONAL", "NOT_APPLICABLE"]},
+          "condition": {"type": ["object", "null"]},
+          "command": {"type": ["string", "null"]},
+          "timeout_seconds": {"type": ["integer", "null"], "minimum": 1},
+          "expected_exit_codes": {"type": "array", "items": {"type": "integer"}},
+          "destructive": {"type": "boolean"},
+          "evidence_required": {"type": "boolean"},
+          "justification": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "frozen": {"const": true},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

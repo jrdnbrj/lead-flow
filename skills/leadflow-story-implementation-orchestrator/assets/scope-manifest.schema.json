@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "story_id", "baseline_commit", "exact_paths_allowed", "path_prefixes_allowed", "generated_artifacts_allowed", "forbidden_paths", "normative_paths", "path_classification", "run_id", "iteration", "generation", "input_fingerprint", "story_fingerprint"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "story_id": {"type": "string", "pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+    "baseline_commit": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "iteration": {"type": "integer", "minimum": 0},
+    "generation": {"type": "integer", "minimum": 0},
+    "input_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "story_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "exact_paths_allowed": {"type": "array", "items": {"type": "string"}},
+    "path_prefixes_allowed": {"type": "array", "items": {"type": "object", "required": ["path", "category", "justification"], "properties": {"path": {"type": "string"}, "category": {"type": "string"}, "justification": {"type": "string"}}}},
+    "generated_artifacts_allowed": {"type": "array", "items": {"type": "string"}},
+    "forbidden_paths": {"type": "array", "items": {"type": "string"}},
+    "normative_paths": {"type": "array", "items": {"type": "string"}},
+    "path_classification": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "category", "justification"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "category": {"enum": ["DEV_WRITABLE", "FIXER_WRITABLE", "CONTROLLER_ONLY", "READ_ONLY_CONTEXT", "NORMATIVE_FORBIDDEN", "SECRET_FORBIDDEN"]},
+          "justification": {"type": "string", "minLength": 1},
+          "exists": {"type": "boolean"},
+          "source": {"type": "string"}
+        }
+      }
+    },
+    "source_refs": {"type": "array", "items": {"type": "string"}},
+    "frozen": {"const": true},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

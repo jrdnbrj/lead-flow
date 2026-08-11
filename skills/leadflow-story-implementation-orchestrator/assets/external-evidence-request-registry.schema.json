@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "requests"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "requests": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["request_id", "story_id", "run_id", "iteration", "generation", "artifact_ref", "file_sha256", "request_fingerprint", "created_at", "evidence_id", "ledger_ref"],
+        "properties": {
+          "request_id": {"type": "string", "minLength": 1},
+          "story_id": {"type": "string", "pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
+          "run_id": {"type": "string", "minLength": 1},
+          "iteration": {"type": "integer", "minimum": 0},
+          "generation": {"type": "integer", "minimum": 0},
+          "artifact_ref": {"type": "string", "minLength": 1},
+          "file_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "request_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "evidence_id": {"type": "string", "minLength": 1},
+          "ledger_ref": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

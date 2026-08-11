@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "request_id": "E4-S1-BACKUP-RESTORE-001",
+  "story_id": "E4-S1",
+  "run_id": "RUN-E4-S1-EXAMPLE",
+  "iteration": 1,
+  "generation": 1,
+  "fingerprint": "9bcf5aa1f6d4a4fcfa4dc308a5932a54e3750c7b0ce42d6b0ac4f0b7ec9a7317",
+  "acceptance_criteria": [
+    {"id": "AC1", "covers": "versioned PASS/FAIL report with backup identity, digest, environment, checks and postconditions"},
+    {"id": "AC2", "covers": "migrations 001-009 objects plus present functions, triggers, RPCs, policies, grants, RLS, Realtime, identity and audit/event objects"},
+    {"id": "AC3", "covers": "real restore drill in isolated local/preview destination"},
+    {"id": "AC4", "covers": "private access and ownership/RLS evidence without raw private rows or secrets"},
+    {"id": "AC5", "covers": "negative cases produce FAIL and block dependent work"}
+  ],
+  "evidence_items": [
+    {"id": "backup_identity", "required": true, "format": "structured report", "description": "mechanism/version, UTC time, source environment/project, backup ID and digest, responsible operator"},
+    {"id": "object_inventory", "required": true, "format": "structured object matrix", "description": "tables from migrations 001-009, functions, triggers, RPCs, policies, grants, RLS, Realtime, identity and audit/events; explicit verified N/A reasons"},
+    {"id": "restore_drill", "required": true, "format": "structured report plus artifact references", "description": "real restore into isolated local/preview destination; production cannot be destination"},
+    {"id": "object_comparison", "required": true, "format": "structured comparison matrix", "description": "schema, columns/types, keys, constraints, indexes, functions/triggers/RPCs, RLS/policies/grants, Realtime, row counts and deterministic ownership digest"},
+    {"id": "private_access_check", "required": true, "format": "structured result", "description": "privileged/authenticated read verification without raw rows and no new anonymous private access"},
+    {"id": "negative_cases", "required": true, "format": "structured case matrix", "description": "missing/corrupt backup, missing object, mismatch, non-isolated destination, unverifiable pooler, new anon access and secret exposure all yield FAIL"},
+    {"id": "recovery_procedure", "required": true, "format": "redacted runbook reference", "description": "recovery procedure does not reopen anonymous private access"}
+  ],
+  "human_operations": [
+    "Use the managed backup mechanism with authorized operational credentials.",
+    "Perform the real restore drill in isolated local or preview infrastructure.",
+    "Run object, ownership, access, RLS, Realtime and negative-case checks.",
+    "Store protected backup/report artifacts outside the repository and provide redacted references and hashes."
+  ],
+  "orchestrator_forbidden_operations": [
+    "backup or restore execution",
+    "Supabase remote SQL, db push, reset, deploy or backfill",
+    "production restore destination",
+    "external storage mutation",
+    "reading, storing or printing secrets, credentials, cookies, tokens or raw private rows"
+  ],
+  "postconditions": [
+    {"id": "destination_isolated", "required": true, "description": "restore destination is local/preview and not production"},
+    {"id": "backup_digest_verified", "required": true, "description": "backup digest matches protected artifact"},
+    {"id": "restore_completed", "required": true, "description": "real restore drill completed"},
+    {"id": "object_matrix_pass", "required": true, "description": "required object comparisons pass or have verified N/A reasons"},
+    {"id": "private_access_verified", "required": true, "description": "authenticated/privileged access verified without raw private rows"},
+    {"id": "no_new_anon_access", "required": true, "description": "no new anonymous private access introduced"},
+    {"id": "negative_cases_pass", "required": true, "description": "negative cases fail closed"},
+    {"id": "no_secret_exposure", "required": true, "description": "report/artifacts/logs contain no secrets"}
+  ],
+  "sensitive_fields_prohibited": ["secret", "token", "password", "credential", "cookie", "authorization", "private_key", "raw_private_row", "raw_payload"],
+  "environment_policy": {
+    "allowed_destinations": ["local", "preview-isolated"],
+    "forbidden_destinations": ["production", "managed-production"]
+  },
+  "staleness_policy": {
+    "max_age_hours": 168,
+    "require_performed_at": true,
+    "require_current_schema_reference": true
+  },
+  "local_artifact_policy": {
+    "allowed_paths": [],
+    "allowed_prefixes": ["_bmad-output/evidence/"]
+  }
+}
