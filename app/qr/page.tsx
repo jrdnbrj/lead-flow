@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { QrCard } from "@/components/qr/qr-card";
+import { isAuthRequiredEnabled } from "@/lib/auth/auth-required";
+import { requireAdvisorOrRedirect } from "@/lib/auth/advisor";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 
 export const metadata: Metadata = { title: "Comparte tu contacto" };
@@ -12,6 +14,7 @@ type QrPageProps = {
 
 export default async function QrPage({ searchParams }: QrPageProps) {
   const params = await searchParams;
+  if (isAuthRequiredEnabled()) await requireAdvisorOrRedirect(`/qr${params.leadId ? `?leadId=${encodeURIComponent(params.leadId)}` : ""}`);
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-7 sm:mb-10">

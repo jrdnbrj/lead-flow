@@ -1,12 +1,16 @@
 "use server";
 
 import type { ActionResponse } from "@/lib/domain/lead";
+import { authRequiredResult } from "@/lib/auth/auth-required";
+import { requireAdvisor } from "@/lib/auth/advisor";
 import { getUnknownWhatsappTemplateVariables } from "@/lib/config/message-template-shared";
 import { savePersistentSettings } from "@/lib/config/persistent-settings";
 
 export async function saveWhatsappMessageTemplateAction(template: string): Promise<ActionResponse<{ template: string }>> {
   const cleanTemplate = template.trim();
   if (cleanTemplate.length < 10 || cleanTemplate.length > 1000) return { success: false, error: "El mensaje debe tener entre 10 y 1000 caracteres." };
+  const authorization = await requireAdvisor();
+  if (authorization.status !== "AUTHORIZED") return authRequiredResult();
   const unknownVariables = getUnknownWhatsappTemplateVariables(cleanTemplate);
   if (unknownVariables.length) return { success: false, error: "Variable no reconocida: {{" + unknownVariables[0] + "}}. Revisa la lista de variables disponibles." };
 

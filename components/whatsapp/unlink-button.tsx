@@ -17,7 +17,7 @@ export function UnlinkWhatsappButton() {
     if (response.success) {
       window.location.assign(`/whatsapp?refresh=${Date.now()}`);
     } else {
-      setError(response.error || "No pudimos desvincular WhatsApp.");
+      setError(response.message || response.error || "No pudimos desvincular WhatsApp.");
       setIsLoading(false);
     }
   }

@@ -1,6 +1,6 @@
 # Story 4.3: Modos de entrada autenticados y contrato AUTH_REQUIRED
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

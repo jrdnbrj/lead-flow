@@ -6,6 +6,7 @@ import { SellerProfileForm } from "@/components/whatsapp/seller-profile-form";
 import { MessageTemplateEditor } from "@/components/whatsapp/message-template-editor";
 import { RefreshQrButton } from "@/components/whatsapp/refresh-qr-button";
 import { UnlinkWhatsappButton } from "@/components/whatsapp/unlink-button";
+import { requireAdvisorOrRedirect } from "@/lib/auth/advisor";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-template";
 import { getPersistentSettings } from "@/lib/config/persistent-settings";
@@ -123,6 +124,7 @@ function WhatsappConnectionSection({ connection }: { connection: WhatsappConnect
 
 export default async function WhatsappPage({ searchParams }: { searchParams: Promise<{ refresh?: string }> }) {
   const params = await searchParams;
+  await requireAdvisorOrRedirect(`/whatsapp${params.refresh ? "?refresh=1" : ""}`);
   const connection = await getWhatsappConnection(Boolean(params.refresh));
   const isConnected = connection.state === "open";
   let sellerProfile = null;

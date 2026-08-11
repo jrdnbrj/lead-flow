@@ -41,7 +41,7 @@ export function LeadCaptureForm() {
     setWarning(null);
     const response = await createLeadAction(input);
     if (!response.success || !response.data) {
-      setSubmitError(response.error || "No pudimos guardar el lead.");
+      setSubmitError(response.message || response.error || "No pudimos guardar el lead.");
       return;
     }
 

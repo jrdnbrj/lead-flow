@@ -143,6 +143,42 @@
       "run_id": "RUN-E4-S2-20260811-001",
       "story_fingerprint": "68c6bf14729deb7c2349b5ed5f91377ea5890eeb1f7c26cac54248db0e363568",
       "story_id": "E4-S2"
+    },
+    "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S3/RUN-E4-S3-20260811-001/scope-manifest.json": {
+      "file_sha256": "ce928117555a6709348df230532a8148e70b100e431762985f512236b783b608",
+      "fingerprint": "f63fb1153663a5cd133dd8104aeffe029cd11d1046ef316c88885712e8a567c4",
+      "frozen_at": "2026-08-11T20:01:28Z",
+      "generation": 1,
+      "input_fingerprint": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1",
+      "iteration": 1,
+      "kind": "scope_manifest",
+      "run_id": "RUN-E4-S3-20260811-001",
+      "story_fingerprint": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1",
+      "story_id": "E4-S3"
+    },
+    "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S3/RUN-E4-S3-20260811-001/story_execution_type.json": {
+      "file_sha256": "18f279144eb3f65956806edd77116d47c318427b616fdcb7172662486b199082",
+      "fingerprint": "516c6a12931c53f2fd9abcf7562b29a6fe54204f1abceff039e6b417da1ee2e0",
+      "frozen_at": "2026-08-11T20:01:28Z",
+      "generation": 1,
+      "input_fingerprint": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1",
+      "iteration": 1,
+      "kind": "story_execution_type",
+      "run_id": "RUN-E4-S3-20260811-001",
+      "story_fingerprint": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1",
+      "story_id": "E4-S3"
+    },
+    "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S3/RUN-E4-S3-20260811-001/validation-plan.json": {
+      "file_sha256": "54b3246c2c6310db145dd957a07e82e4bca9a8e80c311c3cedbb2acd469180d8",
+      "fingerprint": "01b139c5d20541ffca4ab42b0f2921197db117f86fa7ebb74e9d1f9e6d8e51c3",
+      "frozen_at": "2026-08-11T20:01:28Z",
+      "generation": 1,
+      "input_fingerprint": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1",
+      "iteration": 1,
+      "kind": "validation_plan",
+      "run_id": "RUN-E4-S3-20260811-001",
+      "story_fingerprint": "eda87d2a38f5d5b561d4e0d31194a247de388b6c61e8f4229772321fcecd0cd1",
+      "story_id": "E4-S3"
     }
   },
   "schema_version": "1.0"

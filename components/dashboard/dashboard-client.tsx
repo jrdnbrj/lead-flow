@@ -293,7 +293,7 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
       setConversationState("WAITING_CUSTOMER");
       setSendInfo(response.warning || "Mensaje enviado automáticamente por WhatsApp. Los estados se actualizarán desde Evolution.");
     } else {
-      setSendError(response.error || "No fue posible enviar el mensaje.");
+      setSendError(response.message || response.error || "No fue posible enviar el mensaje.");
     }
     setIsSending(false);
   }
@@ -311,7 +311,7 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
       setActionNote("");
       setSendInfo(`Recordatorio agregado: ${formatNextActionDate(response.data.nextActionAt)}. Puedes programar otro para el mismo lead.`);
     } else {
-      setSendError(response.error || "No pudimos programar el recordatorio.");
+      setSendError(response.message || response.error || "No pudimos programar el recordatorio.");
     }
     setIsScheduling(false);
   }
@@ -327,7 +327,7 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
       setSendInfo(status === "DONE" ? "Acción marcada como hecha." : status === "POSTPONED" ? "Acción pospuesta para mañana." : "Acción ignorada; no volverá a alertarte.");
       router.refresh();
     } else {
-      setSendError(response.error || "No pudimos actualizar ese recordatorio.");
+      setSendError(response.message || response.error || "No pudimos actualizar ese recordatorio.");
     }
     setBusyActionId(null);
   }
@@ -341,7 +341,7 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
       setSendInfo("Pendientes ignorados. No volverán a generar alertas.");
       router.refresh();
     } else {
-      setSendError(response.error || "No pudimos actualizar el seguimiento.");
+      setSendError(response.message || response.error || "No pudimos actualizar el seguimiento.");
     }
   }
 
@@ -352,7 +352,7 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
       setSendInfo(state === "CLOSED" ? "Conversación cerrada. Puedes reabrirla cuando lo necesites." : "Conversación reabierta.");
       router.refresh();
     } else {
-      setSendError(response.error || "No pudimos actualizar la conversación.");
+      setSendError(response.message || response.error || "No pudimos actualizar la conversación.");
     }
   }
 
@@ -365,7 +365,7 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
       setIsDeleteModalOpen(false);
       router.refresh();
     } else {
-      setSendError(response.error || "No pudimos eliminar este contacto.");
+      setSendError(response.message || response.error || "No pudimos eliminar este contacto.");
       setIsDeleting(false);
     }
   }

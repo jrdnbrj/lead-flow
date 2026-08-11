@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 
 import { LeadCaptureForm } from "@/components/leads/lead-capture-form";
+import { isAuthRequiredEnabled } from "@/lib/auth/auth-required";
+import { requireAdvisorOrRedirect } from "@/lib/auth/advisor";
 
 export const metadata: Metadata = { title: "Captura express" };
 
-export default function NewLeadPage() {
+export default async function NewLeadPage() {
+  if (isAuthRequiredEnabled()) await requireAdvisorOrRedirect("/nuevo");
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-7 flex items-end justify-between gap-4 sm:mb-10">

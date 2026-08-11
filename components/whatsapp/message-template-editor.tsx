@@ -48,7 +48,7 @@ export function MessageTemplateEditor({ initialTemplate }: { initialTemplate: st
       setTemplate(response.data.template);
       setMessage("Mensaje automático guardado permanentemente en Supabase.");
     } else {
-      setError(response.error || "No pudimos guardar el mensaje.");
+      setError(response.message || response.error || "No pudimos guardar el mensaje.");
     }
     setIsSaving(false);
   }

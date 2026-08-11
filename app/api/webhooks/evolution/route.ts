@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { validateEvolutionWebhookRequest } from "@/lib/auth/entrypoints";
 import type { WhatsappStatus } from "@/lib/domain/lead";
 import { formatPhoneForWhatsapp } from "@/lib/domain/lead";
-import { findLeadByPhone, createLeadMessage, findLeadMessageByProviderId, markLeadCustomerReply, updateLeadMessage, updateLeadWhatsappStatus } from "@/lib/leads/repository";
+import { createLeadMessageForProvider, findLeadByPhoneForProvider, findLeadMessageByProviderIdForProvider, markLeadCustomerReplyForProvider, updateLeadMessageForProvider, updateLeadWhatsappStatusForProvider } from "@/lib/leads/repository";
 import { extractEvolutionMessageId, normalizeEvolutionStatus } from "@/lib/whatsapp/service";
 
 export const runtime = "nodejs";
@@ -123,19 +124,19 @@ async function processIncomingMessage(item: JsonRecord): Promise<boolean> {
   if (isFromMe(item)) return false;
   const phone = phoneFromJid(getRemoteJid(item));
   if (!phone) return false;
-  const lead = await findLeadByPhone(phone);
+  const lead = await findLeadByPhoneForProvider(phone);
   if (!lead) return false;
 
   const providerMessageId = extractEvolutionMessageId(item);
   const body = extractMessageBody(item);
   const createdAt = getMessageTimestamp(item);
-  const existing = providerMessageId ? await findLeadMessageByProviderId(providerMessageId) : null;
+  const existing = providerMessageId ? await findLeadMessageByProviderIdForProvider(providerMessageId) : null;
   if (existing) {
-    await updateLeadMessage(existing.id, { status: "RECEIVED", body, phone, rawPayload: item });
+    await updateLeadMessageForProvider(existing.id, { status: "RECEIVED", body, phone, rawPayload: item });
   } else {
-    await createLeadMessage({ leadId: lead.id, providerMessageId, direction: "INBOUND", status: "RECEIVED", body, phone, createdAt, rawPayload: item });
+    await createLeadMessageForProvider({ leadId: lead.id, providerMessageId, direction: "INBOUND", status: "RECEIVED", body, phone, createdAt, rawPayload: item });
   }
-  await markLeadCustomerReply(lead.id, body, createdAt);
+  await markLeadCustomerReplyForProvider(lead.id, body, createdAt);
   return true;
 }
 
@@ -144,28 +145,26 @@ async function processOutboundEvent(item: JsonRecord): Promise<boolean> {
   const providerMessageId = extractEvolutionMessageId(item);
   if (!providerMessageId) return false;
   const incomingStatus = normalizeEvolutionStatus(getStatusValue(item));
-  const existing = await findLeadMessageByProviderId(providerMessageId);
+  const existing = await findLeadMessageByProviderIdForProvider(providerMessageId);
   const timestamp = getMessageTimestamp(item);
   if (existing) {
     if (!shouldApplyStatus(existing.status, incomingStatus)) return false;
-    await updateLeadMessage(existing.id, { status: incomingStatus, rawPayload: item, ...statusTimestamps(incomingStatus, timestamp) });
-    if (existing.direction === "OUTBOUND") await updateLeadWhatsappStatus(existing.leadId, incomingStatus);
+    await updateLeadMessageForProvider(existing.id, { status: incomingStatus, rawPayload: item, ...statusTimestamps(incomingStatus, timestamp) });
+    if (existing.direction === "OUTBOUND") await updateLeadWhatsappStatusForProvider(existing.leadId, incomingStatus);
     return true;
   }
 
   const phone = phoneFromJid(getRemoteJid(item));
   if (!phone) return false;
-  const lead = await findLeadByPhone(phone);
+  const lead = await findLeadByPhoneForProvider(phone);
   if (!lead) return false;
-  await createLeadMessage({ leadId: lead.id, providerMessageId, direction: "OUTBOUND", status: incomingStatus, body: extractMessageBody(item), phone, createdAt: timestamp, rawPayload: item, ...statusTimestamps(incomingStatus, timestamp) });
-  await updateLeadWhatsappStatus(lead.id, incomingStatus);
+  await createLeadMessageForProvider({ leadId: lead.id, providerMessageId, direction: "OUTBOUND", status: incomingStatus, body: extractMessageBody(item), phone, createdAt: timestamp, rawPayload: item, ...statusTimestamps(incomingStatus, timestamp) });
+  await updateLeadWhatsappStatusForProvider(lead.id, incomingStatus);
   return true;
 }
 
 export async function POST(request: Request) {
-  const expectedToken = process.env.EVOLUTION_WEBHOOK_TOKEN;
-  const receivedToken = request.headers.get("x-evolution-webhook-token");
-  if (!expectedToken || receivedToken !== expectedToken) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  if (!validateEvolutionWebhookRequest(request)) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
 
   let payload: JsonRecord;
   try {

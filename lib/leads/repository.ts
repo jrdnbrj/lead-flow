@@ -2,6 +2,8 @@ import type { ConversationState, CreateLeadInput, FollowUpAction, FollowUpAction
 import { calculateLeadScore, formatPhoneForWhatsapp } from "@/lib/domain/lead";
 import type { Database } from "@/lib/supabase/database";
 import { getInstallationAdvisorUserId } from "@/lib/config/installation";
+import { AUTH_REQUIRED_MESSAGE } from "@/lib/auth/auth-required";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const leadSelect = "id,user_id,tenant_id,created_at,full_name,phone,car_model,car_models,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,conversation_state,next_action_at,next_action_type,last_activity_at,last_customer_message_at,last_agent_message_at,last_customer_message_preview,deleted_at,status";
@@ -34,6 +36,7 @@ type LeadRow = {
 };
 
 type FollowUpActionRow = Database["public"]["Tables"]["lead_follow_up_actions"]["Row"];
+type LeadflowDbClient = NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>;
 
 function toDomainAction(row: FollowUpActionRow): FollowUpAction {
   return {
@@ -81,7 +84,7 @@ function toDomainLead(row: LeadRow, followUpActions: FollowUpAction[] = []): Lea
   };
 }
 
-async function attachFollowUpActions(supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>, leads: Lead[]): Promise<Lead[]> {
+async function attachFollowUpActions(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
   if (leads.length === 0) return leads;
   const { data } = await supabase
     .from("lead_follow_up_actions")
@@ -98,7 +101,7 @@ async function attachFollowUpActions(supabase: NonNullable<Awaited<ReturnType<ty
   return leads.map((lead) => ({ ...lead, followUpActions: actionsByLead.get(lead.id) ?? [] }));
 }
 
-async function attachLatestMessages(supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>, leads: Lead[]): Promise<Lead[]> {
+async function attachLatestMessages(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
   if (leads.length === 0) return leads;
   const { data } = await supabase
     .from("lead_messages")
@@ -116,7 +119,7 @@ async function attachLatestMessages(supabase: NonNullable<Awaited<ReturnType<typ
   });
 }
 
-async function attachLeadRelations(supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>, leads: Lead[]): Promise<Lead[]> {
+async function attachLeadRelations(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
   return attachLatestMessages(supabase, await attachFollowUpActions(supabase, leads));
 }
 
@@ -177,6 +180,7 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
   if (userData.user) {
     ownerId = await getInstallationAdvisorUserId();
     if (!ownerId) throw new Error("La identidad de instalación no está configurada; el lead no fue guardado.");
+    if (userData.user.id !== ownerId) throw new Error(AUTH_REQUIRED_MESSAGE);
   }
   const { data, error } = await supabase
     .from("leads")
@@ -244,16 +248,86 @@ export async function findLeadByPhone(phone: string): Promise<Lead | null> {
   return lead ?? null;
 }
 
+async function getProviderContext(): Promise<{ supabase: LeadflowDbClient; advisorUserId: string } | null> {
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) return null;
+  const advisorUserId = await getInstallationAdvisorUserId();
+  if (!advisorUserId) return null;
+  return { supabase: supabase as unknown as LeadflowDbClient, advisorUserId };
+}
+
+async function isProviderOwnedLead(context: { supabase: LeadflowDbClient; advisorUserId: string }, leadId: string): Promise<boolean> {
+  const { data, error } = await context.supabase
+    .from("leads")
+    .select("id")
+    .eq("id", leadId)
+    .eq("user_id", context.advisorUserId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  return !error && Boolean(data);
+}
+
+async function findProviderOwnedMessageById(context: { supabase: LeadflowDbClient; advisorUserId: string }, messageId: string): Promise<LeadMessage | null> {
+  const { data, error } = await context.supabase
+    .from("lead_messages")
+    .select("id,lead_id,provider_message_id,direction,status,body,phone,created_at,delivered_at,read_at,failed_at")
+    .eq("id", messageId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const owned = await isProviderOwnedLead(context, data.lead_id);
+  return owned ? toDomainMessage(data) : null;
+}
+
+async function findProviderOwnedMessageByProviderId(context: { supabase: LeadflowDbClient; advisorUserId: string }, providerMessageId: string): Promise<LeadMessage | null> {
+  const { data, error } = await context.supabase
+    .from("lead_messages")
+    .select("id,lead_id,provider_message_id,direction,status,body,phone,created_at,delivered_at,read_at,failed_at")
+    .eq("provider_message_id", providerMessageId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const owned = await isProviderOwnedLead(context, data.lead_id);
+  return owned ? toDomainMessage(data) : null;
+}
+
+export async function findLeadByPhoneForProvider(phone: string): Promise<Lead | null> {
+  const context = await getProviderContext();
+  if (!context) return null;
+
+  const { data, error } = await context.supabase
+    .from("leads")
+    .select(leadSelect)
+    .eq("user_id", context.advisorUserId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error || !data) return null;
+  const normalizedPhone = formatPhoneForWhatsapp(phone);
+  const row = data.find((candidate) => formatPhoneForWhatsapp(candidate.phone) === normalizedPhone);
+  if (!row) return null;
+  const [lead] = await attachLeadRelations(context.supabase, [toDomainLead(row)]);
+  return lead ?? null;
+}
+
 export async function updateLeadWhatsappStatus(id: string, status: WhatsappStatus, errorMessage?: string): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
+  return updateLeadWhatsappStatusWithClient(supabase, id, status, errorMessage);
+}
 
+async function updateLeadWhatsappStatusWithClient(supabase: LeadflowDbClient, id: string, status: WhatsappStatus, errorMessage?: string): Promise<boolean> {
   const update = status === "SENT"
     ? { whatsapp_status: status, whatsapp_last_error: null, whatsapp_sent_at: new Date().toISOString() }
     : { whatsapp_status: status, whatsapp_last_error: errorMessage ?? null };
   const { error } = await supabase.from("leads").update(update).eq("id", id).is("deleted_at", null);
   if (!error && status !== "FAILED") await supabase.from("leads").update({ status: "CONTACTADO" }).eq("id", id).eq("status", "NUEVO").is("deleted_at", null);
   return !error;
+}
+
+export async function updateLeadWhatsappStatusForProvider(id: string, status: WhatsappStatus, errorMessage?: string): Promise<boolean> {
+  const context = await getProviderContext();
+  if (!context) return false;
+  const owned = await isProviderOwnedLead(context, id);
+  return owned ? updateLeadWhatsappStatusWithClient(context.supabase, id, status, errorMessage) : false;
 }
 
 export async function markLeadAfterOutboundMessage(id: string, status: WhatsappStatus, errorMessage?: string): Promise<boolean> {
@@ -339,7 +413,10 @@ export async function softDeleteLead(id: string): Promise<boolean> {
 export async function markLeadCustomerReply(id: string, preview: string | null, messageAt: string): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
+  return markLeadCustomerReplyWithClient(supabase, id, preview, messageAt);
+}
 
+async function markLeadCustomerReplyWithClient(supabase: LeadflowDbClient, id: string, preview: string | null, messageAt: string): Promise<boolean> {
   const { error: actionsError } = await supabase.from("lead_follow_up_actions").update({
     status: "CANCELED",
     completed_at: messageAt,
@@ -355,6 +432,13 @@ export async function markLeadCustomerReply(id: string, preview: string | null, 
   }).eq("id", id).is("deleted_at", null);
   if (!actionsError && !error) await supabase.from("leads").update({ status: "CONTACTADO" }).eq("id", id).eq("status", "NUEVO").is("deleted_at", null);
   return !actionsError && !error;
+}
+
+export async function markLeadCustomerReplyForProvider(id: string, preview: string | null, messageAt: string): Promise<boolean> {
+  const context = await getProviderContext();
+  if (!context) return false;
+  const owned = await isProviderOwnedLead(context, id);
+  return owned ? markLeadCustomerReplyWithClient(context.supabase, id, preview, messageAt) : false;
 }
 
 export async function updateLeadConversationState(id: string, state: ConversationState): Promise<boolean> {
@@ -412,7 +496,10 @@ function toDomainMessage(row: LeadMessageRow): LeadMessage {
 export async function createLeadMessage(input: LeadMessageInput): Promise<string | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
+  return createLeadMessageWithClient(supabase, input);
+}
 
+async function createLeadMessageWithClient(supabase: LeadflowDbClient, input: LeadMessageInput): Promise<string | null> {
   const { data, error } = await supabase.from("lead_messages").insert({
     lead_id: input.leadId,
     provider_message_id: input.providerMessageId ?? null,
@@ -429,10 +516,20 @@ export async function createLeadMessage(input: LeadMessageInput): Promise<string
   return error || !data ? null : data.id;
 }
 
+export async function createLeadMessageForProvider(input: LeadMessageInput): Promise<string | null> {
+  const context = await getProviderContext();
+  if (!context) return null;
+  const owned = await isProviderOwnedLead(context, input.leadId);
+  return owned ? createLeadMessageWithClient(context.supabase, input) : null;
+}
+
 export async function updateLeadMessage(id: string, input: Omit<Partial<LeadMessageInput>, "leadId" | "direction">): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
+  return updateLeadMessageWithClient(supabase, id, input);
+}
 
+async function updateLeadMessageWithClient(supabase: LeadflowDbClient, id: string, input: Omit<Partial<LeadMessageInput>, "leadId" | "direction">): Promise<boolean> {
   const update: Database["public"]["Tables"]["lead_messages"]["Update"] = {};
   if (input.providerMessageId !== undefined) update.provider_message_id = input.providerMessageId;
   if (input.status !== undefined) update.status = input.status;
@@ -446,12 +543,27 @@ export async function updateLeadMessage(id: string, input: Omit<Partial<LeadMess
   return !error;
 }
 
+export async function updateLeadMessageForProvider(id: string, input: Omit<Partial<LeadMessageInput>, "leadId" | "direction">): Promise<boolean> {
+  const context = await getProviderContext();
+  if (!context) return false;
+  const message = await findProviderOwnedMessageById(context, id);
+  return message ? updateLeadMessageWithClient(context.supabase, id, input) : false;
+}
+
 export async function findLeadMessageByProviderId(providerMessageId: string): Promise<LeadMessage | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
+  return findLeadMessageByProviderIdWithClient(supabase, providerMessageId);
+}
 
+async function findLeadMessageByProviderIdWithClient(supabase: LeadflowDbClient, providerMessageId: string): Promise<LeadMessage | null> {
   const { data, error } = await supabase.from("lead_messages").select("id,lead_id,provider_message_id,direction,status,body,phone,created_at,delivered_at,read_at,failed_at").eq("provider_message_id", providerMessageId).maybeSingle();
   return error || !data ? null : toDomainMessage(data);
+}
+
+export async function findLeadMessageByProviderIdForProvider(providerMessageId: string): Promise<LeadMessage | null> {
+  const context = await getProviderContext();
+  return context ? findProviderOwnedMessageByProviderId(context, providerMessageId) : null;
 }
 
 export async function updateLeadMessageByProviderId(providerMessageId: string, input: Omit<Partial<LeadMessageInput>, "leadId" | "direction">): Promise<boolean> {

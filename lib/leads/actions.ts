@@ -1,6 +1,8 @@
 "use server";
 
 import type { ActionResponse, ConversationState, CreateLeadInput, FollowUpAction, Lead, ScheduleLeadActionInput, SendLeadInput, UpdateFollowUpActionInput, WhatsappSendResult } from "@/lib/domain/lead";
+import { authRequiredResult, isAuthRequiredEnabled } from "@/lib/auth/auth-required";
+import { requireAdvisor } from "@/lib/auth/advisor";
 import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-template";
 import { renderWhatsappMessageTemplate } from "@/lib/config/message-template-shared";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
@@ -10,10 +12,19 @@ import { leadSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpAct
 import { ensureEvolutionWebhook, sendWhatsappMedia, sendWhatsappText } from "@/lib/whatsapp/service";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
 
+async function requireAdvisorAction<T>(): Promise<ActionResponse<T> | null> {
+  const authorization = await requireAdvisor();
+  return authorization.status === "AUTHORIZED" ? null : authRequiredResult();
+}
+
 export async function createLeadAction(input: CreateLeadInput): Promise<ActionResponse<Lead>> {
   const parsed = leadSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: "Revisa los datos del prospecto antes de guardar." };
+  }
+  if (isAuthRequiredEnabled()) {
+    const auth = await requireAdvisorAction<Lead>();
+    if (auth) return auth;
   }
 
   try {
@@ -28,6 +39,8 @@ export async function createLeadAction(input: CreateLeadInput): Promise<ActionRe
 export async function sendLeadWhatsappAction(input: SendLeadInput): Promise<ActionResponse<WhatsappSendResult>> {
   const parsed = sendLeadSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Los datos del cliente no son válidos para enviar el mensaje." };
+  const auth = await requireAdvisorAction<WhatsappSendResult>();
+  if (auth) return auth;
 
   let messageRowId: string | null = null;
   try {
@@ -88,6 +101,8 @@ export async function sendLeadWhatsappAction(input: SendLeadInput): Promise<Acti
 export async function scheduleLeadActionAction(input: ScheduleLeadActionInput): Promise<ActionResponse<{ action: FollowUpAction; nextActionAt: string; actionType: ScheduleLeadActionInput["actionType"] }>> {
   const parsed = scheduleLeadActionSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Selecciona una acción y una fecha válida." };
+  const auth = await requireAdvisorAction<{ action: FollowUpAction; nextActionAt: string; actionType: ScheduleLeadActionInput["actionType"] }>();
+  if (auth) return auth;
 
   const nextActionAt = getStartOfSellerDayAfter(parsed.data.days);
   const persisted = await scheduleLeadAction(parsed.data.leadId, parsed.data.actionType, nextActionAt, parsed.data.note);
@@ -112,6 +127,8 @@ export async function scheduleLeadActionAction(input: ScheduleLeadActionInput): 
 export async function updateFollowUpActionAction(input: UpdateFollowUpActionInput): Promise<ActionResponse<{ action: FollowUpAction }>> {
   const parsed = updateFollowUpActionSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "No pudimos actualizar ese recordatorio. Revisa la fecha." };
+  const auth = await requireAdvisorAction<{ action: FollowUpAction }>();
+  if (auth) return auth;
 
   const scheduledFor = parsed.data.status === "POSTPONED" ? getStartOfSellerDayAfter(parsed.data.postponeDays ?? 1) : undefined;
   const action = await updateFollowUpAction(parsed.data.actionId, parsed.data.status, scheduledFor, parsed.data.note);
@@ -121,6 +138,8 @@ export async function updateFollowUpActionAction(input: UpdateFollowUpActionInpu
 }
 
 export async function clearLeadActionAction(leadId: string): Promise<ActionResponse<{ leadId: string }>> {
+  const auth = await requireAdvisorAction<{ leadId: string }>();
+  if (auth) return auth;
   const persisted = await clearLeadAction(leadId);
   return { success: persisted, data: persisted ? { leadId } : undefined, error: persisted ? undefined : "No pudimos actualizar el seguimiento." };
 }
@@ -129,12 +148,16 @@ export async function updateLeadConversationAction(input: { leadId: string; stat
   if (!input.leadId || !["NEW", "ACTIVE", "WAITING_CUSTOMER", "CLOSED"].includes(input.state)) {
     return { success: false, error: "El estado de la conversación no es válido." };
   }
+  const auth = await requireAdvisorAction<{ leadId: string; state: ConversationState }>();
+  if (auth) return auth;
   const persisted = await updateLeadConversationState(input.leadId, input.state);
   return { success: persisted, data: persisted ? input : undefined, error: persisted ? undefined : "No pudimos actualizar la conversación." };
 }
 
 export async function deleteLeadAction(leadId: string): Promise<ActionResponse<{ leadId: string }>> {
   if (!leadId) return { success: false, error: "No encontramos el contacto que quieres eliminar." };
+  const auth = await requireAdvisorAction<{ leadId: string }>();
+  if (auth) return auth;
   if (!hasSupabaseConfig()) return { success: true, data: { leadId }, warning: "El contacto se ocultó en este dispositivo." };
   const persisted = await softDeleteLead(leadId);
   return persisted

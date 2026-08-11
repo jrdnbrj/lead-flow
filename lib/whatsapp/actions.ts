@@ -1,9 +1,14 @@
 "use server";
 
 import type { ActionResponse } from "@/lib/domain/lead";
+import { authRequiredResult } from "@/lib/auth/auth-required";
+import { requireAdvisor } from "@/lib/auth/advisor";
 import { getEvolutionErrorMessage } from "@/lib/whatsapp/service";
 
 export async function unlinkWhatsappInstanceAction(): Promise<ActionResponse<{ disconnected: true }>> {
+  const authorization = await requireAdvisor();
+  if (authorization.status !== "AUTHORIZED") return authRequiredResult();
+
   const apiUrl = process.env.EVOLUTION_API_URL;
   const apiKey = process.env.EVOLUTION_API_KEY;
   const instanceName = process.env.EVOLUTION_API_INSTANCE_NAME;

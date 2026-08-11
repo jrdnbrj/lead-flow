@@ -22,7 +22,7 @@ export function SellerProfileForm({ initialProfile, persistentSettingsAvailable 
       setProfile(response.data);
       setMessage("Datos guardados permanentemente en Supabase.");
     } else {
-      setError(response.error || "No pudimos guardar los datos del vendedor.");
+      setError(response.message || response.error || "No pudimos guardar los datos del vendedor.");
     }
     setIsSaving(false);
   }
