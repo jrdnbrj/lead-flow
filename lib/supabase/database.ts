@@ -70,6 +70,7 @@ export type Database = {
       leadflow_settings: {
         Row: {
           id: string;
+          user_id: string;
           whatsapp_message_template: string | null;
           seller_name: string | null;
           seller_phone: string | null;
@@ -80,6 +81,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          user_id: string;
           whatsapp_message_template?: string | null;
           seller_name?: string | null;
           seller_phone?: string | null;
@@ -89,6 +91,22 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["leadflow_settings"]["Insert"]>;
+        Relationships: [];
+      };
+      leadflow_installation: {
+        Row: {
+          singleton: boolean;
+          advisor_user_id: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          singleton?: boolean;
+          advisor_user_id: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["leadflow_installation"]["Insert"]>;
         Relationships: [];
       };
       car_models: {

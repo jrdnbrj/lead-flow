@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getInstallationAdvisorUserId } from "@/lib/config/installation";
 
 export type PersistentSettings = {
   whatsappMessageTemplate: string | null;
@@ -32,7 +33,9 @@ export async function getPersistentSettings(): Promise<{ available: boolean; set
   const supabase = createSupabaseAdminClient();
   if (!supabase) return { available: false, settings: emptySettings };
 
-  const { data, error } = await supabase.from("leadflow_settings").select(settingsSelect).eq("id", "default").maybeSingle();
+  const ownerId = await getInstallationAdvisorUserId();
+  if (!ownerId) return { available: false, settings: emptySettings };
+  const { data, error } = await supabase.from("leadflow_settings").select(settingsSelect).eq("user_id", ownerId).maybeSingle();
   if (error) return { available: false, settings: emptySettings };
   return { available: true, settings: toPersistentSettings(data) };
 }
@@ -40,15 +43,18 @@ export async function getPersistentSettings(): Promise<{ available: boolean; set
 export async function savePersistentSettings(patch: Partial<PersistentSettings>): Promise<boolean> {
   const supabase = createSupabaseAdminClient();
   if (!supabase) return false;
+  const ownerId = await getInstallationAdvisorUserId();
+  if (!ownerId) return false;
 
   const payload = {
     id: "default",
+    user_id: ownerId,
     ...(patch.whatsappMessageTemplate !== undefined ? { whatsapp_message_template: patch.whatsappMessageTemplate } : {}),
     ...(patch.sellerName !== undefined ? { seller_name: patch.sellerName } : {}),
     ...(patch.sellerPhone !== undefined ? { seller_phone: patch.sellerPhone } : {}),
     ...(patch.sellerEmail !== undefined ? { seller_email: patch.sellerEmail } : {}),
     ...(patch.sellerCompany !== undefined ? { seller_company: patch.sellerCompany } : {}),
   };
-  const { error } = await supabase.from("leadflow_settings").upsert(payload, { onConflict: "id" });
+  const { error } = await supabase.from("leadflow_settings").upsert(payload, { onConflict: "user_id" });
   return !error;
 }

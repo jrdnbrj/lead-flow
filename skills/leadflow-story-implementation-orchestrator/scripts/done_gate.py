@@ -39,12 +39,12 @@ from validation_gate import evaluate_checks
 
 RESULT_SPECS = {
     "validation": ("validation_gate", "VALIDATING"),
-    "review": ("independent_reviewer", "REVIEWING"),
     "scope": ("scope_gate", "SCOPE_GATE"),
     "final_scope": ("scope_gate", "FINAL_SCOPE_GATE"),
     "readiness": ("handoff_gate", "HANDOFF"),
     "dependency": ("dependency_gate", "DEPENDENCY_GATE"),
 }
+REVIEW_WAIVER_STATUS = "WAIVED_UNAVAILABLE_RUNTIME"
 
 
 def _load_registered_result(
@@ -56,10 +56,51 @@ def _load_registered_result(
     expected: dict[str, Any],
     frozen: dict[str, Any],
     ledger_path: Path,
+    expected_status: str = "PASS",
 ) -> dict[str, Any]:
     result = load_json(path)
-    validate_result_provenance(root, result, path, expected_producer=producer, expected_gate=gate, expected_frozen_artifacts=frozen, ledger_path=ledger_path, **expected)
+    validate_result_provenance(root, result, path, expected_producer=producer, expected_gate=gate, expected_status=expected_status, expected_frozen_artifacts=frozen, ledger_path=ledger_path, **expected)
     return result
+
+
+def _load_review_or_project_fast_waiver(root: Path, path: Path, *, expected: dict[str, Any], frozen: dict[str, Any], ledger_path: Path) -> dict[str, Any]:
+    try:
+        return _load_registered_result(
+            root,
+            path,
+            producer="independent_reviewer",
+            gate="REVIEWING",
+            expected=expected,
+            frozen=frozen,
+            ledger_path=ledger_path,
+        )
+    except ContractError as review_error:
+        try:
+            waiver = _load_registered_result(
+                root,
+                path,
+                producer="project_fast_policy",
+                gate="PROJECT_FAST",
+                expected=expected,
+                frozen=frozen,
+                ledger_path=ledger_path,
+                expected_status=REVIEW_WAIVER_STATUS,
+            )
+        except ContractError:
+            raise review_error
+    if waiver.get("review") != REVIEW_WAIVER_STATUS:
+        raise ContractError("PROJECT_FAST review waiver declaration is missing")
+    if waiver.get("runtime_independence_available") is not False:
+        raise ContractError("PROJECT_FAST review waiver requires unavailable reviewer independence")
+    if waiver.get("validations_required_pass") is not True:
+        raise ContractError("PROJECT_FAST review waiver requires required validations PASS")
+    if waiver.get("known_p0_p1_open") not in (False, []):
+        raise ContractError("PROJECT_FAST review waiver cannot be used with known open P0/P1 findings")
+    if waiver.get("product_decision_pending") is not False or waiver.get("architecture_decision_pending") is not False:
+        raise ContractError("PROJECT_FAST review waiver cannot bypass a product or architecture decision")
+    if waiver.get("remote_or_destructive_operation_pending") is not False:
+        raise ContractError("PROJECT_FAST review waiver cannot bypass remote or destructive operations")
+    return waiver
 
 
 def _load_gate_inputs(
@@ -95,6 +136,7 @@ def _load_gate_inputs(
             frozen=frozen,
             ledger_path=ledger_path,
         )
+    results["review"] = _load_review_or_project_fast_waiver(root, paths["review"], expected=expected, frozen=frozen, ledger_path=ledger_path)
     return validation_plan, registered_plan, results
 
 
@@ -183,8 +225,8 @@ def evaluate_predicates(
     validate_state_shape(state)
     story = ensure_story_in_state(state, story_id)
     failures: list[str] = []
-    if story.get("status") != "CANDIDATE_DONE":
-        failures.append(f"story must be CANDIDATE_DONE, got {story.get('status')}")
+    if story.get("status") not in {"REVIEWING", "CANDIDATE_DONE"}:
+        failures.append(f"story must be REVIEWING or CANDIDATE_DONE, got {story.get('status')}")
     _assert_story_file_binding(root, story, story_file, story_id, story_fingerprint)
     expected = {
         "expected_story_id": story_id,
@@ -214,9 +256,11 @@ def evaluate_predicates(
     validation_check = evaluate_checks(validation_plan, validation)
     if validation_check["status"] != "PASS":
         failures.extend(validation_check["failures"])
-    for label, result in (("scope", scope), ("readiness", readiness), ("dependency", dependency), ("review", review)):
+    for label, result in (("scope", scope), ("final_scope", final_scope), ("readiness", readiness), ("dependency", dependency)):
         if result.get("status") != "PASS":
             failures.append(f"{label} result is not PASS")
+    if review.get("status") not in {"PASS", REVIEW_WAIVER_STATUS}:
+        failures.append("review result is neither PASS nor PROJECT_FAST waiver")
     try:
         _assert_workspace_consistency(root, validation, review, final_scope)
     except ContractError as exc:
@@ -261,8 +305,8 @@ def _recheck_current_done_inputs(
     state = load_json(state_path)
     validate_state_shape(state)
     story = ensure_story_in_state(state, predicates["story_id"])
-    if story.get("status") != "CANDIDATE_DONE":
-        raise ContractError("story is no longer CANDIDATE_DONE")
+    if story.get("status") not in {"REVIEWING", "CANDIDATE_DONE"}:
+        raise ContractError("story is no longer eligible for atomic completion")
     _assert_story_file_binding(root, story, story_file, predicates["story_id"], predicates["story_fingerprint"])
     expected = {
         "expected_story_id": predicates["story_id"],
@@ -312,8 +356,8 @@ def apply_done(
     state = load_json(state_path)
     validate_state_shape(state)
     story = ensure_story_in_state(state, predicates["story_id"])
-    if story.get("status") != "CANDIDATE_DONE":
-        raise ContractError("only CANDIDATE_DONE can become DONE")
+    if story.get("status") not in {"REVIEWING", "CANDIDATE_DONE"}:
+        raise ContractError("only REVIEWING or CANDIDATE_DONE can become DONE")
     root = project_root.resolve()
     _recheck_current_done_inputs(root, state_path, story_file, ledger_path, predicates)
     # Validate the projection before appending evidence so malformed stories cannot create partial truth.
@@ -331,6 +375,7 @@ def apply_done(
         "story_fingerprint": predicates["story_fingerprint"],
         "producer": "done_gate",
         "gate": "DONE_GATE",
+        "completion_mode": "ATOMIC",
         "artifact_ref": state_ref,
         "frozen_artifacts": predicates["frozen_artifacts"],
         "timestamp": now_utc(),

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -21,11 +22,17 @@ from dependency_gate import evaluate as evaluate_dependencies  # noqa: E402
 from done_gate import apply_done, evaluate_predicates  # noqa: E402
 from handoff_gate import verify as verify_handoff  # noqa: E402
 from import_external_evidence import validate as validate_external_evidence  # noqa: E402
+from import_external_review import import_review  # noqa: E402
 from lib import ContractError, attach_provenance, canonical_hash, frozen_fingerprint, load_json, now_utc, result_fingerprint, root_runtime, sha256_file, snapshot_workspace, workspace_fingerprint, write_bytes_atomic, write_json_atomic  # noqa: E402
 from record_transition import transition  # noqa: E402
 from register_external_evidence import register as register_external_request  # noqa: E402
+from request_external_review import request as request_external_review  # noqa: E402
+from resume_from_integrity_block import resume as resume_integrity_block  # noqa: E402
+from prepare_external_review import prepare as prepare_external_review  # noqa: E402
+from route_story import route as route_story  # noqa: E402
 from scope_gate import evaluate as evaluate_scope  # noqa: E402
 from validation_gate import evaluate_checks, main as validation_gate_main  # noqa: E402
+from verify_external_review_bundle import verify as verify_external_review_bundle  # noqa: E402
 from freeze_artifact import freeze  # noqa: E402
 
 
@@ -279,6 +286,281 @@ class ImplementationOrchestratorTest(unittest.TestCase):
         plan_path = self.freeze_fixture("validation-plan", self.validation_proposal("NOT_APPLICABLE"), "validation-plan.json")
         self.assertEqual(evaluate_checks(load_json(plan_path), {"checks": []})["status"], "PASS")
 
+    def test_fast_strict_routing_is_deterministic(self) -> None:
+        self.story_file.write_text("# E1-S1\n\nRisk: LOW\n\nCapture a lead locally.\n", encoding="utf-8")
+        self.assertEqual(route_story(self.story_file, execution_type="IMPLEMENTATION")["workflow_mode"], "FAST")
+        self.story_file.write_text("# E1-S1\n\nRisk: HIGH\n\nUpdate ownership.\n", encoding="utf-8")
+        self.assertEqual(route_story(self.story_file, execution_type="IMPLEMENTATION")["workflow_mode"], "STRICT")
+        self.story_file.write_text("# E1-S1\n\nRisk: LOW\n\nOperational evidence.\n", encoding="utf-8")
+        self.assertEqual(route_story(self.story_file, execution_type="OPERATIONAL")["workflow_mode"], "STRICT")
+
+    def test_frozen_execution_artifact_records_workflow_mode(self) -> None:
+        frozen = self.freeze_fixture("execution-type", self.execution_proposal("IMPLEMENTATION"), "story_execution_type.json")
+        execution = load_json(frozen)
+        self.assertEqual(execution["workflow_mode"], "STRICT")
+        self.assertIn("risk_not_explicit", execution["workflow_mode_reasons"])
+
+    def test_runtime_unavailability_uses_awaiting_external_review(self) -> None:
+        self.freeze_required()
+        write_json_atomic(self.runtime / "state.json", self.base_state("REVIEWING"))
+        bundle = self.runtime / "review-bundle.json"
+        write_json_atomic(bundle, {"story_id": "E1-S1", "immutable": True})
+        result_path = self.runtime / "review-result.json"
+        request_path = self.runtime / "external-review-request.json"
+        response = request_external_review(self.root, self.runtime / "state.json", self.ledger, story_id="E1-S1", run_id=self.run_id, iteration=self.iteration, generation=self.generation, bundle_path=bundle, result_path=result_path, request_path=request_path)
+        self.assertEqual(response["state"], "AWAITING_EXTERNAL_REVIEW")
+        self.assertEqual(load_json(self.runtime / "state.json")["stories"][0]["status"], "AWAITING_EXTERNAL_REVIEW")
+        self.assertNotEqual(load_json(self.runtime / "state.json")["stories"][0]["status"], "NEEDS_USER_DECISION")
+
+    def test_external_review_state_round_trip_is_allowed(self) -> None:
+        write_json_atomic(self.runtime / "state.json", self.base_state("REVIEWING"))
+        transition(self.runtime / "state.json", "E1-S1", "AWAITING_EXTERNAL_REVIEW", "reviewer runtime unavailable")
+        transition(self.runtime / "state.json", "E1-S1", "REVIEWING", "structured result imported")
+        self.assertEqual(load_json(self.runtime / "state.json")["stories"][0]["status"], "REVIEWING")
+
+    def test_external_review_import_resumes_when_result_is_valid(self) -> None:
+        self.freeze_required()
+        write_json_atomic(self.runtime / "state.json", self.base_state("REVIEWING"))
+        bundle = self.runtime / "review-bundle.json"
+        write_json_atomic(bundle, {"story_id": "E1-S1", "immutable": True})
+        result_path = self.runtime / "review-result.json"
+        request_external_review(self.root, self.runtime / "state.json", self.ledger, story_id="E1-S1", run_id=self.run_id, iteration=self.iteration, generation=self.generation, bundle_path=bundle, result_path=result_path, request_path=self.runtime / "external-review-request.json")
+        raw_path = self.root / "external-review.json"
+        raw = load_json(self.make_result("external-review-source", "independent_reviewer", "REVIEWING"))
+        raw.update(self.context())
+        raw["result_fingerprint"] = raw["provenance"]["result_fingerprint"]
+        raw["provenance"]["result_fingerprint"] = result_fingerprint(raw)
+        write_json_atomic(raw_path, raw)
+        output = self.runtime / "imported-review.json"
+        imported = import_review(self.root, self.runtime / "state.json", self.ledger, input_path=raw_path, output_path=output, story_id="E1-S1", run_id=self.run_id, iteration=self.iteration, generation=self.generation, input_fingerprint=self.input_fingerprint, story_fingerprint=self.story_fingerprint)
+        self.assertEqual(imported["status"], "PASS")
+        self.assertEqual(load_json(self.runtime / "state.json")["stories"][0]["status"], "REVIEWING")
+        self.assertEqual(load_json(output)["imported_from"], "external-review.json")
+
+    def _review_schema_template(self) -> dict:
+        context = self.context()
+        return {
+            "type": "object",
+            "properties": {
+                **{key: {"const": context[key]} for key in ("story_id", "run_id", "iteration", "generation", "input_fingerprint", "story_fingerprint")},
+                "provenance": {
+                    "properties": {
+                        **{key: {"const": context[key]} for key in ("story_id", "run_id", "iteration", "generation", "input_fingerprint", "story_fingerprint")},
+                        "frozen_artifacts": {"const": {}},
+                        "evidence_ledger": {"const": ""},
+                        "evidence_refs": {"const": []},
+                        "result_artifact_ref": {"const": ""},
+                    }
+                },
+            },
+        }
+
+    def _prepare_generation_two_review_fixture(self, *, source_text: str = "# E4-S2 bundle\n\nGeneration 2\n", label: str = "recovery-2") -> tuple[Path, dict]:
+        self.generation = 2
+        self.story_fingerprint = sha256_file(self.story_file)
+        self.freeze_required()
+        state = self.base_state("AWAITING_EXTERNAL_REVIEW")
+        state["stories"][0].update({
+            "run_id": self.run_id,
+            "iteration": self.iteration,
+            "generation": 2,
+            "repair_round": 2,
+            "input_fingerprint": self.input_fingerprint,
+            "story_fingerprint": self.story_fingerprint,
+            "external_review_request": {
+                "request_id": "old",
+                "request_ref": "_bmad-output/orchestration/leadflow-story-implementation/old-request.json",
+                "expected_result_ref": "_bmad-output/orchestration/leadflow-story-implementation/old-result.json",
+                "bundle_ref": "old",
+                "status": "AWAITING_EXTERNAL_REVIEW",
+            },
+            "blockers_open": ["CR-OLD"],
+        })
+        write_json_atomic(self.runtime / "state.json", state)
+        write_json_atomic(self.runtime / "old-request.json", {"generation": 1})
+        write_json_atomic(self.runtime / "old-result.json", {"generation": 1})
+        output_dir = self.runtime / "generation-2"
+        output_dir.mkdir()
+        write_json_atomic(output_dir / "review-result.schema.json", self._review_schema_template())
+        write_bytes_atomic(output_dir / "implementation.diff", b"diff --git a/lib/example.ts b/lib/example.ts\n")
+        write_json_atomic(output_dir / "validation-result.json", {"status": "PASS"})
+        source_bundle = self.runtime / "review-bundle.md"
+        source_bundle.write_text(source_text, encoding="utf-8")
+        result = prepare_external_review(self.root, self.runtime / "state.json", self.ledger, story_id="E1-S1", run_id=self.run_id, iteration=self.iteration, generation=2, input_fingerprint=self.input_fingerprint, story_fingerprint=self.story_fingerprint, source_bundle=source_bundle, output_dir=output_dir, recovery_label=label)
+        return output_dir, result
+
+    def test_generation_scoped_review_contract_has_no_stale_generation(self) -> None:
+        output_dir, result = self._prepare_generation_two_review_fixture()
+        self.assertEqual(result["generation"], 2)
+        for name in ("review-bundle.recovery-2.md", "review-bundle.recovery-2.manifest.json", "review-prompt.recovery-2.md", "review-result.recovery-2.schema.json", "external-review-request.recovery-2.json"):
+            content = (output_dir / name).read_text(encoding="utf-8")
+            self.assertNotIn('"generation": 1', content)
+            self.assertIsNone(re.search(r'-1-1(?=["\'`\\s,.)\\]}]|$)', content))
+        request = load_json(output_dir / "external-review-request.recovery-2.json")
+        schema = load_json(output_dir / "review-result.recovery-2.schema.json")
+        self.assertEqual(request["generation"], 2)
+        self.assertEqual(schema["properties"]["generation"]["const"], 2)
+        self.assertEqual(load_json(self.runtime / "state.json")["stories"][0]["external_review_request"]["generation"], 2)
+        self.assertEqual(load_json(self.runtime / "state.json")["stories"][0]["blockers_open"], [])
+        self.assertTrue(list(self.runtime.glob("old-result.json.invalid-controller-artifact.*")))
+        preflight = verify_external_review_bundle(self.root, output_dir / "review-bundle.recovery-2.manifest.json", **self.context())
+        self.assertEqual(preflight["status"], "PASS")
+
+    def test_generation_two_schema_shaped_result_imports(self) -> None:
+        _output_dir, prepared = self._prepare_generation_two_review_fixture()
+        frozen = self.frozen_context()
+        evidence_ref = "EV-CODE-REVIEW-E1-S1-RUN-1-1-2"
+        raw = {
+            "status": "PASS",
+            "review_type": "CODE_REVIEW",
+            "reviewer_runtime_independence": "separate_reviewer_runtime",
+            **self.context(),
+            "workspace_fingerprint": workspace_fingerprint(self.root),
+            "checked_at": now_utc(),
+            "findings": [],
+            "evidence_refs": [evidence_ref],
+            "provenance": {
+                **self.context(),
+                "frozen_artifacts": frozen,
+                "evidence_ledger": "_bmad-output/orchestration/leadflow-story-implementation/evidence-ledger.jsonl",
+                "evidence_refs": [evidence_ref],
+                "producer": "independent_reviewer",
+                "gate": "REVIEWING",
+                "result_artifact_ref": prepared["expected_result_ref"],
+            },
+        }
+        raw["provenance"]["result_fingerprint"] = result_fingerprint(raw)
+        raw_path = self.root / "generation-two-review.json"
+        write_json_atomic(raw_path, raw)
+        imported = import_review(self.root, self.runtime / "state.json", self.ledger, input_path=raw_path, output_path=self.runtime / "imported-review.json", story_id="E1-S1", run_id=self.run_id, iteration=1, generation=2, input_fingerprint=self.input_fingerprint, story_fingerprint=self.story_fingerprint)
+        self.assertEqual(imported["status"], "PASS")
+
+    def test_external_review_bundle_preflight_rejects_stale_schema_generation(self) -> None:
+        output_dir, _prepared = self._prepare_generation_two_review_fixture()
+        schema = load_json(output_dir / "review-result.recovery-2.schema.json")
+        schema["properties"]["generation"]["const"] = 1
+        write_json_atomic(output_dir / "review-result.recovery-2.schema.json", schema)
+        with self.assertRaises(ContractError):
+            verify_external_review_bundle(self.root, output_dir / "review-bundle.recovery-2.manifest.json", **self.context())
+
+    def test_external_review_bundle_preflight_rejects_stale_schema_sha_in_bundle(self) -> None:
+        stale_sha = "b" * 64
+        output_dir, _prepared = self._prepare_generation_two_review_fixture()
+        bundle = output_dir / "review-bundle.recovery-2.md"
+        bundle.write_text(bundle.read_text(encoding="utf-8") + "\nReview result schema `" + stale_sha + "`\n", encoding="utf-8")
+        with self.assertRaises(ContractError):
+            verify_external_review_bundle(self.root, output_dir / "review-bundle.recovery-2.manifest.json", **self.context())
+
+    def test_external_review_bundle_preflight_rejects_logical_lock_without_path(self) -> None:
+        output_dir, _prepared = self._prepare_generation_two_review_fixture()
+        manifest = load_json(output_dir / "review-bundle.recovery-2.manifest.json")
+        manifest["artifacts"].append({"path": "complete_implementation_diff", "sha256": "c" * 64, "kind": "implementation_diff"})
+        write_json_atomic(output_dir / "review-bundle.recovery-2.manifest.json", manifest)
+        with self.assertRaises(ContractError):
+            verify_external_review_bundle(self.root, output_dir / "review-bundle.recovery-2.manifest.json", **self.context())
+
+    def test_external_review_bundle_preflight_locks_materialized_implementation_diff(self) -> None:
+        output_dir, _prepared = self._prepare_generation_two_review_fixture()
+        manifest = load_json(output_dir / "review-bundle.recovery-2.manifest.json")
+        diff_entries = [entry for entry in manifest["artifacts"] if entry["kind"] == "implementation_diff"]
+        self.assertEqual(len(diff_entries), 1)
+        diff_path = output_dir / diff_entries[0]["path"]
+        self.assertTrue(diff_path.exists())
+        self.assertEqual(diff_entries[0]["sha256"], sha256_file(diff_path))
+
+    def test_external_review_bundle_preflight_rejects_byte_modified_after_manifest(self) -> None:
+        output_dir, _prepared = self._prepare_generation_two_review_fixture()
+        bundle = output_dir / "review-bundle.recovery-2.md"
+        bundle.write_text(bundle.read_text(encoding="utf-8") + "\nmutated\n", encoding="utf-8")
+        with self.assertRaises(ContractError):
+            verify_external_review_bundle(self.root, output_dir / "review-bundle.recovery-2.manifest.json", **self.context())
+
+    def test_external_review_bundle_uses_physical_verifiable_artifact_paths(self) -> None:
+        output_dir, _prepared = self._prepare_generation_two_review_fixture()
+        manifest = load_json(output_dir / "review-bundle.recovery-2.manifest.json")
+        self.assertIsInstance(manifest["artifacts"], list)
+        for entry in manifest["artifacts"]:
+            self.assertIn("path", entry)
+            self.assertIn("sha256", entry)
+            self.assertIn("kind", entry)
+            self.assertNotEqual(entry["path"], "complete_implementation_diff")
+            artifact_path = self.root / entry["path"] if entry["path"].startswith("_bmad-output/") else output_dir / entry["path"]
+            self.assertTrue(artifact_path.exists())
+        bundle = (output_dir / "review-bundle.recovery-2.md").read_text(encoding="utf-8")
+        self.assertNotIn("Review result schema |", bundle)
+
+    def test_preflight_failure_does_not_increment_generation_or_repair_round(self) -> None:
+        source = "# E4-S2 bundle\n\nGeneration 2\n\nUnlocked SHA " + ("d" * 64) + "\n"
+        with self.assertRaises(ContractError):
+            self._prepare_generation_two_review_fixture(source_text=source)
+        state = load_json(self.runtime / "state.json")["stories"][0]
+        self.assertEqual(state["generation"], 2)
+        self.assertEqual(state["repair_round"], 2)
+
+    def test_generation_one_result_is_rejected_by_generation_two_import(self) -> None:
+        self.generation = 2
+        self.story_fingerprint = sha256_file(self.story_file)
+        self.freeze_required()
+        state = self.base_state("REVIEWING")
+        state["stories"][0].update({"run_id": self.run_id, "iteration": self.iteration, "generation": 2, "repair_round": 2, "input_fingerprint": self.input_fingerprint, "story_fingerprint": self.story_fingerprint})
+        write_json_atomic(self.runtime / "state.json", state)
+        bundle = self.runtime / "review-bundle.json"
+        write_json_atomic(bundle, {"story_id": "E1-S1", "generation": 2})
+        request_path = self.runtime / "external-review-request.json"
+        result_path = self.runtime / "review-result.json"
+        request_external_review(self.root, self.runtime / "state.json", self.ledger, story_id="E1-S1", run_id=self.run_id, iteration=self.iteration, generation=2, bundle_path=bundle, result_path=result_path, request_path=request_path)
+        raw = load_json(self.make_result("external-review-source", "independent_reviewer", "REVIEWING"))
+        raw["generation"] = 1
+        raw["provenance"]["generation"] = 1
+        raw_path = self.root / "generation-one-review.json"
+        write_json_atomic(raw_path, raw)
+        with self.assertRaises(ContractError):
+            import_review(self.root, self.runtime / "state.json", self.ledger, input_path=raw_path, output_path=self.runtime / "imported-review.json", story_id="E1-S1", run_id=self.run_id, iteration=self.iteration, generation=2, input_fingerprint=self.input_fingerprint, story_fingerprint=self.story_fingerprint)
+
+    def test_integrity_resume_rejects_replacement_from_previous_generation(self) -> None:
+        self.generation = 2
+        self.story_fingerprint = sha256_file(self.story_file)
+        self.freeze_required()
+        state = self.base_state("ESCALATED")
+        state["stories"][0].update({"run_id": self.run_id, "iteration": self.iteration, "generation": 2, "repair_round": 2, "input_fingerprint": self.input_fingerprint, "story_fingerprint": self.story_fingerprint})
+        write_json_atomic(self.runtime / "state.json", state)
+        target = self.runtime / "external-review-request.json"
+        source = self.runtime / "external-review-request.recovery-1.json"
+        write_json_atomic(target, {"generation": 2, "request_fingerprint": "a" * 64})
+        write_json_atomic(source, {"story_id": "E1-S1", "run_id": self.run_id, "iteration": 1, "generation": 1, "input_fingerprint": self.input_fingerprint, "story_fingerprint": self.story_fingerprint, "request_fingerprint": "b" * 64, "bundle_ref": "bundle", "expected_result_ref": "result"})
+        with self.assertRaises(ContractError):
+            resume_integrity_block(self.root, self.runtime / "state.json", self.ledger, story_id="E1-S1", run_id=self.run_id, iteration=1, generation=2, block_kind="PROVENANCE_METADATA", target_state="AWAITING_EXTERNAL_REVIEW", replacements=[f"{target}={source}"], preserved_results=[], input_fingerprint=self.input_fingerprint, story_fingerprint=self.story_fingerprint)
+        self.assertEqual(load_json(self.runtime / "state.json")["stories"][0]["status"], "ESCALATED")
+
+    def test_integrity_resume_preserves_generation_repair_round_and_history(self) -> None:
+        write_json_atomic(self.runtime / "state.json", self.base_state("ESCALATED"))
+        state = load_json(self.runtime / "state.json")
+        state["stories"][0].update({"run_id": self.run_id, "iteration": self.iteration, "generation": 2, "repair_round": 2})
+        write_json_atomic(self.runtime / "state.json", state)
+        target = self.runtime / "review-bundle.json"
+        source = self.runtime / "review-bundle.repaired.json"
+        write_json_atomic(target, {"version": 1, "invalid": True})
+        write_json_atomic(source, {"version": 2, "invalid": False})
+        response = resume_integrity_block(self.root, self.runtime / "state.json", self.ledger, story_id="E1-S1", run_id=self.run_id, iteration=self.iteration, generation=2, block_kind="BUNDLE", target_state="AWAITING_EXTERNAL_REVIEW", replacements=[f"{target}={source}"], preserved_results=[])
+        current = load_json(self.runtime / "state.json")["stories"][0]
+        self.assertEqual(response["state"], "AWAITING_EXTERNAL_REVIEW")
+        self.assertEqual(current["generation"], 2)
+        self.assertEqual(current["repair_round"], 2)
+        self.assertEqual(load_json(target)["version"], 2)
+        self.assertEqual(len(response["history"]), 1)
+        self.assertTrue((self.root / response["history"][0]["invalid_ref"]).exists())
+
+    def test_atomic_done_gate_accepts_reviewing_without_candidate_state(self) -> None:
+        inputs = self.done_inputs()
+        state_path = self.runtime / "state.json"
+        state = load_json(state_path)
+        state["stories"][0]["status"] = "REVIEWING"
+        write_json_atomic(state_path, state)
+        predicates = self.done_predicates(inputs)
+        result = apply_done(project_root=self.root, state_path=state_path, story_file=self.story_file, ledger_path=self.ledger, predicates=predicates)
+        self.assertEqual(result["status"], "DONE")
+        self.assertEqual(load_json(state_path)["stories"][0]["status"], "DONE")
+
     def external_request(self) -> dict:
         request = {
             "schema_version": "1.0",
@@ -479,6 +761,97 @@ class ImplementationOrchestratorTest(unittest.TestCase):
         with self.assertRaises(ContractError):
             self.done_predicates(inputs)
 
+    def test_project_fast_review_waiver_can_close_when_runtime_review_unavailable(self) -> None:
+        inputs = self.done_inputs(execution_type="IMPLEMENTATION")
+        inputs["review_result_path"] = self.make_result(
+            "project-fast-waiver",
+            "project_fast_policy",
+            "PROJECT_FAST",
+            status="WAIVED_UNAVAILABLE_RUNTIME",
+            extra={
+                "review": "WAIVED_UNAVAILABLE_RUNTIME",
+                "review_type": "REVIEW_WAIVED_UNAVAILABLE_RUNTIME",
+                "runtime_independence_available": False,
+                "validations_required_pass": True,
+                "known_p0_p1_open": False,
+                "product_decision_pending": False,
+                "architecture_decision_pending": False,
+                "remote_or_destructive_operation_pending": False,
+                "workspace_fingerprint": workspace_fingerprint(self.root),
+                "checked_at": now_utc(),
+            },
+        )
+        self.assertEqual(self.done_predicates(inputs)["status"], "PASS")
+
+    def test_project_fast_review_waiver_rejects_known_p1_open(self) -> None:
+        inputs = self.done_inputs(execution_type="IMPLEMENTATION")
+        inputs["review_result_path"] = self.make_result(
+            "project-fast-waiver-open",
+            "project_fast_policy",
+            "PROJECT_FAST",
+            status="WAIVED_UNAVAILABLE_RUNTIME",
+            extra={
+                "review": "WAIVED_UNAVAILABLE_RUNTIME",
+                "review_type": "REVIEW_WAIVED_UNAVAILABLE_RUNTIME",
+                "runtime_independence_available": False,
+                "validations_required_pass": True,
+                "known_p0_p1_open": ["F1"],
+                "product_decision_pending": False,
+                "architecture_decision_pending": False,
+                "remote_or_destructive_operation_pending": False,
+                "workspace_fingerprint": workspace_fingerprint(self.root),
+                "checked_at": now_utc(),
+            },
+        )
+        with self.assertRaises(ContractError):
+            self.done_predicates(inputs)
+
+    def test_project_fast_review_waiver_rejects_available_runtime_review(self) -> None:
+        inputs = self.done_inputs(execution_type="IMPLEMENTATION")
+        inputs["review_result_path"] = self.make_result(
+            "project-fast-waiver-runtime-available",
+            "project_fast_policy",
+            "PROJECT_FAST",
+            status="WAIVED_UNAVAILABLE_RUNTIME",
+            extra={
+                "review": "WAIVED_UNAVAILABLE_RUNTIME",
+                "review_type": "REVIEW_WAIVED_UNAVAILABLE_RUNTIME",
+                "runtime_independence_available": True,
+                "validations_required_pass": True,
+                "known_p0_p1_open": False,
+                "product_decision_pending": False,
+                "architecture_decision_pending": False,
+                "remote_or_destructive_operation_pending": False,
+                "workspace_fingerprint": workspace_fingerprint(self.root),
+                "checked_at": now_utc(),
+            },
+        )
+        with self.assertRaises(ContractError):
+            self.done_predicates(inputs)
+
+    def test_project_fast_review_waiver_rejects_missing_validation_pass(self) -> None:
+        inputs = self.done_inputs(execution_type="IMPLEMENTATION")
+        inputs["review_result_path"] = self.make_result(
+            "project-fast-waiver-no-validation",
+            "project_fast_policy",
+            "PROJECT_FAST",
+            status="WAIVED_UNAVAILABLE_RUNTIME",
+            extra={
+                "review": "WAIVED_UNAVAILABLE_RUNTIME",
+                "review_type": "REVIEW_WAIVED_UNAVAILABLE_RUNTIME",
+                "runtime_independence_available": False,
+                "validations_required_pass": False,
+                "known_p0_p1_open": False,
+                "product_decision_pending": False,
+                "architecture_decision_pending": False,
+                "remote_or_destructive_operation_pending": False,
+                "workspace_fingerprint": workspace_fingerprint(self.root),
+                "checked_at": now_utc(),
+            },
+        )
+        with self.assertRaises(ContractError):
+            self.done_predicates(inputs)
+
     def test_hybrid_done_requires_both_review_components(self) -> None:
         inputs = self.done_inputs(execution_type="HYBRID")
         inputs["review_result_path"] = self.make_result("hybrid-code-only", "independent_reviewer", "REVIEWING", extra={"review_type": "CODE_REVIEW", "review_components": ["CODE_REVIEW"]})
@@ -548,6 +921,49 @@ class ImplementationOrchestratorTest(unittest.TestCase):
         manifest, manifest_path, baseline_path = self.scope_fixture("CONTROLLER_ONLY")
         self.assertEqual(evaluate_scope(self.root, load_json(baseline_path), manifest, "DEV", manifest_path=manifest_path, snapshot_path=baseline_path, expected=self.context())["status"], "FAIL")
         self.assertEqual(evaluate_scope(self.root, load_json(baseline_path), manifest, "FIXER", manifest_path=manifest_path, snapshot_path=baseline_path, expected=self.context())["status"], "FAIL")
+
+    def test_project_fast_scope_allows_story_and_controller_policy_changes(self) -> None:
+        code_file = self.root / "src" / "feature.ts"
+        code_file.parent.mkdir(parents=True)
+        code_file.write_text("before\n", encoding="utf-8")
+        controller_file = self.root / "skills" / "leadflow-story-implementation-orchestrator" / "scripts" / "policy.py"
+        controller_file.parent.mkdir(parents=True)
+        controller_file.write_text("before\n", encoding="utf-8")
+        frozen = self.freeze_required(scope_entries=[{"path": "src/feature.ts", "category": "FIXER_WRITABLE", "justification": "story fix"}])
+        baseline = self.capture_baseline("project-fast-baseline.json")
+        code_file.write_text("after\n", encoding="utf-8")
+        controller_file.write_text("after\n", encoding="utf-8")
+        result = evaluate_scope(self.root, load_json(baseline), load_json(frozen["scope"]), "PROJECT_FAST", manifest_path=frozen["scope"], snapshot_path=baseline, expected=self.context())
+        self.assertEqual(result["status"], "PASS")
+
+    def test_project_fast_scope_rejects_unknown_product_change(self) -> None:
+        frozen = self.freeze_required(scope_entries=[{"path": "_bmad-output/implementation-artifacts/1-1-first.md", "category": "DEV_WRITABLE", "justification": "story"}])
+        baseline = self.capture_baseline("project-fast-unknown-baseline.json")
+        unknown = self.root / "src" / "unknown.ts"
+        unknown.parent.mkdir(parents=True)
+        unknown.write_text("unknown\n", encoding="utf-8")
+        result = evaluate_scope(self.root, load_json(baseline), load_json(frozen["scope"]), "PROJECT_FAST", manifest_path=frozen["scope"], snapshot_path=baseline, expected=self.context())
+        self.assertEqual(result["status"], "FAIL")
+
+    def test_workspace_snapshot_ignores_typescript_build_cache(self) -> None:
+        (self.root / "tsconfig.tsbuildinfo").write_text("cache\n", encoding="utf-8")
+        self.assertNotIn("tsconfig.tsbuildinfo", snapshot_workspace(self.root))
+
+    def test_scope_ignores_typescript_build_cache_from_existing_baseline(self) -> None:
+        (self.root / "tsconfig.tsbuildinfo").write_text("cache\n", encoding="utf-8")
+        frozen = self.freeze_required(scope_entries=[{"path": "_bmad-output/implementation-artifacts/1-1-first.md", "category": "DEV_WRITABLE", "justification": "story"}])
+        baseline = self.capture_baseline("typescript-cache-baseline.json")
+        baseline_value = load_json(baseline)
+        baseline_value["files"]["tsconfig.tsbuildinfo"] = "0" * 64
+        baseline_value["file_map_fingerprint"] = canonical_hash(baseline_value["files"])
+        write_json_atomic(baseline, baseline_value)
+        registry = load_json(self.runtime / "baseline-snapshots.json")
+        registry["snapshots"][baseline_value["snapshot_id"]]["artifact_sha256"] = sha256_file(baseline)
+        registry["snapshots"][baseline_value["snapshot_id"]]["file_map_fingerprint"] = baseline_value["file_map_fingerprint"]
+        write_json_atomic(self.runtime / "baseline-snapshots.json", registry)
+        (self.root / "tsconfig.tsbuildinfo").unlink()
+        result = evaluate_scope(self.root, load_json(baseline), load_json(frozen["scope"]), "PROJECT_FAST", manifest_path=frozen["scope"], snapshot_path=baseline, expected=self.context())
+        self.assertEqual(result["status"], "PASS")
 
     def test_operational_scope_rejects_dev_fixer_authorization_before_review(self) -> None:
         code_file = self.root / "src" / "unexpected.ts"

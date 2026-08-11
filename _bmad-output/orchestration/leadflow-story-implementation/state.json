@@ -1,10 +1,97 @@
 {
   "active_story_id": null,
   "created_at": "2026-08-10T00:00:00Z",
-  "revision": 17,
+  "revision": 45,
   "runtime_status": "IDLE",
   "schema_version": "1.0",
   "stories": [
+    {
+      "blockers_open": [],
+      "dependencies": [
+        "E4-S1"
+      ],
+      "done_at": "2026-08-11T19:52:15Z",
+      "done_evidence": {
+        "evidence_id": "EV-DONE-E4-S2-RUN-E4-S2-20260811-001-1-2",
+        "frozen_artifacts": {
+          "scope_manifest": {
+            "file_sha256": "d426a1a70e35c917da54402cbbd1a0e79a1005de8344d09b1df7df1323236a55",
+            "fingerprint": "62270df89afa04d330baf41a420f097b275571a1090f8a9de6c050f9437c0de4",
+            "generation": 2,
+            "input_fingerprint": "c8ae0cf992d8b1ca454879b1370e572c4db99a618954184318830de9f1a52df7",
+            "iteration": 1,
+            "kind": "scope_manifest",
+            "path": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/scope-manifest.json",
+            "run_id": "RUN-E4-S2-20260811-001",
+            "story_fingerprint": "68c6bf14729deb7c2349b5ed5f91377ea5890eeb1f7c26cac54248db0e363568",
+            "story_id": "E4-S2"
+          },
+          "story_execution_type": {
+            "file_sha256": "bf1c587909833f1f688a00cb2250be92894aaba9ce1a293216b4b0f2a480c6e2",
+            "fingerprint": "cd124b5bfadf567f2a747feaf6ac22d9a9218864cea1ad517ec66001d74b6d6a",
+            "generation": 2,
+            "input_fingerprint": "c8ae0cf992d8b1ca454879b1370e572c4db99a618954184318830de9f1a52df7",
+            "iteration": 1,
+            "kind": "story_execution_type",
+            "path": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/story_execution_type.json",
+            "run_id": "RUN-E4-S2-20260811-001",
+            "story_fingerprint": "68c6bf14729deb7c2349b5ed5f91377ea5890eeb1f7c26cac54248db0e363568",
+            "story_id": "E4-S2"
+          },
+          "validation_plan": {
+            "file_sha256": "f1809a60635e2c37350ae9e596b32cc100bdcf43e3e3365b0606a0b605db1aca",
+            "fingerprint": "0a0ccb5ceae205279a97229752928716b1a9f9ab3dd93c76a0ec75f2619a48bb",
+            "generation": 2,
+            "input_fingerprint": "c8ae0cf992d8b1ca454879b1370e572c4db99a618954184318830de9f1a52df7",
+            "iteration": 1,
+            "kind": "validation_plan",
+            "path": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/validation-plan.json",
+            "run_id": "RUN-E4-S2-20260811-001",
+            "story_fingerprint": "68c6bf14729deb7c2349b5ed5f91377ea5890eeb1f7c26cac54248db0e363568",
+            "story_id": "E4-S2"
+          }
+        },
+        "status": "PASS"
+      },
+      "evidence_refs": [
+        "EV-DONE-E4-S2-RUN-E4-S2-20260811-001-1-2"
+      ],
+      "execution_type": "IMPLEMENTATION",
+      "external_review_request": {
+        "bundle_manifest_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/review-bundle.recovery-6.manifest.json",
+        "bundle_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/review-bundle.recovery-6.md",
+        "expected_result_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/review-result.recovery-6.json",
+        "generation": 2,
+        "input_fingerprint": "c8ae0cf992d8b1ca454879b1370e572c4db99a618954184318830de9f1a52df7",
+        "iteration": 1,
+        "request_fingerprint": "b2591608044a81ef589b17362f5582d97c756cd2f4cae7511cec0a6753aa6e2a",
+        "request_id": "REQ-REVIEW-E4-S2-RUN-E4-S2-20260811-001-1-2-recovery-6",
+        "request_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/external-review-request.recovery-6.json",
+        "run_id": "RUN-E4-S2-20260811-001",
+        "schema_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/review-result.recovery-6.schema.json",
+        "status": "NOT_EXECUTED_SUPERSEDED_BY_PROJECT_POLICY",
+        "story_fingerprint": "68c6bf14729deb7c2349b5ed5f91377ea5890eeb1f7c26cac54248db0e363568",
+        "story_id": "E4-S2",
+        "superseded_by": "EV-PROJECT-FAST-REVIEW-WAIVER-E4-S2-RUN-E4-S2-20260811-001-1-2"
+      },
+      "generation": 2,
+      "generation_lineage_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/repair-generation-lineage.json",
+      "iteration": 1,
+      "last_transition": {
+        "from": "AWAITING_EXTERNAL_REVIEW",
+        "reason": "PROJECT_FAST review waived due unavailable independent reviewer runtime; validations and scope passed",
+        "timestamp": "2026-08-11T19:51:59Z",
+        "to": "REVIEWING"
+      },
+      "project_fast_review_waiver_evidence": "EV-PROJECT-FAST-REVIEW-WAIVER-E4-S2-RUN-E4-S2-20260811-001-1-2",
+      "project_fast_review_waiver_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/project-fast-review-waiver.json",
+      "repair_round": 2,
+      "review_round": 1,
+      "run_id": "RUN-E4-S2-20260811-001",
+      "status": "DONE",
+      "story_file": "_bmad-output/implementation-artifacts/4-2-singleton-identity-and-settings-ownership.md",
+      "story_id": "E4-S2"
+    },
     {
       "dependencies": [],
       "done_at": "2026-08-11T04:23:25Z",

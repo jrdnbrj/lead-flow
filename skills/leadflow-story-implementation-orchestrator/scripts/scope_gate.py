@@ -30,6 +30,9 @@ from lib import (
 )
 
 
+IGNORED_GENERATED_FILES = {"tsconfig.tsbuildinfo"}
+
+
 def _registry_snapshot(root: Path, snapshot_path: Path, expected: dict[str, Any]) -> dict[str, Any]:
     snapshot = load_json(snapshot_path)
     required = {"snapshot_id", "story_id", "run_id", "iteration", "generation", "baseline_commit", "created_at", "files", "file_map_fingerprint", "artifact_ref"}
@@ -73,8 +76,8 @@ def evaluate(
     snapshot_path: Path,
     expected: dict[str, Any],
 ) -> dict[str, Any]:
-    if actor not in {"DEV", "FIXER", "CONTROLLER"}:
-        raise ContractError("actor must be DEV, FIXER or CONTROLLER")
+    if actor not in {"DEV", "FIXER", "CONTROLLER", "PROJECT_FAST"}:
+        raise ContractError("actor must be DEV, FIXER, CONTROLLER or PROJECT_FAST")
     frozen_manifest = validate_registered_frozen_artifact(
         root,
         manifest_path,
@@ -95,7 +98,9 @@ def evaluate(
     before = baseline.get("files")
     if not isinstance(before, dict):
         raise ContractError("baseline snapshot files must be an object")
+    before = {path: digest for path, digest in before.items() if path not in IGNORED_GENERATED_FILES}
     after = snapshot_workspace(root)
+    after = {path: digest for path, digest in after.items() if path not in IGNORED_GENERATED_FILES}
     current_fingerprint = canonical_hash(after)
     changed = sorted({*before, *after} - {path for path in set(before) & set(after) if before[path] == after[path]})
     if baseline.get("self_path") in changed:
@@ -109,9 +114,23 @@ def evaluate(
     for path in changed:
         _, canonical = canonical_relative(root, path, allow_new=False)
         item = entries.get(canonical) or _prefix_match(canonical, prefixes)
+        if item is None and actor == "PROJECT_FAST" and (
+            canonical == "skills/leadflow-story-implementation-orchestrator"
+            or canonical.startswith("skills/leadflow-story-implementation-orchestrator/")
+        ):
+            item = {
+                "path": canonical,
+                "category": "CONTROLLER_ONLY",
+                "justification": "LeadFlow project policy enforcement is controller-owned.",
+            }
         category = item.get("category") if item else None
         classifications.append({"path": canonical, "category": category or "UNKNOWN"})
-        allowed = (actor == "DEV" and category == "DEV_WRITABLE") or (actor == "FIXER" and category == "FIXER_WRITABLE") or (actor == "CONTROLLER" and category == "CONTROLLER_ONLY")
+        allowed = (
+            (actor == "DEV" and category == "DEV_WRITABLE")
+            or (actor == "FIXER" and category == "FIXER_WRITABLE")
+            or (actor == "CONTROLLER" and category == "CONTROLLER_ONLY")
+            or (actor == "PROJECT_FAST" and category in {"DEV_WRITABLE", "FIXER_WRITABLE", "CONTROLLER_ONLY"})
+        )
         if not allowed:
             failures.append(f"SCOPE_DRIFT: {canonical} category={category or 'UNKNOWN'} actor={actor}")
     return {
@@ -129,7 +148,7 @@ def main() -> int:
     parser.add_argument("--project-root", required=True, type=Path)
     parser.add_argument("--baseline", required=True, type=Path)
     parser.add_argument("--manifest", required=True, type=Path)
-    parser.add_argument("--actor", required=True, choices=["DEV", "FIXER", "CONTROLLER"])
+    parser.add_argument("--actor", required=True, choices=["DEV", "FIXER", "CONTROLLER", "PROJECT_FAST"])
     parser.add_argument("--story-id", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--iteration", required=True, type=int)

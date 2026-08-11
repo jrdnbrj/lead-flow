@@ -1,6 +1,6 @@
 # Story 4.2: Singleton de identidad y ownership de configuración existente
 
-Status: ready-for-revalidation
+Status: done
 
 ## Story
 

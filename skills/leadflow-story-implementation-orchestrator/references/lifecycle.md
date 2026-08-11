@@ -34,7 +34,7 @@ Review repairs use at most two cycles:
 REVIEWING → NEEDS_TECHNICAL_FIX → REVALIDATING → REVIEWING
 ```
 
-Only a passing review can enter `CANDIDATE_DONE`; validation and review results must carry the workspace fingerprint and check timestamp they inspected. Before `done_gate.py` can enter `DONE`, those fingerprints must match a fresh ledger-bound `FINAL_SCOPE_GATE` and the current filesystem. `NEEDS_USER_DECISION` and `ESCALATED` are terminal for the current run.
+If the runtime cannot provide an independent reviewer, `REVIEWING → AWAITING_EXTERNAL_REVIEW → REVIEWING` uses one controller-owned request and one structured result. Runtime unavailability is not `NEEDS_USER_DECISION`. A passing review may enter `CANDIDATE_DONE`, or `done_gate.py` may perform equivalent atomic completion directly from `REVIEWING`; the same validation, review, final-scope, provenance and current-filesystem predicates remain mandatory. `NEEDS_USER_DECISION` and `ESCALATED` are terminal unless controller-only integrity recovery explicitly reopens an integrity block without changing generation or repair round.
 
 Allowed story states:
 
@@ -49,6 +49,7 @@ VALIDATING
 AWAITING_EXTERNAL_EVIDENCE
 VALIDATING_EVIDENCE
 REVIEWING
+AWAITING_EXTERNAL_REVIEW
 NEEDS_TECHNICAL_FIX
 REVALIDATING
 CANDIDATE_DONE

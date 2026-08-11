@@ -1,6 +1,7 @@
 import type { ConversationState, CreateLeadInput, FollowUpAction, FollowUpActionStatus, Lead, LeadMessage, MessageDirection, NextActionType, WhatsappStatus } from "@/lib/domain/lead";
 import { calculateLeadScore, formatPhoneForWhatsapp } from "@/lib/domain/lead";
 import type { Database } from "@/lib/supabase/database";
+import { getInstallationAdvisorUserId } from "@/lib/config/installation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const leadSelect = "id,user_id,tenant_id,created_at,full_name,phone,car_model,car_models,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,conversation_state,next_action_at,next_action_type,last_activity_at,last_customer_message_at,last_agent_message_at,last_customer_message_preview,deleted_at,status";
@@ -168,11 +169,19 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error("Supabase no está configurado. Completa NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY para guardar el contacto en la nube.");
 
-  const { data: userData } = await supabase.auth.getUser();
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  if (authError && authError.name !== "AuthSessionMissingError") {
+    throw new Error("No fue posible verificar la sesión; el lead no fue guardado.");
+  }
+  let ownerId: string | null = null;
+  if (userData.user) {
+    ownerId = await getInstallationAdvisorUserId();
+    if (!ownerId) throw new Error("La identidad de instalación no está configurada; el lead no fue guardado.");
+  }
   const { data, error } = await supabase
     .from("leads")
     .insert({
-      user_id: userData.user?.id ?? null,
+      user_id: ownerId,
       full_name: localLead.fullName,
       phone: localLead.phone,
       car_model: localLead.carModel,

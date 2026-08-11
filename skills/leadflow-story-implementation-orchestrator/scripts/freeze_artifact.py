@@ -18,7 +18,9 @@ from lib import (
     artifact_kind,
     canonical_hash,
     canonical_relative,
+    classify_workflow_mode,
     discover_protected_paths,
+    extract_story_id,
     frozen_fingerprint,
     load_json,
     now_utc,
@@ -83,6 +85,27 @@ def validate_execution_proposal(root: Path, proposal: dict[str, Any]) -> dict[st
     sources = validate_source_refs(root, proposal.get("source_refs", []))
     final = dict(proposal)
     final.update({"schema_version": "1.0", "story_id": story_id, "execution_type": execution_type, "source_refs": sources, **context})
+    story_source = None
+    for source in sources:
+        candidate = root / source
+        if not candidate.exists():
+            continue
+        try:
+            if extract_story_id(candidate.read_text(encoding="utf-8")) == story_id:
+                story_source = candidate
+                break
+        except OSError as exc:
+            raise ContractError(f"cannot read execution story source: {candidate}") from exc
+        except ContractError:
+            continue
+    if story_source is None:
+        raise ContractError("execution proposal must reference an existing story source matching story_id")
+    route = classify_workflow_mode(
+        story_text=story_source.read_text(encoding="utf-8"),
+        execution_type=execution_type,
+        external_evidence_required=gates.get("external_evidence") is True,
+    )
+    final.update({"workflow_mode": route["workflow_mode"], "workflow_mode_reasons": route["reasons"]})
     return final
 
 

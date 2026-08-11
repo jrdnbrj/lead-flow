@@ -25,7 +25,7 @@ The LLM, DEV, fixer, and reviewer cannot edit frozen `story_execution_type.json`
 2. Verify the readiness runtime, its PASS evidence, invalidation status, dependency fingerprints, and story-content fingerprint before reading BMad `Status` as a projection.
 3. Reconcile a secondary BMad status drift automatically when content and fingerprints still agree. Escalate material divergence.
 4. Obtain and freeze `story-execution-type`, `validation-plan`, and `scope-manifest` before implementation or external evidence collection; register the controller-owned baseline snapshot before scope evaluation.
-5. Execute only the lifecycle required by the frozen type: `IMPLEMENTATION`, `OPERATIONAL`, or `HYBRID`.
+5. Route every story deterministically to `FAST` or `STRICT`; execute only the lifecycle required by the frozen type: `IMPLEMENTATION`, `OPERATIONAL`, or `HYBRID`.
 6. Keep DEV, fixer, and reviewer in separate workspaces/contexts. Reviewer and validation results must carry the workspace fingerprint and check timestamp they actually inspected. Import only structured results.
 7. Register `external-evidence-request.json` with `register_external_evidence.py` before `AWAITING_EXTERNAL_EVIDENCE`; `import_external_evidence.py` accepts only the intact registered request. Supplied evidence is never PASS until validated and reviewed.
 8. Enforce canonical paths, registered baseline snapshots, forbidden categories, secret redaction, dependency completion, required validations, ledger-bound result provenance, final workspace scope, bounded fix rounds, and the `DONE` gate with scripts.
@@ -42,6 +42,9 @@ Use `uv run scripts/<script>.py --help` for the current interface. The scripts a
 - `validation_gate.py`: consumes only the registered frozen story-specific validation plan; missing REQUIRED checks fail.
 - `import_external_evidence.py`: validates the intact registered request and redacts structured external evidence without executing the operation.
 - `record_transition.py`: writes allowed non-terminal story transitions; it cannot write `DONE`.
+- `route_story.py`: classifies `FAST`/`STRICT` from story, execution type, scope and external-evidence inputs without a human checkpoint.
+- `verify_external_review_bundle.py`, `request_external_review.py`, and `import_external_review.py`: verify the manifest-locked external review bundle locally before involving a reviewer, create one external review request when reviewer independence is unavailable, and import one validated structured result.
+- `resume_from_integrity_block.py`: reopens only controller-owned integrity failures without changing generation or repair round, preserving invalid artifact history.
 - `done_gate.py`: the sole controller script allowed to project `DONE` and BMad `Status: done`; it verifies frozen-artifact/result provenance, rechecks the registered story and current workspace, requires a ledger-bound `FINAL_SCOPE_GATE`, and compensates state, evidence, and projection writes on failure.
 
 ## Lifecycle routing

@@ -71,6 +71,78 @@
       "run_id": "RUN-E4-S1-20260810-001",
       "story_fingerprint": "d2f49b83da674a37ec64448e49d9b4a9c829d89fa8dc525d2825636e2cee19eb",
       "story_id": "E4-S1"
+    },
+    "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/scope-manifest.json": {
+      "file_sha256": "d426a1a70e35c917da54402cbbd1a0e79a1005de8344d09b1df7df1323236a55",
+      "fingerprint": "62270df89afa04d330baf41a420f097b275571a1090f8a9de6c050f9437c0de4",
+      "frozen_at": "2026-08-11T14:26:59Z",
+      "generation": 2,
+      "input_fingerprint": "c8ae0cf992d8b1ca454879b1370e572c4db99a618954184318830de9f1a52df7",
+      "iteration": 1,
+      "kind": "scope_manifest",
+      "run_id": "RUN-E4-S2-20260811-001",
+      "story_fingerprint": "68c6bf14729deb7c2349b5ed5f91377ea5890eeb1f7c26cac54248db0e363568",
+      "story_id": "E4-S2"
+    },
+    "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/story_execution_type.json": {
+      "file_sha256": "bf1c587909833f1f688a00cb2250be92894aaba9ce1a293216b4b0f2a480c6e2",
+      "fingerprint": "cd124b5bfadf567f2a747feaf6ac22d9a9218864cea1ad517ec66001d74b6d6a",
+      "frozen_at": "2026-08-11T14:26:40Z",
+      "generation": 2,
+      "input_fingerprint": "c8ae0cf992d8b1ca454879b1370e572c4db99a618954184318830de9f1a52df7",
+      "iteration": 1,
+      "kind": "story_execution_type",
+      "run_id": "RUN-E4-S2-20260811-001",
+      "story_fingerprint": "68c6bf14729deb7c2349b5ed5f91377ea5890eeb1f7c26cac54248db0e363568",
+      "story_id": "E4-S2"
+    },
+    "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/generation-2/validation-plan.json": {
+      "file_sha256": "f1809a60635e2c37350ae9e596b32cc100bdcf43e3e3365b0606a0b605db1aca",
+      "fingerprint": "0a0ccb5ceae205279a97229752928716b1a9f9ab3dd93c76a0ec75f2619a48bb",
+      "frozen_at": "2026-08-11T14:26:49Z",
+      "generation": 2,
+      "input_fingerprint": "c8ae0cf992d8b1ca454879b1370e572c4db99a618954184318830de9f1a52df7",
+      "iteration": 1,
+      "kind": "validation_plan",
+      "run_id": "RUN-E4-S2-20260811-001",
+      "story_fingerprint": "68c6bf14729deb7c2349b5ed5f91377ea5890eeb1f7c26cac54248db0e363568",
+      "story_id": "E4-S2"
+    },
+    "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/scope-manifest.json": {
+      "file_sha256": "0b593e5faec4f3ea7cc855cdc4966870b96bf2b389d345b779af435074d16721",
+      "fingerprint": "f1118ed6de488d5f0d3ddfcee2f2905b41be438b63fa9f36d862d995e76a5f57",
+      "frozen_at": "2026-08-11T05:56:16Z",
+      "generation": 1,
+      "input_fingerprint": "c8ae0cf992d8b1ca454879b1370e572c4db99a618954184318830de9f1a52df7",
+      "iteration": 1,
+      "kind": "scope_manifest",
+      "run_id": "RUN-E4-S2-20260811-001",
+      "story_fingerprint": "68c6bf14729deb7c2349b5ed5f91377ea5890eeb1f7c26cac54248db0e363568",
+      "story_id": "E4-S2"
+    },
+    "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/story_execution_type.json": {
+      "file_sha256": "c9b7e81c01b863f7b6d9ce6d73c5206bc4e2bda3424f59a68c53f70efd761950",
+      "fingerprint": "f53e74f7ffaa8bc4dc5dabf2a288c65951fc66a9b09c4dae653ddb3d685806c8",
+      "frozen_at": "2026-08-11T05:56:16Z",
+      "generation": 1,
+      "input_fingerprint": "c8ae0cf992d8b1ca454879b1370e572c4db99a618954184318830de9f1a52df7",
+      "iteration": 1,
+      "kind": "story_execution_type",
+      "run_id": "RUN-E4-S2-20260811-001",
+      "story_fingerprint": "68c6bf14729deb7c2349b5ed5f91377ea5890eeb1f7c26cac54248db0e363568",
+      "story_id": "E4-S2"
+    },
+    "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S2/RUN-E4-S2-20260811-001/validation-plan.json": {
+      "file_sha256": "ea9582bd805b884f8030e34870e215ea22f1ca50bb6bdb4f0e83fb6258b849b2",
+      "fingerprint": "080dc137c2a58654d938dbfbb9e3ed57fdb312ccfca33d50a46cf8b0bf2fc2af",
+      "frozen_at": "2026-08-11T05:56:16Z",
+      "generation": 1,
+      "input_fingerprint": "c8ae0cf992d8b1ca454879b1370e572c4db99a618954184318830de9f1a52df7",
+      "iteration": 1,
+      "kind": "validation_plan",
+      "run_id": "RUN-E4-S2-20260811-001",
+      "story_fingerprint": "68c6bf14729deb7c2349b5ed5f91377ea5890eeb1f7c26cac54248db0e363568",
+      "story_id": "E4-S2"
     }
   },
   "schema_version": "1.0"

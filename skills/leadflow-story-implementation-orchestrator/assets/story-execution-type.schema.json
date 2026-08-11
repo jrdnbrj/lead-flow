@@ -7,6 +7,8 @@
     "schema_version": {"const": "1.0"},
     "story_id": {"type": "string", "pattern": "^E[0-9]+-S[0-9]+[a-z]?$"},
     "execution_type": {"enum": ["IMPLEMENTATION", "OPERATIONAL", "HYBRID"]},
+    "workflow_mode": {"enum": ["FAST", "STRICT"]},
+    "workflow_mode_reasons": {"type": "array", "items": {"type": "string"}},
     "classification_source": {"type": "string", "minLength": 1},
     "classification_basis": {"type": "object"},
     "required_gates": {

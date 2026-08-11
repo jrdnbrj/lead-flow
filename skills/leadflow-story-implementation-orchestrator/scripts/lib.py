@@ -18,6 +18,7 @@ from typing import Any, Iterable
 WORKFLOW = "leadflow-story-implementation-orchestrator"
 RUNTIME_REL = Path("_bmad-output/orchestration/leadflow-story-implementation")
 EXECUTION_TYPES = {"IMPLEMENTATION", "OPERATIONAL", "HYBRID"}
+WORKFLOW_MODES = {"FAST", "STRICT"}
 REQUIRED_FROZEN_KINDS = {"story_execution_type", "validation_plan", "scope_manifest"}
 FROZEN_KIND_ALIASES = {
     "execution-type": "story_execution_type",
@@ -46,6 +47,7 @@ STATES = {
     "AWAITING_EXTERNAL_EVIDENCE",
     "VALIDATING_EVIDENCE",
     "REVIEWING",
+    "AWAITING_EXTERNAL_REVIEW",
     "NEEDS_TECHNICAL_FIX",
     "REVALIDATING",
     "CANDIDATE_DONE",
@@ -60,10 +62,56 @@ STATUS_RE = re.compile(r"^(?P<prefix>[ \t]*Status:)[ \t]*(?P<value>[^ \t\r\n]+)(
 STORY_HEADING_RE = re.compile(r"^\s*#\s*(?:Story\s+)?(?:(?P<canonical>E\d+-S\d+[a-z]?)|(?P<numeric>\d+\.\d+[a-z]?))(?:\s*[:\-]|\s|$)", re.I | re.M)
 SECRET_KEY_RE = re.compile(r"(?:api[_-]?key|access[_-]?token|password|credential|authorization|private[_-]?key|service[_-]?role|cookie|webhook[_-]?token|secret)", re.I)
 SECRET_VALUE_RE = re.compile(r"(?:-----BEGIN|Bearer\s+[A-Za-z0-9._-]+|sk-[A-Za-z0-9]|eyJ[A-Za-z0-9_-]{12,})")
+RISK_RE = re.compile(r"(?:risk|riesgo)(?:\s+level)?\s*[:=]\s*(LOW|MEDIUM|HIGH|OPERATIONAL)\b", re.I)
+STRICT_TEXT_MARKERS = (
+    "migration", "migrations", "migración", "migraciones", "auth", "rls", "grant",
+    "ownership", "user_id", "tenant_id", "secret", "credential", "password",
+    "supabase", "webhook", "remote", "production", "destructive", "private data",
+    "datos privados", "backup", "restore", "backfill", "cutover", "external evidence",
+    "evidencia externa", "evolution api", "evolution_api",
+)
 
 
 class ContractError(ValueError):
     """A persisted contract or policy is invalid."""
+
+
+def classify_workflow_mode(
+    *,
+    story_text: str,
+    execution_type: str,
+    scope_paths: Iterable[str] | None = None,
+    external_evidence_required: bool = False,
+) -> dict[str, Any]:
+    """Classify FAST/STRICT from observable story/run inputs.
+
+    Unknown risk is intentionally fail-closed to STRICT. This is routing only;
+    it does not change the frozen execution type or add a human checkpoint.
+    """
+    normalized_type = str(execution_type).upper()
+    if normalized_type not in EXECUTION_TYPES:
+        raise ContractError(f"invalid execution_type for workflow routing: {execution_type}")
+    text = story_text.lower()
+    reasons: list[str] = []
+    risk_match = RISK_RE.search(story_text)
+    risk = risk_match.group(1).upper() if risk_match else None
+    if risk in {"HIGH", "OPERATIONAL"}:
+        reasons.append(f"risk={risk}")
+    elif risk is None:
+        reasons.append("risk_not_explicit")
+    if normalized_type in {"OPERATIONAL", "HYBRID"}:
+        reasons.append(f"execution_type={normalized_type}")
+    if external_evidence_required:
+        reasons.append("external_evidence_required")
+    for marker in STRICT_TEXT_MARKERS:
+        if marker in text:
+            reasons.append(f"story_marker={marker}")
+    for path in scope_paths or ():
+        path_text = str(path).lower()
+        if any(marker in path_text for marker in ("migration", "auth", "rls", "grant", "secret", "ownership", "supabase")):
+            reasons.append(f"scope_marker={path}")
+    mode = "STRICT" if reasons else "FAST"
+    return {"workflow_mode": mode, "reasons": sorted(set(reasons)), "risk": risk}
 
 
 def now_utc() -> str:
@@ -564,6 +612,7 @@ def discover_protected_paths(root: Path, story_id: str) -> list[dict[str, Any]]:
 def iter_workspace_files(root: Path) -> Iterable[tuple[str, Path]]:
     root = root.resolve()
     ignored = {".git", ".next", "node_modules", "__pycache__"}
+    ignored_files = {"tsconfig.tsbuildinfo"}
     for current, dirs, files in os.walk(root, followlinks=False):
         current_path = Path(current)
         current_relative = current_path.relative_to(root).as_posix()
@@ -572,6 +621,8 @@ def iter_workspace_files(root: Path) -> Iterable[tuple[str, Path]]:
             continue
         dirs[:] = sorted([name for name in dirs if name not in ignored])
         for name in sorted(files):
+            if name in ignored_files:
+                continue
             path = current_path / name
             if path.is_symlink():
                 raise ContractError(f"symlink path is not allowed in workspace snapshot: {path.relative_to(root).as_posix()}")
@@ -602,12 +653,13 @@ def validate_result_provenance(
     expected_gate: str,
     expected_frozen_artifacts: dict[str, Any],
     ledger_path: Path,
+    expected_status: str = "PASS",
 ) -> dict[str, Any]:
     provenance = result.get("provenance")
     if not isinstance(provenance, dict):
         raise ContractError("result is missing provenance")
-    if result.get("status") != "PASS":
-        raise ContractError("result consumed by DONE_GATE must be PASS")
+    if result.get("status") != expected_status:
+        raise ContractError(f"result consumed by DONE_GATE must be {expected_status}")
     expected = {
         "story_id": expected_story_id,
         "run_id": expected_run_id,
@@ -652,7 +704,7 @@ def validate_result_provenance(
             "gate": expected_gate,
             "artifact_ref": result_relative,
             "result_fingerprint": provenance["result_fingerprint"],
-            "status": "PASS",
+            "status": expected_status,
         }
         for key, value in required_entry.items():
             if entry.get(key) != value:
