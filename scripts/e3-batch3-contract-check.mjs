@@ -1,0 +1,10 @@
+import fs from "node:fs";
+const migration = fs.readFileSync("supabase/migrations/022_epic3_retry_and_action_adapter.sql", "utf8");
+const action = fs.readFileSync("lib/leads/actions.ts", "utf8");
+const command = fs.readFileSync("lib/first-contact/command.ts", "utf8");
+for (const token of ["retry_first_contact_effect_v1", "FAILED", "RETRY_NOT_ALLOWED", "STALE_EFFECT", "idempotency_key", "external_effect_retry_scheduled"]) if (!migration.includes(token)) throw new Error(`missing retry contract ${token}`);
+for (const token of ["retryFirstContactResourceAction", "firstContactRetrySchema", "retryFirstContact", "ActionResponse"]) if (!action.includes(token)) throw new Error(`missing application adapter ${token}`);
+if (!command.includes("retryFirstContactEffect") || !command.includes("beginFirstContactEffect")) throw new Error("retry does not use canonical fence");
+if (/markLeadAfterOutboundMessage|createLeadMessage|sendWhatsappText|sendWhatsappMedia/.test(action)) throw new Error("direct outbound bypass remains in Server Actions");
+if (/push|purchase_decision|inbound_classification/i.test(migration + action + command)) throw new Error("scope leakage in E3 batch 3");
+console.log("E3 batch 3 contract checks: PASS");

@@ -3,13 +3,12 @@
 import type { ActionResponse, ConversationState, CreateLeadInput, ExistingLeadSummary, FollowUpAction, Lead, ScheduleLeadActionInput, SendLeadInput, UpdateFollowUpActionInput, WhatsappSendResult } from "@/lib/domain/lead";
 import { authRequiredResult, isAuthRequiredEnabled } from "@/lib/auth/auth-required";
 import { requireAdvisor } from "@/lib/auth/advisor";
-import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-template";
-import { renderWhatsappMessageTemplate } from "@/lib/config/message-template-shared";
-import { getEffectiveSellerProfile } from "@/lib/config/seller";
+import { executeFirstContact, retryFirstContact } from "@/lib/first-contact/command";
+import { createEvolutionFirstContactProvider } from "@/lib/first-contact/provider";
+import type { FirstContactOperationResult } from "@/lib/first-contact/types";
 import { getStartOfSellerDayAfter } from "@/lib/leads/follow-up";
-import { clearLeadAction, correctInboundResponseForAdvisor, createLead, createLeadMessage, findLeadByPhone, getCarModelImageUrl, getInboundMessageCreatedAtForAdvisor, getLeadById, markLeadAfterOutboundMessage, recordPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadMessage } from "@/lib/leads/repository";
-import { correctInboundResponseSchema, leadSchema, purchaseDecisionSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema } from "@/lib/leads/validation";
-import { ensureEvolutionWebhook, sendWhatsappMedia, sendWhatsappText } from "@/lib/whatsapp/service";
+import { clearLeadAction, correctInboundResponseForAdvisor, createLead, findLeadByPhone, getInboundMessageCreatedAtForAdvisor, getLeadById, recordPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState } from "@/lib/leads/repository";
+import { correctInboundResponseSchema, firstContactRetrySchema, leadSchema, purchaseDecisionSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema } from "@/lib/leads/validation";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
 
 async function requireAdvisorAction<T>(): Promise<ActionResponse<T> | null> {
@@ -68,60 +67,53 @@ export async function sendLeadWhatsappAction(input: SendLeadInput): Promise<Acti
   if (!parsed.success) return { success: false, error: "Los datos del cliente no son válidos para enviar el mensaje." };
   const auth = await requireAdvisorAction<WhatsappSendResult>();
   if (auth) return auth;
-
-  let messageRowId: string | null = null;
   try {
     const storedLead = await getLeadById(parsed.data.leadId);
     if (hasSupabaseConfig() && !storedLead) return { success: false, error: "No encontramos este lead en Supabase; actualiza el dashboard e inténtalo nuevamente." };
-    const target = storedLead ?? parsed.data;
-    const template = await getEffectiveWhatsappMessageTemplate();
-    const seller = await getEffectiveSellerProfile();
-    const text = renderWhatsappMessageTemplate(template, {
-      nombre: target.fullName.trim().split(/\s+/)[0] || "cliente",
-      numero: target.phone,
-      carro: target.carModels.join(", "),
-      nombre_vendedor: seller.name,
-      correo_vendedor: seller.email,
-      empresa_vendedor: seller.company,
-      numero_vendedor: seller.phone,
-    });
-    messageRowId = await createLeadMessage({ leadId: parsed.data.leadId, direction: "OUTBOUND", status: "PENDING", body: text, phone: target.phone });
-    let webhookConfigured = false;
-    try {
-      webhookConfigured = await ensureEvolutionWebhook();
-    } catch {
-      webhookConfigured = false;
-    }
-    const result = await sendWhatsappText({ phone: target.phone, text });
-    const persisted = await markLeadAfterOutboundMessage(parsed.data.leadId, result.status, undefined);
-    if (messageRowId) {
-      await updateLeadMessage(messageRowId, { providerMessageId: result.providerMessageId, status: result.status, rawPayload: result.payload });
-    }
-    let mediaSent = false;
-    let mediaWarning: string | undefined;
-    const firstCar = target.carModels[0];
-    const imageUrl = firstCar ? await getCarModelImageUrl(firstCar) : null;
-    if (imageUrl) {
-      const mediaMessageRowId = await createLeadMessage({ leadId: parsed.data.leadId, direction: "OUTBOUND", status: "PENDING", body: `[Imagen del vehículo] ${firstCar}`, phone: target.phone });
-      try {
-        const mediaResult = await sendWhatsappMedia({ phone: target.phone, mediaUrl: imageUrl, caption: `Información de ${firstCar}`, fileName: `leadflow-${firstCar.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg` });
-        mediaSent = true;
-        if (mediaMessageRowId) await updateLeadMessage(mediaMessageRowId, { providerMessageId: mediaResult.providerMessageId, status: mediaResult.status, rawPayload: mediaResult.payload });
-      } catch (error) {
-        mediaWarning = error instanceof Error ? error.message : "El texto se envió, pero la imagen no pudo enviarse.";
-        if (mediaMessageRowId) await updateLeadMessage(mediaMessageRowId, { status: "FAILED", failedAt: new Date().toISOString() });
-      }
-    }
+    const target = storedLead ?? { id: parsed.data.leadId, fullName: parsed.data.fullName, phone: parsed.data.phone, carModels: parsed.data.carModels };
+    const result = await executeFirstContact(target, createEvolutionFirstContactProvider(), crypto.randomUUID());
+    if (!result) return { success: false, error: "No pudimos preparar el primer contacto. Puedes reintentarlo." };
+    const messageItem = result.items.find((item) => item.resourceKind === "MESSAGE");
+    const photosItem = result.items.find((item) => item.resourceKind === "PHOTOS");
     return {
       success: true,
-      data: { leadId: parsed.data.leadId, whatsappStatus: result.status, persisted, providerMessageId: result.providerMessageId, mediaSent },
-      warning: mediaWarning || (!webhookConfigured ? "Mensaje enviado. Evolution no tiene webhook configurado; los estados posteriores no se sincronizarán todavía." : persisted ? undefined : "Mensaje enviado; el lead no confirmó la persistencia en Supabase."),
+      data: { leadId: parsed.data.leadId, whatsappStatus: messageItem?.result === "ACCEPTED" ? "SENT" : messageItem?.result === "FAILED" ? "FAILED" : "PENDING", persisted: true, providerMessageId: messageItem?.providerMessageId ?? null, mediaSent: photosItem?.result === "ACCEPTED" },
+      warning: result.replayed ? "El primer contacto ya estaba registrado." : undefined,
     };
   } catch (error) {
-    await markLeadAfterOutboundMessage(parsed.data.leadId, "FAILED", error instanceof Error ? error.message : "Evolution API error");
-    if (messageRowId) await updateLeadMessage(messageRowId, { status: "FAILED", failedAt: new Date().toISOString() });
-    const message = error instanceof Error ? error.message : "No fue posible enviar el mensaje por WhatsApp.";
-    return { success: false, error: message };
+    return { success: false, error: error instanceof Error ? error.message : "No fue posible preparar el primer contacto." };
+  }
+}
+
+export async function startFirstContactAction(input: SendLeadInput): Promise<ActionResponse<FirstContactOperationResult>> {
+  const parsed = sendLeadSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "Los datos del cliente no son válidos para iniciar el primer contacto." };
+  const auth = await requireAdvisorAction<FirstContactOperationResult>();
+  if (auth) return auth;
+  try {
+    const storedLead = await getLeadById(parsed.data.leadId);
+    if (hasSupabaseConfig() && !storedLead) return { success: false, error: "No encontramos este lead para iniciar el primer contacto." };
+    const target = storedLead ?? { id: parsed.data.leadId, fullName: parsed.data.fullName, phone: parsed.data.phone, carModels: parsed.data.carModels };
+    const result = await executeFirstContact(target, createEvolutionFirstContactProvider(), crypto.randomUUID());
+    return result ? { success: true, data: result } : { success: false, error: "No pudimos preparar el primer contacto. Puedes reintentarlo." };
+  } catch {
+    return { success: false, error: "No pudimos iniciar el primer contacto sin cambiar parcialmente el estado." };
+  }
+}
+
+export async function retryFirstContactResourceAction(input: { leadId: string; effectId: string; expectedEffectVersion?: number; idempotencyKey: string }): Promise<ActionResponse<FirstContactOperationResult>> {
+  const parsed = firstContactRetrySchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "El reintento no es válido." };
+  const auth = await requireAdvisorAction<FirstContactOperationResult>();
+  if (auth) return auth;
+  try {
+    const lead = await getLeadById(parsed.data.leadId);
+    if (!lead) return { success: false, error: "No encontramos este lead para reintentar el recurso." };
+    const result = await retryFirstContact(lead, parsed.data.effectId, parsed.data.expectedEffectVersion, parsed.data.idempotencyKey, createEvolutionFirstContactProvider());
+    if (!result) return { success: false, error: "No pudimos reintentar el recurso. Puedes actualizar e intentarlo nuevamente." };
+    return { success: true, data: result, message: "Reintento procesado." };
+  } catch {
+    return { success: false, error: "No pudimos reintentar el recurso sin cambiar parcialmente el estado." };
   }
 }
 

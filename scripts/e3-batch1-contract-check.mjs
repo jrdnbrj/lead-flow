@@ -1,0 +1,10 @@
+import { readFile } from "node:fs/promises";
+const migration = await readFile("supabase/migrations/019_epic3_first_contact_model.sql", "utf8");
+const assert = (v, m) => { if (!v) throw new Error(m); };
+for (const token of ["lead_contact_operations", "operation_version", "FIRST_CONTACT", "lead_contact_operation_items", "MESSAGE", "PHOTOS", "TECHNICAL_SHEET", "ACCEPTED", "FAILED", "UNKNOWN", "NOT_AVAILABLE", "external_effects", "external_effect_attempts", "external_effect_attempt_observations", "business_key", "claim_token_digest", "leadflow_first_contact_owner_v1"]) assert(migration.includes(token), `BATCH1 missing ${token}`);
+assert(migration.includes("unique (lead_id, operation_type)"), "operation identity missing");
+assert(migration.includes("unique (operation_id, item_key)"), "item identity missing");
+assert(migration.includes("unique (lead_id, effect_kind, business_key)"), "effect identity missing");
+assert(migration.includes("deleted_at is null"), "ownership active-lead guard missing");
+assert(!migration.includes("purchase_decision") && !migration.includes("push_delivery"), "scope leakage in BATCH1");
+console.log("E3 BATCH 1 contract checks: PASS");

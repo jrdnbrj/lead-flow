@@ -7,6 +7,13 @@ export const sendLeadSchema = z.object({
   carModels: z.array(z.string().trim().min(2).max(100)).min(1).max(10),
 });
 
+export const firstContactRetrySchema = z.object({
+  leadId: z.string().trim().min(1),
+  effectId: z.string().trim().min(1),
+  expectedEffectVersion: z.number().int().positive().optional(),
+  idempotencyKey: z.string().trim().min(16).max(200),
+});
+
 export const scheduleLeadActionSchema = z.object({
   leadId: z.string().trim().min(1),
   actionType: z.enum(["CALL", "WHATSAPP", "QUOTE", "OTHER"]),

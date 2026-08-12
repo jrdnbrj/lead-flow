@@ -1,3 +1,5 @@
+import type { FirstContactOperationResult } from "@/lib/first-contact/types";
+
 export const leadTimeframes = [
   { value: "INMEDIATA", label: "Ya", helper: "Esta semana" },
   { value: "1_3_MESES", label: "1–3 meses", helper: "Próximo trimestre" },
@@ -35,7 +37,6 @@ export type InboundClassification = "NO_SUGGESTION" | "PENDING" | "REVIEW";
 export type NextActionType = "CALL" | "WHATSAPP" | "QUOTE" | "OTHER" | "RESPONSE";
 export type FollowUpActionStatus = "PENDING" | "DONE" | "POSTPONED" | "IGNORED" | "CANCELED";
 export type MessageDirection = "INBOUND" | "OUTBOUND";
-
 export interface FollowUpAction {
   id: string;
   leadId: string;
@@ -93,6 +94,7 @@ export interface Lead {
   deletedAt: string | null;
   status: LeadStatus;
   followUpActions: FollowUpAction[];
+  firstContact?: FirstContactOperationResult | null;
 }
 
 export interface CreateLeadInput {

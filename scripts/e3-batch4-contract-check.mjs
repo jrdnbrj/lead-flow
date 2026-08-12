@@ -1,0 +1,10 @@
+import fs from "node:fs";
+const ui = fs.readFileSync("components/leads/first-contact-summary.tsx", "utf8");
+const dashboard = fs.readFileSync("components/dashboard/dashboard-client.tsx", "utf8");
+const capture = fs.readFileSync("components/leads/lead-capture-form.tsx", "utf8");
+for (const token of ["firstContactResourceLabel", "resultLabel", "resultClass", "retryFirstContactResourceAction", "startFirstContactAction"]) if (!ui.includes(token)) throw new Error(`missing UI contract ${token}`);
+if (!dashboard.includes("FirstContactSummary") || !capture.includes("FirstContactSummary")) throw new Error("summary is not shared by dashboard and capture");
+if (!ui.includes("result === \"FAILED\"") || !ui.includes("operation.items.map")) throw new Error("retry/result projection is not bounded");
+if (/set.*result|result\s*=\s*\"ACCEPTED\"/i.test(ui)) throw new Error("UI recalculates persisted results");
+if (/push|scheduler|inbound_classification/i.test(ui)) throw new Error("scope leakage in E3 batch 4");
+console.log("E3 batch 4 contract checks: PASS");

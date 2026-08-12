@@ -6,6 +6,7 @@ import { AUTH_REQUIRED_MESSAGE } from "@/lib/auth/auth-required";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveInboundLeadMatch, type InboundLeadMatch } from "@/lib/leads/inbound-matching";
+import type { FirstContactItem, FirstContactOperation, FirstContactOperationResult, FirstContactResource, FirstContactResult, ProviderOutcome } from "@/lib/first-contact/types";
 
 const leadSelect = "id,user_id,tenant_id,created_at,full_name,phone,car_model,car_models,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,conversation_state,next_action_at,next_action_type,last_activity_at,last_customer_message_at,last_agent_message_at,last_customer_message_preview,deleted_at,status";
 
@@ -113,7 +114,18 @@ function toDomainLead(row: LeadRow, followUpActions: FollowUpAction[] = []): Lea
     deletedAt: row.deleted_at,
     status: row.status,
     followUpActions,
+    firstContact: null,
   };
+}
+
+async function attachFirstContact(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
+  if (leads.length === 0) return leads;
+  const results = await Promise.all(leads.map(async (lead) => {
+    const { data } = await supabase.rpc("get_first_contact_v1", { p_lead_id: lead.id });
+    return [lead.id, data && typeof data === "object" ? toFirstContactResult(data as Record<string, unknown>) : null] as const;
+  }));
+  const byLead = new Map(results);
+  return leads.map((lead) => ({ ...lead, firstContact: byLead.get(lead.id) ?? null }));
 }
 
 async function attachFollowUpActions(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
@@ -173,7 +185,7 @@ async function attachPurchaseMilestones(supabase: LeadflowDbClient, leads: Lead[
 }
 
 async function attachLeadRelations(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
-  return attachPurchaseMilestones(supabase, await attachInboundManualDecisions(supabase, await attachLatestMessages(supabase, await attachFollowUpActions(supabase, leads))));
+  return attachFirstContact(supabase, await attachPurchaseMilestones(supabase, await attachInboundManualDecisions(supabase, await attachLatestMessages(supabase, await attachFollowUpActions(supabase, leads)))));
 }
 
 export async function getLeads(): Promise<Lead[]> {
@@ -484,6 +496,58 @@ export async function recordPurchaseDecision(leadId: string, idempotencyKey: str
   const milestone = toPurchaseDecisionMilestone(result.milestone);
   if (!milestone) return null;
   return { status: typeof result.status === "string" ? result.status : "UNKNOWN", replayed: result.replayed === true, milestone };
+}
+
+function toFirstContactResult(value: unknown): FirstContactOperationResult | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const op = raw.operation as Record<string, unknown> | undefined;
+  if (!op || typeof op.id !== "string" || typeof op.lead_id !== "string" || op.operation_type !== "FIRST_CONTACT" || typeof op.operation_version !== "number" || typeof op.status !== "string") return null;
+  const items = Array.isArray(raw.items) ? raw.items.map((item): FirstContactItem | null => {
+    if (!item || typeof item !== "object") return null;
+    const row = item as Record<string, unknown>;
+    if (typeof row.id !== "string" || typeof row.resource_kind !== "string" || typeof row.item_key !== "string" || typeof row.resource_version !== "string" || (row.availability !== "AVAILABLE" && row.availability !== "NOT_AVAILABLE")) return null;
+    return { id: row.id, resourceKind: row.resource_kind as FirstContactResource, itemKey: row.item_key, resourceVersion: row.resource_version, availability: row.availability, result: row.result as FirstContactResult | null, effectId: typeof row.effect_id === "string" ? row.effect_id : null, leadMessageId: typeof row.lead_message_id === "string" ? row.lead_message_id : null, providerMessageId: typeof row.provider_message_id === "string" ? row.provider_message_id : null };
+  }) : [];
+  if (items.some((item) => !item)) return null;
+  return { status: typeof raw.status === "string" ? raw.status : "UNKNOWN", replayed: raw.replayed === true, operation: { id: op.id, leadId: op.lead_id, operationType: "FIRST_CONTACT", operationVersion: op.operation_version, status: op.status as FirstContactOperation["status"] }, items: items as FirstContactItem[] };
+}
+
+export async function requestFirstContact(input: { leadId: string; configurationDigest: string; items: Array<{ resourceKind: FirstContactResource; itemKey: string; resourceVersion: string; availability: "AVAILABLE" | "NOT_AVAILABLE" }>; idempotencyKey: string }): Promise<FirstContactOperationResult | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("request_first_contact_v1", { p_lead_id: input.leadId, p_configuration_digest: input.configurationDigest, p_items: input.items.map((item) => ({ resource_kind: item.resourceKind, item_key: item.itemKey, resource_version: item.resourceVersion, availability: item.availability })), p_idempotency_key: input.idempotencyKey });
+  return error ? null : toFirstContactResult(data);
+}
+
+export async function claimFirstContactEffect(effectId: string, claimTokenDigest: string): Promise<{ status: string; effectId: string; attemptNo: number } | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("claim_first_contact_effect_v1", { p_effect_id: effectId, p_claim_token_digest: claimTokenDigest });
+  if (error || !data || typeof data !== "object") return null;
+  const result = data as Record<string, unknown>;
+  return typeof result.status === "string" && typeof result.effect_id === "string" && typeof result.attempt_no === "number" ? { status: result.status, effectId: result.effect_id, attemptNo: result.attempt_no } : null;
+}
+
+export async function beginFirstContactEffect(effectId: string, attemptNo: number, claimTokenDigest: string): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return false;
+  const { data, error } = await supabase.rpc("begin_first_contact_effect_io_v1", { p_effect_id: effectId, p_attempt_no: attemptNo, p_claim_token_digest: claimTokenDigest });
+  return !error && Boolean(data);
+}
+
+export async function recordFirstContactEffectResult(effectId: string, attemptNo: number, claimTokenDigest: string, outcome: ProviderOutcome & { messageBody?: string | null }): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return false;
+  const { error } = await supabase.rpc("record_first_contact_effect_result_v1", { p_effect_id: effectId, p_attempt_no: attemptNo, p_claim_token_digest: claimTokenDigest, p_result_kind: outcome.result, p_provider_message_id: outcome.providerMessageId ?? null, p_provider_status: outcome.providerStatus ?? null, p_message_body: outcome.messageBody ?? null });
+  return !error;
+}
+
+export async function retryFirstContactEffect(effectId: string, expectedEffectVersion: number | undefined, idempotencyKey: string): Promise<Record<string, unknown> | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("retry_first_contact_effect_v1", { p_effect_id: effectId, p_expected_effect_version: expectedEffectVersion ?? null, p_idempotency_key: idempotencyKey });
+  return error || !data || typeof data !== "object" ? null : data as Record<string, unknown>;
 }
 
 export async function updateLeadWhatsappStatus(id: string, status: WhatsappStatus, errorMessage?: string): Promise<boolean> {

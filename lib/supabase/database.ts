@@ -250,6 +250,12 @@ export type Database = {
         Args: { p_lead_id: string; p_idempotency_key?: string | null; p_recorded_at?: string | null };
         Returns: Record<string, unknown>;
       };
+      request_first_contact_v1: { Args: { p_lead_id: string; p_configuration_digest: string; p_items: unknown; p_idempotency_key: string }; Returns: Record<string, unknown> };
+      claim_first_contact_effect_v1: { Args: { p_effect_id: string; p_claim_token_digest: string }; Returns: Record<string, unknown> };
+      begin_first_contact_effect_io_v1: { Args: { p_effect_id: string; p_attempt_no: number; p_claim_token_digest: string }; Returns: Record<string, unknown> };
+      record_first_contact_effect_result_v1: { Args: { p_effect_id: string; p_attempt_no: number; p_claim_token_digest: string; p_result_kind: string; p_provider_message_id?: string | null; p_provider_status?: string | null; p_message_body?: string | null }; Returns: Record<string, unknown> };
+      retry_first_contact_effect_v1: { Args: { p_effect_id: string; p_expected_effect_version?: number | null; p_idempotency_key: string }; Returns: Record<string, unknown> };
+      get_first_contact_v1: { Args: { p_lead_id: string }; Returns: Record<string, unknown> | null };
       persist_inbound_message_v1: {
         Args: {
           p_lead_id: string;
