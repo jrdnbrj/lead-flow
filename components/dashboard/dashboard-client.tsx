@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 
 import type { ConversationState, FollowUpAction, InboundClassification, Lead, LeadStatus, LeadTemperature, WhatsappStatus } from "@/lib/domain/lead";
 import { formatPhoneForWhatsapp, getConversationStateLabel, getNextActionLabel, getStatusLabel, getTemperatureLabel, getWhatsappStatusLabel } from "@/lib/domain/lead";
-import { correctInboundResponseAction, deleteLeadAction, sendLeadWhatsappAction, updateLeadConversationAction } from "@/lib/leads/actions";
+import { correctInboundResponseAction, deleteLeadAction, recordPurchaseDecisionAction, sendLeadWhatsappAction, updateLeadConversationAction } from "@/lib/leads/actions";
 import { formatNextActionDate, getDashboardLeadBucket, isLeadReminderDue, sortLeadsForDashboard } from "@/lib/leads/follow-up";
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -248,6 +248,9 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [manualDecision, setManualDecision] = useState<Lead["inboundManualDecision"]>(lead.inboundManualDecision);
   const [isCorrectingInbound, setIsCorrectingInbound] = useState(false);
+  const [purchaseDecisionAt, setPurchaseDecisionAt] = useState(lead.purchaseDecisionAt);
+  const [isPurchaseConfirming, setIsPurchaseConfirming] = useState(false);
+  const [isRecordingPurchase, setIsRecordingPurchase] = useState(false);
   const [, startStateSync] = useTransition();
 
   useEffect(() => {
@@ -256,13 +259,30 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
       setConversationState(lead.conversationState);
       setFollowUpActions(lead.followUpActions);
       setManualDecision(lead.inboundManualDecision);
+      setPurchaseDecisionAt(lead.purchaseDecisionAt);
     });
-  }, [lead.conversationState, lead.followUpActions, lead.whatsappStatus, lead.inboundManualDecision]);
+  }, [lead.conversationState, lead.followUpActions, lead.whatsappStatus, lead.inboundManualDecision, lead.purchaseDecisionAt]);
 
   const isReminderDue = followUpActions.some(isDueAction);
   const canSend = whatsappStatus === "PENDING" || whatsappStatus === "FAILED";
   const nextOpenAction = getNextOpenAction({ ...lead, followUpActions });
   const inboundClassification = lead.inboundClassification;
+
+  async function recordPurchaseDecision() {
+    if (isRecordingPurchase || purchaseDecisionAt) return;
+    setIsRecordingPurchase(true);
+    setSendError(null);
+    const response = await recordPurchaseDecisionAction({ leadId: lead.id });
+    if (response.success && response.data) {
+      setPurchaseDecisionAt(response.data.recordedAt);
+      setIsPurchaseConfirming(false);
+      setSendInfo("Compra registrada. El estado comercial y el seguimiento no cambiaron.");
+      router.refresh();
+    } else {
+      setSendError(response.error || "No pudimos registrar la decisión. Puedes reintentarlo.");
+    }
+    setIsRecordingPurchase(false);
+  }
 
   async function correctInbound(decision: "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED") {
     if (isCorrectingInbound || !inboundClassification) return;
@@ -336,6 +356,8 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
     {isExpanded && lead.lastMessageDirection ? <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f6f3ed] px-2.5 py-2 text-[11px]"><p className="min-w-0 truncate text-[var(--muted)]"><strong className="text-[var(--ink)]">{lead.lastMessageDirection === "INBOUND" ? "Último mensaje · Cliente:" : "Último mensaje · Tú:"}</strong> {lead.lastMessagePreview || "Mensaje sin texto"}</p>{conversationState === "ACTIVE" ? <button type="button" onClick={() => changeConversationState("CLOSED")} className="shrink-0 font-black text-[var(--muted)] hover:text-[var(--ink)]">Cerrar conversación</button> : conversationState === "CLOSED" ? <button type="button" onClick={() => changeConversationState("ACTIVE")} className="shrink-0 font-black text-[#18733a]">Reabrir</button> : null}</div> : null}
 
     {isExpanded && inboundClassification ? <section className="mt-3 rounded-2xl border border-[#dce5ef] bg-[#f8fbff] p-3" aria-label="Estado inbound"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Clasificación inbound</p><span className={`mt-1 inline-flex rounded-full px-2 py-1 text-[10px] font-black ${inboundClassificationClasses(inboundClassification)}`}>{manualDecision === "REQUIRES_RESPONSE" ? "Respuesta pendiente" : manualDecision === "NO_RESPONSE_REQUIRED" ? "No requiere respuesta" : inboundClassificationLabel(inboundClassification)}</span></div><p className="text-[10px] font-semibold text-[var(--muted)]">{lead.lastInboundMessageAt ? formatRelativeDate(lead.lastInboundMessageAt) : "Sin fecha"}</p></div><p className="mt-2 text-xs leading-5 text-[var(--ink)]">{lead.lastInboundMessagePreview || "Mensaje sin texto"}</p>{inboundClassification !== "NO_SUGGESTION" ? <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={isCorrectingInbound} onClick={() => void correctInbound("REQUIRES_RESPONSE")} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isCorrectingInbound ? "Guardando…" : "Sí requiere respuesta"}</button><button type="button" disabled={isCorrectingInbound} onClick={() => void correctInbound("NO_RESPONSE_REQUIRED")} className="button-secondary min-h-9 px-3 py-2 text-[11px]">No requiere respuesta</button></div> : null}</section> : null}
+
+    {isExpanded ? <section className="mt-3 rounded-2xl border border-[#e6dfd0] bg-[#fffdf8] p-3" aria-label="Decisión de compra"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Compra</p><p className="mt-1 text-sm font-black">{purchaseDecisionAt ? "Compra registrada" : "Aún no registrada"}</p>{purchaseDecisionAt ? <p className="mt-1 text-[11px] text-[var(--muted)]">Registrada el {new Intl.DateTimeFormat("es-EC", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Guayaquil" }).format(new Date(purchaseDecisionAt))}</p> : null}</div>{!purchaseDecisionAt && !isPurchaseConfirming ? <button type="button" onClick={() => setIsPurchaseConfirming(true)} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cliente decidió comprar</button> : null}</div>{isPurchaseConfirming ? <div className="mt-3 rounded-xl border border-[#ead7a8] bg-[#fff8df] p-3"><p className="text-xs font-bold">¿Registrar esta decisión con la fecha y hora de ahora?</p><div className="mt-2 flex flex-wrap gap-2"><button type="button" disabled={isRecordingPurchase} onClick={() => void recordPurchaseDecision()} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isRecordingPurchase ? "Registrando…" : "Registrar"}</button><button type="button" disabled={isRecordingPurchase} onClick={() => setIsPurchaseConfirming(false)} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cancelar</button></div></div> : null}</section> : null}
 
     {isExpanded ? <FollowUpActions leadId={lead.id} actions={followUpActions} onActionsChange={(actions) => { setFollowUpActions(actions); router.refresh(); }} onConversationWaiting={() => setConversationState("WAITING_CUSTOMER")} onError={setSendError} onInfo={setSendInfo} /> : null}
     {isExpanded && lead.lastCustomerMessageAt ? <p className="mt-3 text-[11px] text-[var(--muted)]">Última respuesta del cliente registrada. Las acciones pendientes se cancelan cuando llega una nueva respuesta.</p> : null}

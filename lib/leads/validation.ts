@@ -40,6 +40,11 @@ export const correctInboundResponseSchema = z.object({
   if (value.decision === "NO_RESPONSE_REQUIRED" && !value.expectedActionVersion) context.addIssue({ code: z.ZodIssueCode.custom, path: ["expectedActionVersion"], message: "La versión de la acción es requerida." });
 });
 
+export const purchaseDecisionSchema = z.object({
+  leadId: z.string().trim().min(1),
+  idempotencyKey: z.string().trim().min(16).max(200).optional(),
+});
+
 export const leadSchema = z.object({
   fullName: z.string().trim().min(2, "Escribe el nombre del prospecto").max(100),
   phone: z.string().trim().regex(/^[0-9+\s()-]{7,20}$/, "Ingresa un celular válido"),

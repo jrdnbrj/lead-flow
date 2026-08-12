@@ -109,6 +109,7 @@ function toDomainLead(row: LeadRow, followUpActions: FollowUpAction[] = []): Lea
     lastInboundMessagePreview: null,
     inboundClassification: null,
     inboundManualDecision: null,
+    purchaseDecisionAt: null,
     deletedAt: row.deleted_at,
     status: row.status,
     followUpActions,
@@ -162,8 +163,17 @@ async function attachInboundManualDecisions(supabase: LeadflowDbClient, leads: L
   return leads.map((lead) => ({ ...lead, inboundManualDecision: latest.get(lead.id) ?? null }));
 }
 
+async function attachPurchaseMilestones(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
+  if (leads.length === 0) return leads;
+  const { data } = await supabase.from("lead_milestones").select("lead_id,recorded_at").eq("milestone_type", "PURCHASE_DECISION").in("lead_id", leads.map((lead) => lead.id));
+  if (!data) return leads;
+  const dates = new Map<string, string>();
+  data.forEach((row) => { if (!dates.has(row.lead_id)) dates.set(row.lead_id, row.recorded_at); });
+  return leads.map((lead) => ({ ...lead, purchaseDecisionAt: dates.get(lead.id) ?? null }));
+}
+
 async function attachLeadRelations(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
-  return attachInboundManualDecisions(supabase, await attachLatestMessages(supabase, await attachFollowUpActions(supabase, leads)));
+  return attachPurchaseMilestones(supabase, await attachInboundManualDecisions(supabase, await attachLatestMessages(supabase, await attachFollowUpActions(supabase, leads))));
 }
 
 export async function getLeads(): Promise<Lead[]> {
@@ -212,6 +222,7 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
     lastInboundMessagePreview: null,
     inboundClassification: null,
     inboundManualDecision: null,
+    purchaseDecisionAt: null,
     deletedAt: null,
     status: "NUEVO",
     followUpActions: [],
@@ -453,6 +464,26 @@ export async function getInboundMessageCreatedAtForAdvisor(messageId: string, le
   if (!supabase) return null;
   const { data, error } = await supabase.from("lead_messages").select("created_at").eq("id", messageId).eq("lead_id", leadId).eq("direction", "INBOUND").maybeSingle();
   return error || !data ? null : data.created_at;
+}
+
+export type PurchaseDecisionMilestone = { id: string; leadId: string; milestoneType: "PURCHASE_DECISION"; recordedAt: string; origin: "MANUAL" };
+
+function toPurchaseDecisionMilestone(value: unknown): PurchaseDecisionMilestone | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.id !== "string" || typeof row.lead_id !== "string" || row.milestone_type !== "PURCHASE_DECISION" || typeof row.recorded_at !== "string" || row.origin !== "MANUAL") return null;
+  return { id: row.id, leadId: row.lead_id, milestoneType: "PURCHASE_DECISION", recordedAt: row.recorded_at, origin: "MANUAL" };
+}
+
+export async function recordPurchaseDecision(leadId: string, idempotencyKey: string): Promise<{ status: string; replayed: boolean; milestone: PurchaseDecisionMilestone } | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("record_purchase_decision_v1", { p_lead_id: leadId, p_idempotency_key: idempotencyKey, p_recorded_at: new Date().toISOString() });
+  if (error || !data || typeof data !== "object") return null;
+  const result = data as Record<string, unknown>;
+  const milestone = toPurchaseDecisionMilestone(result.milestone);
+  if (!milestone) return null;
+  return { status: typeof result.status === "string" ? result.status : "UNKNOWN", replayed: result.replayed === true, milestone };
 }
 
 export async function updateLeadWhatsappStatus(id: string, status: WhatsappStatus, errorMessage?: string): Promise<boolean> {

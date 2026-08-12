@@ -89,6 +89,7 @@ export interface Lead {
   lastInboundMessagePreview: string | null;
   inboundClassification: InboundClassification | null;
   inboundManualDecision: "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED" | null;
+  purchaseDecisionAt: string | null;
   deletedAt: string | null;
   status: LeadStatus;
   followUpActions: FollowUpAction[];

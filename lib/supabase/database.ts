@@ -191,6 +191,26 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["lead_inbound_manual_decisions"]["Insert"]>;
         Relationships: [];
       };
+      lead_milestones: {
+        Row: {
+          id: string;
+          lead_id: string;
+          milestone_type: "PURCHASE_DECISION";
+          recorded_at: string;
+          origin: "MANUAL";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          lead_id: string;
+          milestone_type: "PURCHASE_DECISION";
+          recorded_at?: string;
+          origin?: "MANUAL";
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["lead_milestones"]["Insert"]>;
+        Relationships: [];
+      };
       lead_follow_up_actions: {
         Row: {
           id: string;
@@ -226,6 +246,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      record_purchase_decision_v1: {
+        Args: { p_lead_id: string; p_idempotency_key?: string | null; p_recorded_at?: string | null };
+        Returns: Record<string, unknown>;
+      };
       persist_inbound_message_v1: {
         Args: {
           p_lead_id: string;
