@@ -12,13 +12,16 @@ export const scheduleLeadActionSchema = z.object({
   actionType: z.enum(["CALL", "WHATSAPP", "QUOTE", "OTHER"]),
   days: z.number().int().min(1).max(365),
   note: z.string().trim().max(240, "La nota no puede superar 240 caracteres").optional(),
+  idempotencyKey: z.string().trim().min(16).max(200).optional(),
 });
 
 export const updateFollowUpActionSchema = z.object({
   actionId: z.string().trim().min(1),
-  status: z.enum(["DONE", "POSTPONED", "IGNORED"]),
+  status: z.enum(["DONE", "POSTPONED", "IGNORED", "CANCELED"]),
   postponeDays: z.number().int().min(1).max(365).optional(),
   note: z.string().trim().max(240).optional(),
+  expectedActionVersion: z.number().int().positive().optional(),
+  idempotencyKey: z.string().trim().min(16).max(200).optional(),
 }).superRefine((value, context) => {
   if (value.status === "POSTPONED" && !value.postponeDays) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["postponeDays"], message: "Indica cuándo reprogramar la acción." });

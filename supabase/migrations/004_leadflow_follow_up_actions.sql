@@ -37,7 +37,7 @@ begin
   from public.lead_follow_up_actions
   where lead_id = target_lead_id
     and status in ('PENDING', 'POSTPONED')
-  order by scheduled_for asc, created_at asc
+  order by scheduled_for asc, created_at asc, id asc
   limit 1;
 
   update public.leads

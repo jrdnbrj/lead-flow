@@ -1,15 +1,16 @@
 "use client";
 
 import * as XLSX from "xlsx";
-import { Ban, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock3, Download, Flame, LoaderCircle, MessageCircle, Phone, Plus, RefreshCw, RotateCcw, Search, Send, SlidersHorizontal, Target, Trash2, TriangleAlert, UserRound } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, Clock3, Download, Flame, LoaderCircle, MessageCircle, Phone, RefreshCw, Search, Send, SlidersHorizontal, Target, Trash2, TriangleAlert, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
-import type { ConversationState, FollowUpAction, Lead, LeadStatus, LeadTemperature, NextActionType, WhatsappStatus } from "@/lib/domain/lead";
-import { formatPhoneForWhatsapp, getConversationStateLabel, getFollowUpActionStatusLabel, getNextActionLabel, getStatusLabel, getTemperatureLabel, getWhatsappStatusLabel } from "@/lib/domain/lead";
-import { clearLeadActionAction, deleteLeadAction, scheduleLeadActionAction, sendLeadWhatsappAction, updateFollowUpActionAction, updateLeadConversationAction } from "@/lib/leads/actions";
-import { formatNextActionDate, isLeadReminderDue } from "@/lib/leads/follow-up";
+import type { ConversationState, FollowUpAction, Lead, LeadStatus, LeadTemperature, WhatsappStatus } from "@/lib/domain/lead";
+import { formatPhoneForWhatsapp, getConversationStateLabel, getNextActionLabel, getStatusLabel, getTemperatureLabel, getWhatsappStatusLabel } from "@/lib/domain/lead";
+import { deleteLeadAction, sendLeadWhatsappAction, updateLeadConversationAction } from "@/lib/leads/actions";
+import { formatNextActionDate, getDashboardLeadBucket, isLeadReminderDue, sortLeadsForDashboard } from "@/lib/leads/follow-up";
+import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type TemperatureFilter = "ALL" | LeadTemperature;
@@ -60,19 +61,7 @@ function whatsappStatusClasses(status: WhatsappStatus): string {
   return status === "FAILED" ? "bg-[#fff0ee] text-[#b33a2c]" : status === "READ" || status === "PLAYED" ? "bg-[#e4f8e9] text-[#18733a]" : "bg-[#f6f3ed] text-[#777c86]";
 }
 
-function actionStatusClasses(status: FollowUpAction["status"]): string {
-  return {
-    PENDING: "border-[#f0ca68] bg-[#fff0bd] text-[#765000]",
-    POSTPONED: "border-[#a9c9f4] bg-[#dceaff] text-[#24578e]",
-    DONE: "border-[#9bd3a8] bg-[#ccefd6] text-[#176333]",
-    IGNORED: "border-[#d0d3d8] bg-[#e5e7eb] text-[#59616d]",
-    CANCELED: "border-[#d0d3d8] bg-[#e5e7eb] text-[#59616d]",
-  }[status];
-}
-
-function isOpenAction(action: FollowUpAction): boolean {
-  return action.status === "PENDING" || action.status === "POSTPONED";
-}
+function isOpenAction(action: FollowUpAction): boolean { return action.status === "PENDING" || action.status === "POSTPONED"; }
 
 function isDueAction(action: FollowUpAction): boolean {
   return isOpenAction(action) && isLeadReminderDue(action.scheduledFor);
@@ -133,18 +122,15 @@ function refreshAllLeads() {
     return matchesTemperature && matchesStatus && matchesTradeIn && matchesQuery;
   }), [leads, query, status, temperature, tradeIn]);
 
-  const activeLeads = filteredLeads.filter((lead) => lead.conversationState === "ACTIVE");
-  const reminderLeads = filteredLeads.filter((lead) => lead.conversationState !== "ACTIVE" && lead.conversationState !== "CLOSED" && lead.followUpActions.some(isDueAction));
-  const priorityIds = new Set([...activeLeads, ...reminderLeads].map((lead) => lead.id));
-  const remainingLeads = filteredLeads.filter((lead) => !priorityIds.has(lead.id));
-  const orderedLeads = [...activeLeads, ...reminderLeads, ...remainingLeads];
+  const orderedLeads = sortLeadsForDashboard(filteredLeads);
   const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(orderedLeads.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const visibleLeads = orderedLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const visibleActiveLeads = visibleLeads.filter((lead) => lead.conversationState === "ACTIVE");
-  const visibleReminderLeads = visibleLeads.filter((lead) => lead.conversationState !== "ACTIVE" && lead.conversationState !== "CLOSED" && lead.followUpActions.some(isDueAction));
-  const visibleContactLeads = visibleLeads.filter((lead) => !visibleActiveLeads.includes(lead) && !visibleReminderLeads.includes(lead));
+  const visibleActiveLeads = visibleLeads.filter((lead) => getDashboardLeadBucket(lead) === 0);
+  const visibleReminderLeads = visibleLeads.filter((lead) => getDashboardLeadBucket(lead) === 1);
+  const visibleNoActionLeads = visibleLeads.filter((lead) => getDashboardLeadBucket(lead) === 2);
+  const visibleRemainingLeads = visibleLeads.filter((lead) => getDashboardLeadBucket(lead) === 3);
   const highCount = leads.filter((lead) => lead.temperature === "HIGH").length;
   const activeCount = leads.filter((lead) => lead.conversationState === "ACTIVE").length;
   const reminderCount = leads.filter((lead) => lead.conversationState !== "CLOSED" && lead.followUpActions.some(isDueAction)).length;
@@ -224,11 +210,10 @@ function refreshAllLeads() {
 
       {filteredLeads.length ? <Pagination currentPage={currentPage} totalPages={totalPages} visibleCount={visibleLeads.length} totalCount={filteredLeads.length} onPageChange={setPage} /> : null}
       {visibleActiveLeads.length ? <LeadSection title="Conversaciones activas" helper="Responde primero: el cliente ya está hablando contigo." leads={visibleActiveLeads} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
-      {visibleReminderLeads.length ? <LeadSection title="Recordatorios para hoy" helper="La alerta empieza a las 00:00 y permanece visible hasta resolverla." leads={visibleReminderLeads} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
-      {visibleContactLeads.length || (!visibleActiveLeads.length && !visibleReminderLeads.length) ? <section className="space-y-3">
-        <div className="flex items-center justify-between"><h2 className="text-xl font-black tracking-[-0.04em]">{visibleActiveLeads.length || visibleReminderLeads.length ? "Todos los contactos" : "Seguimiento"}</h2><span className="text-sm font-bold text-[var(--muted)]">{visibleContactLeads.length} en esta página</span></div>
-        {visibleContactLeads.length ? visibleContactLeads.map((lead) => <LeadCard key={lead.id} lead={lead} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} />) : <div className="rounded-[22px] border border-dashed border-black/15 bg-white px-5 py-12 text-center"><Search className="mx-auto text-[var(--muted)]" size={28} /><h3 className="mt-4 font-black">No hay contactos con esos filtros</h3><p className="mt-1 text-sm text-[var(--muted)]">Prueba otra búsqueda o captura un nuevo prospecto.</p></div>}
-      </section> : null}
+      {visibleReminderLeads.length ? <LeadSection title="Vencidos o para hoy" helper="La alerta permanece visible hasta resolverla." leads={visibleReminderLeads} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
+      {visibleNoActionLeads.length ? <LeadSection title="Sin próxima acción" helper="Estos leads están listos para que definas el siguiente paso." leads={visibleNoActionLeads} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
+      {visibleRemainingLeads.length ? <LeadSection title="Resto de contactos" helper="Seguimientos futuros y conversaciones pendientes." leads={visibleRemainingLeads} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
+      {!visibleLeads.length ? <div className="rounded-[22px] border border-dashed border-black/15 bg-white px-5 py-12 text-center"><Search className="mx-auto text-[var(--muted)]" size={28} /><h3 className="mt-4 font-black">No hay contactos con esos filtros</h3><p className="mt-1 text-sm text-[var(--muted)]">Prueba otra búsqueda o captura un nuevo prospecto.</p></div> : null}
       {filteredLeads.length > pageSize ? <Pagination currentPage={currentPage} totalPages={totalPages} visibleCount={visibleLeads.length} totalCount={filteredLeads.length} onPageChange={setPage} /> : null}
     </div>
   );
@@ -252,12 +237,7 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsappStatus>(lead.whatsappStatus);
   const [conversationState, setConversationState] = useState<ConversationState>(lead.conversationState);
   const [followUpActions, setFollowUpActions] = useState<FollowUpAction[]>(lead.followUpActions);
-  const [actionType, setActionType] = useState<NextActionType>(getNextOpenAction(lead)?.actionType ?? "CALL");
-  const [days, setDays] = useState("3");
-  const [actionNote, setActionNote] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [isScheduling, setIsScheduling] = useState(false);
-  const [busyActionId, setBusyActionId] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendInfo, setSendInfo] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -273,14 +253,9 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
     });
   }, [lead.conversationState, lead.followUpActions, lead.whatsappStatus]);
 
-  const openActions = followUpActions.filter(isOpenAction);
-  const dueActions = openActions.filter(isDueAction);
-  const isReminderDue = dueActions.length > 0;
+  const isReminderDue = followUpActions.some(isDueAction);
   const canSend = whatsappStatus === "PENDING" || whatsappStatus === "FAILED";
-
-  function patchActions(actions: FollowUpAction[]) {
-    setFollowUpActions(actions);
-  }
+  const nextOpenAction = getNextOpenAction({ ...lead, followUpActions });
 
   async function sendMessage() {
     if (isSending || !canSend) return;
@@ -296,53 +271,6 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
       setSendError(response.message || response.error || "No fue posible enviar el mensaje.");
     }
     setIsSending(false);
-  }
-
-  async function scheduleAction() {
-    if (isScheduling) return;
-    setIsScheduling(true);
-    setSendError(null);
-    setSendInfo(null);
-    const response = await scheduleLeadActionAction({ leadId: lead.id, actionType, days: Number(days), note: actionNote });
-    if (response.success && response.data) {
-      const nextActions = [...followUpActions, response.data.action];
-      patchActions(nextActions);
-      setConversationState("WAITING_CUSTOMER");
-      setActionNote("");
-      setSendInfo(`Recordatorio agregado: ${formatNextActionDate(response.data.nextActionAt)}. Puedes programar otro para el mismo lead.`);
-    } else {
-      setSendError(response.message || response.error || "No pudimos programar el recordatorio.");
-    }
-    setIsScheduling(false);
-  }
-
-  async function updateAction(actionId: string, status: "DONE" | "POSTPONED" | "IGNORED") {
-    if (busyActionId) return;
-    setBusyActionId(actionId);
-    setSendError(null);
-    const response = await updateFollowUpActionAction({ actionId, status, postponeDays: status === "POSTPONED" ? 1 : undefined });
-    if (response.success && response.data) {
-      const nextActions = followUpActions.map((action) => action.id === actionId ? response.data!.action : action);
-      patchActions(nextActions);
-      setSendInfo(status === "DONE" ? "Acción marcada como hecha." : status === "POSTPONED" ? "Acción pospuesta para mañana." : "Acción ignorada; no volverá a alertarte.");
-      router.refresh();
-    } else {
-      setSendError(response.message || response.error || "No pudimos actualizar ese recordatorio.");
-    }
-    setBusyActionId(null);
-  }
-
-  async function ignoreAllOpenActions() {
-    if (!openActions.length) return;
-    const response = await clearLeadActionAction(lead.id);
-    if (response.success) {
-      const now = new Date().toISOString();
-      patchActions(followUpActions.map((action) => isOpenAction(action) ? { ...action, status: "IGNORED", completedAt: now, note: "Pendiente ignorado por el vendedor." } : action));
-      setSendInfo("Pendientes ignorados. No volverán a generar alertas.");
-      router.refresh();
-    } else {
-      setSendError(response.message || response.error || "No pudimos actualizar el seguimiento.");
-    }
   }
 
   async function changeConversationState(state: ConversationState) {
@@ -374,22 +302,13 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
 
   return <article onClick={() => { if (!isExpanded) setIsExpanded(true); }} className={`rounded-[20px] border bg-white p-3 shadow-[0_8px_24px_rgba(16,24,40,0.04)] transition hover:shadow-[0_12px_30px_rgba(16,24,40,0.07)] ${!isExpanded ? "cursor-pointer" : ""} sm:p-3.5 ${conversationState === "ACTIVE" ? "border-[#75c88b] ring-1 ring-[#75c88b]/20" : isReminderDue ? "border-[#f3b257] ring-1 ring-[#f3b257]/20" : "border-black/[0.06]"}`}>
     <div onClick={toggleExpanded} className="compact-lead-header flex cursor-pointer flex-col gap-2.5 sm:flex-row sm:items-center">
-      <div className="flex min-w-0 flex-1 items-start gap-2.5"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#f0eee8] text-xs font-black">{lead.fullName.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="truncate text-sm font-black">{lead.fullName}</h3><span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${temperatureClasses(lead.temperature)}`}>{lead.temperature === "HIGH" ? "🔥 " : ""}{getTemperatureLabel(lead.temperature)}</span></div><p className="mt-0.5 truncate text-xs text-[var(--muted)]">{lead.carModel} <span className="mx-1 text-black/20">·</span> {getStatusLabel(lead.status)} <span className="mx-1 text-black/20">·</span> {formatRelativeDate(lead.createdAt)}</p><div className="mt-1.5 flex flex-wrap gap-1"><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${conversationClasses(conversationState)}`}>{getConversationStateLabel(conversationState)}</span><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${whatsappStatusClasses(whatsappStatus)}`}>{getWhatsappStatusLabel(whatsappStatus)}</span>{lead.tradeInCar ? <span className="rounded-full bg-[#e7edf9] px-1.5 py-0.5 text-[9px] font-black text-[#3c5f9b]">Parte de pago</span> : null}{isReminderDue ? <span className="rounded-full bg-[#fff8ed] px-1.5 py-0.5 text-[9px] font-black text-[#b94910]">Para hoy</span> : null}</div></div></div>
+      <div className="flex min-w-0 flex-1 items-start gap-2.5"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#f0eee8] text-xs font-black">{lead.fullName.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="truncate text-sm font-black">{lead.fullName}</h3><span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${temperatureClasses(lead.temperature)}`}>{lead.temperature === "HIGH" ? "🔥 " : ""}{getTemperatureLabel(lead.temperature)}</span></div><p className="mt-0.5 truncate text-xs text-[var(--muted)]">{lead.carModel} <span className="mx-1 text-black/20">·</span> {getStatusLabel(lead.status)} <span className="mx-1 text-black/20">·</span> {formatRelativeDate(lead.createdAt)}</p><div className="mt-1.5 flex flex-wrap gap-1"><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${conversationClasses(conversationState)}`}>{getConversationStateLabel(conversationState)}</span><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${whatsappStatusClasses(whatsappStatus)}`}>{getWhatsappStatusLabel(whatsappStatus)}</span>{lead.tradeInCar ? <span className="rounded-full bg-[#e7edf9] px-1.5 py-0.5 text-[9px] font-black text-[#3c5f9b]">Parte de pago</span> : null}{isReminderDue ? <span className="rounded-full bg-[#fff8ed] px-1.5 py-0.5 text-[9px] font-black text-[#b94910]">Para hoy</span> : null}</div><p className="mt-1 truncate text-[11px] font-bold text-[var(--muted)]">{nextOpenAction ? `Próxima acción: ${getNextActionLabel(nextOpenAction.actionType)} · ${formatNextActionDate(nextOpenAction.scheduledFor) ?? "sin fecha"}` : "Sin próxima acción"}</p></div></div>
       <div className="flex items-center gap-1.5 sm:shrink-0"><span className="mr-auto rounded-lg bg-[#f6f3ed] px-2 py-1.5 text-center sm:mr-1"><strong className="block text-base font-black leading-none">{lead.score}</strong><span className="text-[8px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">score</span></span><a onClick={(event) => event.stopPropagation()} aria-label={`Llamar a ${lead.fullName}`} href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} className="icon-action icon-action-phone" title="Llamar"><Phone size={15} /></a><button type="button" aria-label={`Enviar WhatsApp a ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); void sendMessage(); }} disabled={isSending || !canSend} className={`send-whatsapp-button ${!canSend ? "send-whatsapp-button-sent" : ""}`} title={!canSend ? "Mensaje automático ya enviado" : whatsappStatus === "FAILED" ? "Reintentar envío automático" : "Enviar WhatsApp automáticamente"}>{isSending ? <LoaderCircle size={15} className="animate-spin" /> : !canSend ? <CheckCircle2 size={15} /> : <Send size={15} />}<span className="hidden sm:inline">{isSending ? "Enviando" : !canSend ? "Enviado" : whatsappStatus === "FAILED" ? "Reintentar" : "Enviar"}</span></button><a onClick={(event) => event.stopPropagation()} aria-label={`Abrir WhatsApp manual para ${lead.fullName}`} href={`https://wa.me/${formatPhoneForWhatsapp(lead.phone)}`} target="_blank" rel="noreferrer" className="icon-action icon-action-whatsapp" title="Abrir chat de WhatsApp"><WhatsAppLogo /></a><button type="button" aria-expanded={isExpanded} aria-label={isExpanded ? `Ocultar detalles de ${lead.fullName}` : `Mostrar detalles de ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); toggleExpanded(); }} className="icon-action" title={isExpanded ? "Ocultar detalles" : "Ver detalles"}>{isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button></div>
     </div>
 
     {isExpanded && lead.lastMessageDirection ? <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f6f3ed] px-2.5 py-2 text-[11px]"><p className="min-w-0 truncate text-[var(--muted)]"><strong className="text-[var(--ink)]">{lead.lastMessageDirection === "INBOUND" ? "Último mensaje · Cliente:" : "Último mensaje · Tú:"}</strong> {lead.lastMessagePreview || "Mensaje sin texto"}</p>{conversationState === "ACTIVE" ? <button type="button" onClick={() => changeConversationState("CLOSED")} className="shrink-0 font-black text-[var(--muted)] hover:text-[var(--ink)]">Cerrar conversación</button> : conversationState === "CLOSED" ? <button type="button" onClick={() => changeConversationState("ACTIVE")} className="shrink-0 font-black text-[#18733a]">Reabrir</button> : null}</div> : null}
 
-    {isExpanded ? <div className="compact-follow-up mt-3 rounded-2xl bg-[#faf9f6] p-2.5">
-      <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs font-black"><CalendarClock size={15} />Seguimiento del lead</div>{openActions.length ? <button type="button" onClick={ignoreAllOpenActions} className="text-[11px] font-bold text-[var(--muted)] hover:text-[var(--ink)]">Ignorar pendientes</button> : null}</div>
-      {followUpActions.length ? <div className="mt-3 space-y-2">{followUpActions.map((action) => {
-        const due = isDueAction(action);
-        return <div key={action.id} className={`rounded-xl border px-3 py-2.5 ${due ? "border-[#f3b257] bg-[#fff8ed]" : "border-black/[0.06] bg-white"}`}>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-2 py-1 text-[10px] font-black ${actionStatusClasses(action.status)}`}>{getFollowUpActionStatusLabel(action.status)}</span><span className={`text-xs font-black ${due ? "text-[#b94910]" : "text-[var(--ink)]"}`}>{due ? "Para hoy · " : ""}{getNextActionLabel(action.actionType)}</span><span className="text-[11px] text-[var(--muted)]">{formatNextActionDate(action.scheduledFor)}</span></div>{action.note ? <p className="mt-1 line-clamp-1 text-[11px] text-[var(--muted)]">{action.note}</p> : null}</div>{isOpenAction(action) ? <div className="flex flex-wrap gap-1.5"><button type="button" disabled={busyActionId === action.id} onClick={() => updateAction(action.id, "DONE")} className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#e4f8e9] px-2.5 text-[11px] font-black text-[#18733a] disabled:opacity-50"><Check size={13} />Hecha</button><button type="button" disabled={busyActionId === action.id} onClick={() => updateAction(action.id, "POSTPONED")} className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#edf3ff] px-2.5 text-[11px] font-black text-[#3c5f9b] disabled:opacity-50"><RotateCcw size={13} />+1 día</button><button type="button" disabled={busyActionId === action.id} onClick={() => updateAction(action.id, "IGNORED")} className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#f1f1f1] px-2.5 text-[11px] font-black text-[#777c86] disabled:opacity-50"><Ban size={13} />Ignorar</button></div> : null}</div>
-        </div>;
-      })}</div> : <p className="mt-2 text-xs font-semibold text-[var(--muted)]">No hay acciones programadas todavía.</p>}
-      <div className="mt-3 flex flex-col gap-2 border-t border-black/[0.06] pt-3 sm:flex-row sm:flex-wrap sm:items-center"><span className="flex items-center gap-1.5 text-[11px] font-black text-[var(--muted)]"><Plus size={14} />Agregar acción</span><select aria-label="Tipo de siguiente acción" value={actionType} onChange={(event) => setActionType(event.target.value as NextActionType)} className="h-9 rounded-lg border border-black/10 bg-white px-2 text-xs font-bold"><option value="CALL">Llamar</option><option value="WHATSAPP">WhatsApp</option><option value="QUOTE">Cotizar</option><option value="OTHER">Otra</option></select><select aria-label="Días para el recordatorio" value={days} onChange={(event) => setDays(event.target.value)} className="h-9 rounded-lg border border-black/10 bg-white px-2 text-xs font-bold"><option value="1">Mañana</option><option value="3">En 3 días</option><option value="7">En 7 días</option><option value="14">En 14 días</option></select><input value={actionNote} onChange={(event) => setActionNote(event.target.value)} placeholder="Nota opcional" className="h-9 min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-2 text-xs font-semibold outline-none placeholder:text-[#9a9b9b]" /><button type="button" onClick={scheduleAction} disabled={isScheduling} className="h-9 rounded-lg bg-[var(--ink)] px-3 text-xs font-black text-white disabled:opacity-60">{isScheduling ? "Guardando" : "Programar"}</button></div>
-    </div> : null}
+    {isExpanded ? <FollowUpActions leadId={lead.id} actions={followUpActions} onActionsChange={(actions) => { setFollowUpActions(actions); router.refresh(); }} onConversationWaiting={() => setConversationState("WAITING_CUSTOMER")} onError={setSendError} onInfo={setSendInfo} /> : null}
     {isExpanded && lead.lastCustomerMessageAt ? <p className="mt-3 text-[11px] text-[var(--muted)]">Última respuesta del cliente registrada. Las acciones pendientes se cancelan cuando llega una nueva respuesta.</p> : null}
     {isExpanded && <div className="mt-3 flex items-center justify-between gap-3 border-t border-black/[0.06] pt-3"><span className="text-[11px] text-[var(--muted)]">Se ocultará de la lista y dejará de generar recordatorios.</span><button type="button" onClick={(event) => { event.stopPropagation(); setIsDeleteModalOpen(true); setSendError(null); }} disabled={isDeleting} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-black text-[#b33a2c] hover:bg-[#fff0ee] disabled:opacity-50"><Trash2 size={14} />Eliminar contacto</button></div>}
     {isExpanded && sendError ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-red-600"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{sendError}</p> : null}{isExpanded && sendInfo ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-emerald-700"><CheckCircle2 size={14} className="mt-0.5 shrink-0" />{sendInfo}</p> : null}

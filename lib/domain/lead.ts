@@ -45,6 +45,16 @@ export interface FollowUpAction {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  actionVersion?: number;
+  origin?: "MANUAL" | "SUGGESTED";
+}
+
+export interface ExistingLeadSummary {
+  id: string;
+  fullName: string;
+  carModels: string[];
+  status: LeadStatus;
+  createdAt: string;
 }
 
 export interface Lead {
@@ -99,13 +109,16 @@ export interface ScheduleLeadActionInput {
   actionType: NextActionType;
   days: number;
   note?: string;
+  idempotencyKey?: string;
 }
 
 export interface UpdateFollowUpActionInput {
   actionId: string;
-  status: "DONE" | "POSTPONED" | "IGNORED";
+  status: "DONE" | "POSTPONED" | "IGNORED" | "CANCELED";
   postponeDays?: number;
   note?: string;
+  expectedActionVersion?: number;
+  idempotencyKey?: string;
 }
 
 export interface LeadScore {

@@ -1,4 +1,4 @@
-import type { ConversationState, CreateLeadInput, FollowUpAction, FollowUpActionStatus, Lead, LeadMessage, MessageDirection, NextActionType, WhatsappStatus } from "@/lib/domain/lead";
+import type { ConversationState, CreateLeadInput, ExistingLeadSummary, FollowUpAction, FollowUpActionStatus, Lead, LeadMessage, MessageDirection, NextActionType, WhatsappStatus } from "@/lib/domain/lead";
 import { calculateLeadScore, formatPhoneForWhatsapp } from "@/lib/domain/lead";
 import type { Database } from "@/lib/supabase/database";
 import { getInstallationAdvisorUserId } from "@/lib/config/installation";
@@ -37,6 +37,19 @@ type LeadRow = {
 
 type FollowUpActionRow = Database["public"]["Tables"]["lead_follow_up_actions"]["Row"];
 type LeadflowDbClient = NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>;
+type ActionRpcPayload = {
+  id: string;
+  lead_id: string;
+  action_type: NextActionType;
+  scheduled_for: string;
+  status: FollowUpActionStatus;
+  action_version: number;
+  origin: "MANUAL" | "SUGGESTED";
+  note: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 function toDomainAction(row: FollowUpActionRow): FollowUpAction {
   return {
@@ -49,7 +62,17 @@ function toDomainAction(row: FollowUpActionRow): FollowUpAction {
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    actionVersion: row.action_version,
+    origin: row.origin,
   };
+}
+
+function toDomainActionRpc(data: Record<string, unknown> | null): FollowUpAction | null {
+  const raw = data?.action;
+  if (!raw || typeof raw !== "object") return null;
+  const action = raw as Partial<ActionRpcPayload>;
+  if (!action.id || !action.lead_id || !action.action_type || !action.scheduled_for || !action.status || typeof action.action_version !== "number") return null;
+  return toDomainAction(action as ActionRpcPayload);
 }
 
 function toDomainLead(row: LeadRow, followUpActions: FollowUpAction[] = []): Lead {
@@ -88,7 +111,7 @@ async function attachFollowUpActions(supabase: LeadflowDbClient, leads: Lead[]):
   if (leads.length === 0) return leads;
   const { data } = await supabase
     .from("lead_follow_up_actions")
-    .select("id,lead_id,action_type,scheduled_for,status,note,completed_at,created_at,updated_at")
+    .select("id,lead_id,action_type,scheduled_for,status,action_version,origin,note,completed_at,created_at,updated_at")
     .in("lead_id", leads.map((lead) => lead.id))
     .order("scheduled_for", { ascending: true });
   if (!data) return leads;
@@ -230,22 +253,27 @@ export async function getCarModelImageUrl(modelName: string): Promise<string | n
   return image?.image_url ?? null;
 }
 
-export async function findLeadByPhone(phone: string): Promise<Lead | null> {
+export async function findLeadByPhone(phone: string, excludeLeadId?: string): Promise<ExistingLeadSummary | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
 
   const { data: userData } = await supabase.auth.getUser();
-  const query = supabase.from("leads").select(leadSelect).is("deleted_at", null).order("created_at", { ascending: false }).limit(500);
+  const query = supabase.from("leads").select(leadSelect).is("deleted_at", null).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(500);
   const { data, error } = userData.user
     ? await query.eq("user_id", userData.user.id)
     : await query.is("user_id", null);
 
   if (error || !data) return null;
   const normalizedPhone = formatPhoneForWhatsapp(phone);
-  const row = data.find((candidate) => formatPhoneForWhatsapp(candidate.phone) === normalizedPhone);
+  const row = data.find((candidate) => candidate.id !== excludeLeadId && formatPhoneForWhatsapp(candidate.phone) === normalizedPhone);
   if (!row) return null;
-  const [lead] = await attachLeadRelations(supabase, [toDomainLead(row)]);
-  return lead ?? null;
+  return {
+    id: row.id,
+    fullName: row.full_name,
+    carModels: row.car_models?.length ? row.car_models : [row.car_model],
+    status: row.status,
+    createdAt: row.created_at,
+  };
 }
 
 async function getProviderContext(): Promise<{ supabase: LeadflowDbClient; advisorUserId: string } | null> {
@@ -350,56 +378,68 @@ export async function markLeadAfterOutboundMessage(id: string, status: WhatsappS
   return !error;
 }
 
-const followUpActionSelect = "id,lead_id,action_type,scheduled_for,status,note,completed_at,created_at,updated_at";
-
-export async function createFollowUpAction(id: string, actionType: NextActionType, scheduledFor: string, note?: string): Promise<FollowUpAction | null> {
+export async function createFollowUpAction(id: string, actionType: NextActionType, scheduledFor: string, note?: string, idempotencyKey = crypto.randomUUID()): Promise<FollowUpAction | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
 
-  const { data: activeLead } = await supabase.from("leads").select("id").eq("id", id).is("deleted_at", null).maybeSingle();
-  if (!activeLead) return null;
-
-  const { data, error } = await supabase.from("lead_follow_up_actions").insert({
-    lead_id: id,
-    action_type: actionType,
-    scheduled_for: scheduledFor,
-    note: note?.trim() || null,
-  }).select(followUpActionSelect).single();
-  if (error || !data) return null;
-  await supabase.from("leads").update({ conversation_state: "WAITING_CUSTOMER" }).eq("id", id).is("deleted_at", null);
-  return toDomainAction(data);
+  const { data, error } = await supabase.rpc("create_lead_follow_up_action_v1", {
+    p_lead_id: id,
+    p_action_type: actionType,
+    p_scheduled_for: scheduledFor,
+    p_note: note?.trim() || null,
+    p_idempotency_key: idempotencyKey,
+    p_action_id: null,
+    p_expected_action_version: null,
+  });
+  return error ? null : toDomainActionRpc(data);
 }
 
-export async function updateFollowUpAction(actionId: string, status: FollowUpActionStatus, scheduledFor?: string, note?: string): Promise<FollowUpAction | null> {
+export async function updateFollowUpAction(actionId: string, status: FollowUpActionStatus, scheduledFor?: string, note?: string, expectedActionVersion?: number, idempotencyKey = crypto.randomUUID()): Promise<FollowUpAction | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
 
-  const update: Database["public"]["Tables"]["lead_follow_up_actions"]["Update"] = {
-    status,
-    completed_at: status === "PENDING" || status === "POSTPONED" ? null : new Date().toISOString(),
-  };
-  if (scheduledFor) update.scheduled_for = scheduledFor;
-  if (note !== undefined) update.note = note.trim() || null;
-  const { data, error } = await supabase.from("lead_follow_up_actions").update(update).eq("id", actionId).select(followUpActionSelect).single();
-  return error || !data ? null : toDomainAction(data);
+  let version = expectedActionVersion;
+  if (!version) {
+    const { data } = await supabase.from("lead_follow_up_actions").select("action_version").eq("id", actionId).maybeSingle();
+    version = data?.action_version;
+  }
+  if (!version) return null;
+
+  const { data, error } = await supabase.rpc("transition_lead_follow_up_action_v1", {
+    p_action_id: actionId,
+    p_status: status,
+    p_expected_action_version: version,
+    p_scheduled_for: scheduledFor ?? null,
+    p_note: note?.trim() || null,
+    p_idempotency_key: idempotencyKey,
+    p_cancel_reason: status === "CANCELED" ? "ADVISOR_COMMAND" : null,
+  });
+  return error ? null : toDomainActionRpc(data);
 }
 
-export async function scheduleLeadAction(id: string, actionType: NextActionType, nextActionAt: string, note?: string): Promise<FollowUpAction | null> {
-  return createFollowUpAction(id, actionType, nextActionAt, note);
+export async function scheduleLeadAction(id: string, actionType: NextActionType, nextActionAt: string, note?: string, idempotencyKey?: string): Promise<FollowUpAction | null> {
+  return createFollowUpAction(id, actionType, nextActionAt, note, idempotencyKey);
 }
 
 export async function clearLeadAction(id: string): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
 
-  const now = new Date().toISOString();
-  const { error: actionsError } = await supabase.from("lead_follow_up_actions").update({
-    status: "IGNORED",
-    completed_at: now,
-    note: "Pendiente ignorado por el vendedor.",
-  }).eq("lead_id", id).in("status", ["PENDING", "POSTPONED"]);
-  const { error } = await supabase.from("leads").update({ next_action_at: null, next_action_type: null }).eq("id", id).is("deleted_at", null);
-  return !actionsError && !error;
+  const { data: actions, error: readError } = await supabase.from("lead_follow_up_actions").select("id,action_version").eq("lead_id", id).in("status", ["PENDING", "POSTPONED"]);
+  if (readError) return false;
+  for (const action of actions ?? []) {
+    const { data, error } = await supabase.rpc("transition_lead_follow_up_action_v1", {
+      p_action_id: action.id,
+      p_status: "IGNORED",
+      p_expected_action_version: action.action_version,
+      p_scheduled_for: null,
+      p_note: "Pendiente ignorado por el vendedor.",
+      p_idempotency_key: crypto.randomUUID(),
+      p_cancel_reason: null,
+    });
+    if (error || !toDomainActionRpc(data)) return false;
+  }
+  return true;
 }
 
 export async function softDeleteLead(id: string): Promise<boolean> {

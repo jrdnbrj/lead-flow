@@ -1,6 +1,8 @@
-import type { NextActionType } from "@/lib/domain/lead";
+import type { Lead, NextActionType } from "@/lib/domain/lead";
 
 export const SELLER_TIME_ZONE = "America/Guayaquil";
+
+export type ScheduleShortcut = "POSTPONE_PLUS_ONE_HOUR" | "POSTPONE_LATER" | "POSTPONE_TOMORROW" | "POSTPONE_IN_THREE_DAYS";
 
 function getSellerDateParts(date: Date): { year: number; month: number; day: number } {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -20,6 +22,18 @@ function getSellerDateParts(date: Date): { year: number; month: number; day: num
 export function getStartOfSellerDayAfter(days: number, reference = new Date()): string {
   const date = getSellerDateParts(reference);
   return new Date(Date.UTC(date.year, date.month - 1, date.day + days, 5, 0, 0, 0)).toISOString();
+}
+
+export function resolveScheduleShortcut(shortcut: ScheduleShortcut, reference = new Date()): string {
+  if (shortcut === "POSTPONE_PLUS_ONE_HOUR") return new Date(reference.getTime() + 60 * 60 * 1000).toISOString();
+  const local = getSellerDateParts(reference);
+  const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: SELLER_TIME_ZONE, hour: "2-digit", hour12: false }).format(reference));
+  if (shortcut === "POSTPONE_LATER") {
+    const days = hour < 16 ? 0 : 1;
+    return new Date(Date.UTC(local.year, local.month - 1, local.day + days, 21, 0, 0, 0)).toISOString();
+  }
+  const days = shortcut === "POSTPONE_TOMORROW" ? 1 : 3;
+  return new Date(Date.UTC(local.year, local.month - 1, local.day + days, 14, 0, 0, 0)).toISOString();
 }
 
 export function isLeadReminderDue(nextActionAt: string | null, reference = new Date()): boolean {
@@ -45,4 +59,20 @@ export function formatNextActionDate(nextActionAt: string | null, reference = ne
 
 export function getNextActionDefaultLabel(actionType: NextActionType): string {
   return { CALL: "Llamar", WHATSAPP: "Escribir", QUOTE: "Cotizar", OTHER: "Seguimiento" }[actionType];
+}
+
+export function getDashboardLeadBucket(lead: Lead, reference = new Date()): 0 | 1 | 2 | 3 {
+  if (lead.conversationState === "ACTIVE") return 0;
+  const hasDueAction = lead.followUpActions.some((action) => (action.status === "PENDING" || action.status === "POSTPONED") && isLeadReminderDue(action.scheduledFor, reference));
+  if (hasDueAction) return 1;
+  const hasOpenAction = lead.followUpActions.some((action) => action.status === "PENDING" || action.status === "POSTPONED");
+  if (!hasOpenAction) return 2;
+  return 3;
+}
+
+export function sortLeadsForDashboard(leads: Lead[], reference = new Date()): Lead[] {
+  return leads
+    .map((lead, index) => ({ lead, index }))
+    .sort((a, b) => getDashboardLeadBucket(a.lead, reference) - getDashboardLeadBucket(b.lead, reference) || a.index - b.index)
+    .map(({ lead }) => lead);
 }

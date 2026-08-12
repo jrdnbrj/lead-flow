@@ -1,13 +1,13 @@
 "use server";
 
-import type { ActionResponse, ConversationState, CreateLeadInput, FollowUpAction, Lead, ScheduleLeadActionInput, SendLeadInput, UpdateFollowUpActionInput, WhatsappSendResult } from "@/lib/domain/lead";
+import type { ActionResponse, ConversationState, CreateLeadInput, ExistingLeadSummary, FollowUpAction, Lead, ScheduleLeadActionInput, SendLeadInput, UpdateFollowUpActionInput, WhatsappSendResult } from "@/lib/domain/lead";
 import { authRequiredResult, isAuthRequiredEnabled } from "@/lib/auth/auth-required";
 import { requireAdvisor } from "@/lib/auth/advisor";
 import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-template";
 import { renderWhatsappMessageTemplate } from "@/lib/config/message-template-shared";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { getStartOfSellerDayAfter } from "@/lib/leads/follow-up";
-import { clearLeadAction, createLead, createLeadMessage, getCarModelImageUrl, getLeadById, markLeadAfterOutboundMessage, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadMessage } from "@/lib/leads/repository";
+import { clearLeadAction, createLead, createLeadMessage, findLeadByPhone, getCarModelImageUrl, getLeadById, markLeadAfterOutboundMessage, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadMessage } from "@/lib/leads/repository";
 import { leadSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema } from "@/lib/leads/validation";
 import { ensureEvolutionWebhook, sendWhatsappMedia, sendWhatsappText } from "@/lib/whatsapp/service";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
@@ -33,6 +33,19 @@ export async function createLeadAction(input: CreateLeadInput): Promise<ActionRe
   } catch (error) {
     const detail = error instanceof Error ? error.message : "No pudimos guardar el lead en Supabase. Intenta nuevamente.";
     return { success: false, error: detail };
+  }
+}
+
+export async function findExistingLeadByPhoneAction(phone: string, excludeLeadId?: string): Promise<ActionResponse<ExistingLeadSummary | null>> {
+  if (!phone.trim()) return { success: true, data: null };
+  if (isAuthRequiredEnabled()) {
+    const auth = await requireAdvisorAction<ExistingLeadSummary | null>();
+    if (auth) return auth;
+  }
+  try {
+    return { success: true, data: await findLeadByPhone(phone, excludeLeadId) };
+  } catch {
+    return { success: false, error: "No pudimos revisar si ya existe un contacto con ese teléfono." };
   }
 }
 
@@ -105,23 +118,10 @@ export async function scheduleLeadActionAction(input: ScheduleLeadActionInput): 
   if (auth) return auth;
 
   const nextActionAt = getStartOfSellerDayAfter(parsed.data.days);
-  const persisted = await scheduleLeadAction(parsed.data.leadId, parsed.data.actionType, nextActionAt, parsed.data.note);
-  const action = persisted ?? {
-    id: crypto.randomUUID(),
-    leadId: parsed.data.leadId,
-    actionType: parsed.data.actionType,
-    scheduledFor: nextActionAt,
-    status: "PENDING" as const,
-    note: parsed.data.note?.trim() || null,
-    completedAt: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  return {
-    success: true,
-    data: { action, nextActionAt, actionType: parsed.data.actionType },
-    warning: persisted ? undefined : "El recordatorio se calculó, pero Supabase no confirmó el guardado.",
-  };
+  const action = await scheduleLeadAction(parsed.data.leadId, parsed.data.actionType, nextActionAt, parsed.data.note, parsed.data.idempotencyKey);
+  return action
+    ? { success: true, data: { action, nextActionAt, actionType: parsed.data.actionType } }
+    : { success: false, error: "No pudimos programar ese recordatorio." };
 }
 
 export async function updateFollowUpActionAction(input: UpdateFollowUpActionInput): Promise<ActionResponse<{ action: FollowUpAction }>> {
@@ -131,7 +131,7 @@ export async function updateFollowUpActionAction(input: UpdateFollowUpActionInpu
   if (auth) return auth;
 
   const scheduledFor = parsed.data.status === "POSTPONED" ? getStartOfSellerDayAfter(parsed.data.postponeDays ?? 1) : undefined;
-  const action = await updateFollowUpAction(parsed.data.actionId, parsed.data.status, scheduledFor, parsed.data.note);
+  const action = await updateFollowUpAction(parsed.data.actionId, parsed.data.status, scheduledFor, parsed.data.note, parsed.data.expectedActionVersion, parsed.data.idempotencyKey);
   return action
     ? { success: true, data: { action } }
     : { success: false, error: "No pudimos actualizar ese recordatorio en Supabase." };

@@ -190,6 +190,8 @@ export type Database = {
           action_type: NextActionType;
           scheduled_for: string;
           status: FollowUpActionStatus;
+          action_version: number;
+          origin: "MANUAL" | "SUGGESTED";
           note: string | null;
           completed_at: string | null;
           created_at: string;
@@ -201,6 +203,8 @@ export type Database = {
           action_type: NextActionType;
           scheduled_for: string;
           status?: FollowUpActionStatus;
+          action_version?: number;
+          origin?: "MANUAL" | "SUGGESTED";
           note?: string | null;
           completed_at?: string | null;
           created_at?: string;
@@ -215,6 +219,30 @@ export type Database = {
       soft_delete_lead: {
         Args: { p_lead_id: string };
         Returns: boolean;
+      };
+      create_lead_follow_up_action_v1: {
+        Args: {
+          p_lead_id: string;
+          p_action_type: NextActionType;
+          p_scheduled_for: string;
+          p_note?: string | null;
+          p_idempotency_key?: string | null;
+          p_action_id?: string | null;
+          p_expected_action_version?: number | null;
+        };
+        Returns: Record<string, unknown>;
+      };
+      transition_lead_follow_up_action_v1: {
+        Args: {
+          p_action_id: string;
+          p_status: FollowUpActionStatus;
+          p_expected_action_version: number;
+          p_scheduled_for?: string | null;
+          p_note?: string | null;
+          p_idempotency_key?: string | null;
+          p_cancel_reason?: string | null;
+        };
+        Returns: Record<string, unknown>;
       };
     };
     Enums: Record<string, never>;
