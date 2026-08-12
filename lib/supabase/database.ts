@@ -165,6 +165,7 @@ export type Database = {
           read_at: string | null;
           failed_at: string | null;
           raw_payload: Record<string, unknown> | null;
+          inbound_classification: "NO_SUGGESTION" | "PENDING" | "REVIEW" | null;
         };
         Insert: {
           id?: string;
@@ -179,8 +180,15 @@ export type Database = {
           read_at?: string | null;
           failed_at?: string | null;
           raw_payload?: Record<string, unknown> | null;
+          inbound_classification?: "NO_SUGGESTION" | "PENDING" | "REVIEW" | null;
         };
         Update: Partial<Database["public"]["Tables"]["lead_messages"]["Insert"]>;
+        Relationships: [];
+      };
+      lead_inbound_manual_decisions: {
+        Row: { id: string; idempotency_key: string; lead_id: string; source_message_id: string | null; action_id: string | null; decision: "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED"; result: Record<string, unknown>; created_at: string };
+        Insert: { id?: string; idempotency_key: string; lead_id: string; source_message_id?: string | null; action_id?: string | null; decision: "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED"; result: Record<string, unknown>; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["lead_inbound_manual_decisions"]["Insert"]>;
         Relationships: [];
       };
       lead_follow_up_actions: {
@@ -192,6 +200,7 @@ export type Database = {
           status: FollowUpActionStatus;
           action_version: number;
           origin: "MANUAL" | "SUGGESTED";
+          source_message_id: string | null;
           note: string | null;
           completed_at: string | null;
           created_at: string;
@@ -205,6 +214,7 @@ export type Database = {
           status?: FollowUpActionStatus;
           action_version?: number;
           origin?: "MANUAL" | "SUGGESTED";
+          source_message_id?: string | null;
           note?: string | null;
           completed_at?: string | null;
           created_at?: string;
@@ -216,6 +226,42 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      persist_inbound_message_v1: {
+        Args: {
+          p_lead_id: string;
+          p_evolution_instance: string;
+          p_provider_message_id: string;
+          p_phone: string;
+          p_body?: string | null;
+          p_created_at?: string | null;
+          p_classification: string;
+          p_association_status: string;
+          p_match_ambiguous?: boolean;
+        };
+        Returns: Record<string, unknown>;
+      };
+      upsert_inbound_response_action_v1: {
+        Args: {
+          p_lead_id: string;
+          p_source_message_id: string;
+          p_classification: string;
+          p_scheduled_for: string;
+          p_idempotency_key: string;
+        };
+        Returns: Record<string, unknown>;
+      };
+      correct_inbound_response_v1: {
+        Args: {
+          p_lead_id: string;
+          p_decision: string;
+          p_source_message_id?: string | null;
+          p_action_id?: string | null;
+          p_expected_action_version?: number | null;
+          p_scheduled_for?: string | null;
+          p_idempotency_key?: string | null;
+        };
+        Returns: Record<string, unknown>;
+      };
       soft_delete_lead: {
         Args: { p_lead_id: string };
         Returns: boolean;

@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { validateEvolutionWebhookRequest } from "@/lib/auth/entrypoints";
 import type { WhatsappStatus } from "@/lib/domain/lead";
 import { formatPhoneForWhatsapp } from "@/lib/domain/lead";
-import { createLeadMessageForProvider, findLeadByPhoneForProvider, findLeadMessageByProviderIdForProvider, markLeadCustomerReplyForProvider, updateLeadMessageForProvider, updateLeadWhatsappStatusForProvider } from "@/lib/leads/repository";
+import { classifyInboundMessage } from "@/lib/leads/inbound-classifier";
+import { InboundMessageLedger } from "@/lib/leads/inbound-dedup";
+import { normalizeInboundPayload } from "@/lib/leads/inbound-dto";
+import { findLeadByPhoneForProvider, findLeadMessageByProviderIdForProvider, persistInboundMessageForProvider, resolveInboundLeadMatchForProvider, updateLeadMessageForProvider, updateLeadWhatsappStatusForProvider, upsertInboundResponseActionForProvider, createLeadMessageForProvider } from "@/lib/leads/repository";
 import { extractEvolutionMessageId, normalizeEvolutionStatus } from "@/lib/whatsapp/service";
 
 export const runtime = "nodejs";
@@ -122,25 +125,39 @@ function statusTimestamps(status: WhatsappStatus, timestamp: string): { delivere
   };
 }
 
-async function processIncomingMessage(item: JsonRecord): Promise<boolean> {
-  if (isFromMe(item)) return false;
-  const phone = phoneFromJid(getRemoteJid(item));
-  if (!phone) return false;
-  const lead = await findLeadByPhoneForProvider(phone);
-  if (!lead) return false;
+async function processIncomingMessage(item: JsonRecord, event: string, ledger: InboundMessageLedger): Promise<boolean> {
+  const normalized = normalizeInboundPayload(item, event, EVOLUTION_INSTANCE);
+  if (!normalized.accepted) return false;
+  const identity = ledger.accept({ evolutionInstance: normalized.dto.evolutionInstance, providerMessageId: normalized.dto.providerMessageId });
+  if (!identity.accepted) return identity.replay;
 
-  const providerMessageId = extractEvolutionMessageId(item);
-  if (!providerMessageId || !EVOLUTION_INSTANCE) return false;
-  const body = extractMessageBody(item);
-  const createdAt = getMessageTimestamp(item);
-  const existing = await findLeadMessageByProviderIdForProvider(providerMessageId, EVOLUTION_INSTANCE);
-  if (existing) {
-    await updateLeadMessageForProvider(existing.id, { status: "RECEIVED", body, phone, rawPayload: item });
-  } else {
-    await createLeadMessageForProvider({ leadId: lead.id, evolutionInstance: EVOLUTION_INSTANCE, providerMessageId, direction: "INBOUND", status: "RECEIVED", body, phone, createdAt, rawPayload: item });
-  }
-  await markLeadCustomerReplyForProvider(lead.id, body, createdAt);
-  return true;
+  const classification = classifyInboundMessage(normalized.dto.body ?? "").classification;
+  const match = await resolveInboundLeadMatchForProvider(normalized.dto.phone);
+  if (match.status === "NO_MATCH") return false;
+  const persisted = await persistInboundMessageForProvider({
+    leadId: match.leadId,
+    evolutionInstance: normalized.dto.evolutionInstance,
+    providerMessageId: normalized.dto.providerMessageId,
+    phone: normalized.dto.phone,
+    body: normalized.dto.body,
+    createdAt: normalized.dto.timestamp,
+    classification,
+    associationStatus: match.status === "AMBIGUOUS" ? "AMBIGUOUS" : "MATCHED",
+    matchAmbiguous: match.status === "AMBIGUOUS",
+  });
+  if (!persisted) return false;
+  if (classification === "NO_SUGGESTION") return true;
+  const sourceMessageId = typeof persisted.message_id === "string" ? persisted.message_id : null;
+  if (!sourceMessageId) return false;
+  const scheduledFor = new Date(new Date(normalized.dto.timestamp).getTime() + 60 * 60 * 1000).toISOString();
+  const action = await upsertInboundResponseActionForProvider({
+    leadId: match.leadId,
+    sourceMessageId,
+    classification,
+    scheduledFor,
+    idempotencyKey: `evolution-inbound-response:${normalized.dto.evolutionInstance}:${normalized.dto.providerMessageId}`,
+  });
+  return Boolean(action);
 }
 
 async function processOutboundEvent(item: JsonRecord): Promise<boolean> {
@@ -181,10 +198,11 @@ export async function POST(request: Request) {
 
   const event = normalizeEvent(payload.event ?? payload.type);
   const items = flattenEventData(payload.data ?? payload);
+  const inboundLedger = new InboundMessageLedger();
   let processed = 0;
   for (const item of items) {
     const handled = event === "MESSAGES_UPSERT" || event === "MESSAGES_SET"
-      ? await processIncomingMessage(item) || await processOutboundEvent(item)
+      ? await processIncomingMessage(item, event, inboundLedger) || await processOutboundEvent(item)
       : event === "MESSAGES_UPDATE" || event === "SEND_MESSAGE"
         ? await processOutboundEvent(item)
         : false;

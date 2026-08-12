@@ -28,6 +28,18 @@ export const updateFollowUpActionSchema = z.object({
   }
 });
 
+export const correctInboundResponseSchema = z.object({
+  leadId: z.string().trim().min(1),
+  decision: z.enum(["REQUIRES_RESPONSE", "NO_RESPONSE_REQUIRED"]),
+  sourceMessageId: z.string().trim().min(1).optional(),
+  actionId: z.string().trim().min(1).optional(),
+  expectedActionVersion: z.number().int().positive().optional(),
+  idempotencyKey: z.string().trim().min(16).max(200).optional(),
+}).superRefine((value, context) => {
+  if (value.decision === "REQUIRES_RESPONSE" && !value.sourceMessageId) context.addIssue({ code: z.ZodIssueCode.custom, path: ["sourceMessageId"], message: "El mensaje inbound es requerido." });
+  if (value.decision === "NO_RESPONSE_REQUIRED" && !value.expectedActionVersion) context.addIssue({ code: z.ZodIssueCode.custom, path: ["expectedActionVersion"], message: "La versión de la acción es requerida." });
+});
+
 export const leadSchema = z.object({
   fullName: z.string().trim().min(2, "Escribe el nombre del prospecto").max(100),
   phone: z.string().trim().regex(/^[0-9+\s()-]{7,20}$/, "Ingresa un celular válido"),

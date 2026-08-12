@@ -5,6 +5,7 @@ import { getInstallationAdvisorUserId } from "@/lib/config/installation";
 import { AUTH_REQUIRED_MESSAGE } from "@/lib/auth/auth-required";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { resolveInboundLeadMatch, type InboundLeadMatch } from "@/lib/leads/inbound-matching";
 
 const leadSelect = "id,user_id,tenant_id,created_at,full_name,phone,car_model,car_models,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,conversation_state,next_action_at,next_action_type,last_activity_at,last_customer_message_at,last_agent_message_at,last_customer_message_preview,deleted_at,status";
 
@@ -45,6 +46,7 @@ type ActionRpcPayload = {
   status: FollowUpActionStatus;
   action_version: number;
   origin: "MANUAL" | "SUGGESTED";
+  source_message_id: string | null;
   note: string | null;
   completed_at: string | null;
   created_at: string;
@@ -64,6 +66,7 @@ function toDomainAction(row: FollowUpActionRow): FollowUpAction {
     updatedAt: row.updated_at,
     actionVersion: row.action_version,
     origin: row.origin,
+    sourceMessageId: row.source_message_id,
   };
 }
 
@@ -101,6 +104,11 @@ function toDomainLead(row: LeadRow, followUpActions: FollowUpAction[] = []): Lea
     lastCustomerMessagePreview: row.last_customer_message_preview,
     lastMessageDirection: null,
     lastMessagePreview: null,
+    lastInboundMessageId: null,
+    lastInboundMessageAt: null,
+    lastInboundMessagePreview: null,
+    inboundClassification: null,
+    inboundManualDecision: null,
     deletedAt: row.deleted_at,
     status: row.status,
     followUpActions,
@@ -111,7 +119,7 @@ async function attachFollowUpActions(supabase: LeadflowDbClient, leads: Lead[]):
   if (leads.length === 0) return leads;
   const { data } = await supabase
     .from("lead_follow_up_actions")
-    .select("id,lead_id,action_type,scheduled_for,status,action_version,origin,note,completed_at,created_at,updated_at")
+    .select("id,lead_id,action_type,scheduled_for,status,action_version,origin,source_message_id,note,completed_at,created_at,updated_at")
     .in("lead_id", leads.map((lead) => lead.id))
     .order("scheduled_for", { ascending: true });
   if (!data) return leads;
@@ -128,22 +136,34 @@ async function attachLatestMessages(supabase: LeadflowDbClient, leads: Lead[]): 
   if (leads.length === 0) return leads;
   const { data } = await supabase
     .from("lead_messages")
-    .select("lead_id,direction,body,created_at")
+    .select("id,lead_id,direction,body,created_at,inbound_classification")
     .in("lead_id", leads.map((lead) => lead.id))
     .order("created_at", { ascending: false });
   if (!data) return leads;
   const latestByLead = new Map<string, { direction: MessageDirection; preview: string | null }>();
+  const latestInboundByLead = new Map<string, { id: string; createdAt: string; preview: string | null; classification: Lead["inboundClassification"] }>();
   data.forEach((row) => {
     if (!latestByLead.has(row.lead_id)) latestByLead.set(row.lead_id, { direction: row.direction, preview: row.body?.slice(0, 240) ?? null });
+    if (row.direction === "INBOUND" && !latestInboundByLead.has(row.lead_id)) latestInboundByLead.set(row.lead_id, { id: row.id, createdAt: row.created_at, preview: row.body?.slice(0, 500) ?? null, classification: row.inbound_classification });
   });
   return leads.map((lead) => {
     const latest = latestByLead.get(lead.id);
-    return latest ? { ...lead, lastMessageDirection: latest.direction, lastMessagePreview: latest.preview } : lead;
+    const inbound = latestInboundByLead.get(lead.id);
+    return { ...lead, ...(latest ? { lastMessageDirection: latest.direction, lastMessagePreview: latest.preview } : {}), ...(inbound ? { lastInboundMessageId: inbound.id, lastInboundMessageAt: inbound.createdAt, lastInboundMessagePreview: inbound.preview, inboundClassification: inbound.classification } : {}) };
   });
 }
 
+async function attachInboundManualDecisions(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
+  if (leads.length === 0) return leads;
+  const { data } = await supabase.from("lead_inbound_manual_decisions").select("lead_id,decision,created_at").in("lead_id", leads.map((lead) => lead.id)).order("created_at", { ascending: false });
+  if (!data) return leads;
+  const latest = new Map<string, "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED">();
+  data.forEach((row) => { if (!latest.has(row.lead_id)) latest.set(row.lead_id, row.decision); });
+  return leads.map((lead) => ({ ...lead, inboundManualDecision: latest.get(lead.id) ?? null }));
+}
+
 async function attachLeadRelations(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
-  return attachLatestMessages(supabase, await attachFollowUpActions(supabase, leads));
+  return attachInboundManualDecisions(supabase, await attachLatestMessages(supabase, await attachFollowUpActions(supabase, leads)));
 }
 
 export async function getLeads(): Promise<Lead[]> {
@@ -187,6 +207,11 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
     lastCustomerMessagePreview: null,
     lastMessageDirection: null,
     lastMessagePreview: null,
+    lastInboundMessageId: null,
+    lastInboundMessageAt: null,
+    lastInboundMessagePreview: null,
+    inboundClassification: null,
+    inboundManualDecision: null,
     deletedAt: null,
     status: "NUEVO",
     followUpActions: [],
@@ -334,6 +359,100 @@ export async function findLeadByPhoneForProvider(phone: string): Promise<Lead | 
   if (!row) return null;
   const [lead] = await attachLeadRelations(context.supabase, [toDomainLead(row)]);
   return lead ?? null;
+}
+
+export async function resolveInboundLeadMatchForProvider(phone: string): Promise<InboundLeadMatch> {
+  const context = await getProviderContext();
+  if (!context) return { status: "NO_MATCH" };
+  const { data, error } = await context.supabase
+    .from("leads")
+    .select("id,phone,created_at,deleted_at")
+    .eq("user_id", context.advisorUserId)
+    .limit(500);
+  if (error || !data) return { status: "NO_MATCH" };
+  return resolveInboundLeadMatch(phone, data.map((candidate) => ({ id: candidate.id, phone: candidate.phone, createdAt: candidate.created_at, deletedAt: candidate.deleted_at })));
+}
+
+export async function persistInboundMessageForProvider(input: {
+  leadId: string;
+  evolutionInstance: string;
+  providerMessageId: string;
+  phone: string;
+  body: string | null;
+  createdAt: string;
+  classification: "NO_SUGGESTION" | "PENDING" | "REVIEW";
+  associationStatus: "MATCHED" | "AMBIGUOUS";
+  matchAmbiguous?: boolean;
+}): Promise<Record<string, unknown> | null> {
+  const context = await getProviderContext();
+  if (!context) return null;
+  const { data, error } = await context.supabase.rpc("persist_inbound_message_v1", {
+    p_lead_id: input.leadId,
+    p_evolution_instance: input.evolutionInstance,
+    p_provider_message_id: input.providerMessageId,
+    p_phone: input.phone,
+    p_body: input.body,
+    p_created_at: input.createdAt,
+    p_classification: input.classification,
+    p_association_status: input.associationStatus,
+    p_match_ambiguous: input.matchAmbiguous ?? false,
+  });
+  return error ? null : data;
+}
+
+export async function upsertInboundResponseActionForProvider(input: {
+  leadId: string;
+  sourceMessageId: string;
+  classification: "PENDING" | "REVIEW";
+  scheduledFor: string;
+  idempotencyKey: string;
+}): Promise<FollowUpAction | null> {
+  const context = await getProviderContext();
+  if (!context) return null;
+  const { data, error } = await context.supabase.rpc("upsert_inbound_response_action_v1", {
+    p_lead_id: input.leadId,
+    p_source_message_id: input.sourceMessageId,
+    p_classification: input.classification,
+    p_scheduled_for: input.scheduledFor,
+    p_idempotency_key: input.idempotencyKey,
+  });
+  return error ? null : toDomainActionRpc(data);
+}
+
+export async function correctInboundResponseForAdvisor(input: {
+  leadId: string;
+  decision: "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED";
+  sourceMessageId?: string;
+  actionId?: string;
+  expectedActionVersion?: number;
+  scheduledFor?: string;
+  idempotencyKey: string;
+}): Promise<{ action: FollowUpAction | null; status: string; manualDecision: string } | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("correct_inbound_response_v1", {
+    p_lead_id: input.leadId,
+    p_decision: input.decision,
+    p_source_message_id: input.sourceMessageId ?? null,
+    p_action_id: input.actionId ?? null,
+    p_expected_action_version: input.expectedActionVersion ?? null,
+    p_scheduled_for: input.scheduledFor ?? null,
+    p_idempotency_key: input.idempotencyKey,
+  });
+  if (error || !data || typeof data !== "object") return null;
+  const result = data as Record<string, unknown>;
+  return {
+    action: toDomainActionRpc(result),
+    status: typeof result.status === "string" ? result.status : "UNKNOWN",
+    manualDecision: typeof result.manual_decision === "string" ? result.manual_decision : input.decision,
+  };
+}
+
+export async function getInboundMessageCreatedAtForAdvisor(messageId: string, leadId: string): Promise<string | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase.from("lead_messages").select("created_at").eq("id", messageId).eq("lead_id", leadId).eq("direction", "INBOUND").maybeSingle();
+  return error || !data ? null : data.created_at;
 }
 
 export async function updateLeadWhatsappStatus(id: string, status: WhatsappStatus, errorMessage?: string): Promise<boolean> {

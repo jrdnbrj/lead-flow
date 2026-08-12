@@ -7,8 +7,8 @@ import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-templa
 import { renderWhatsappMessageTemplate } from "@/lib/config/message-template-shared";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { getStartOfSellerDayAfter } from "@/lib/leads/follow-up";
-import { clearLeadAction, createLead, createLeadMessage, findLeadByPhone, getCarModelImageUrl, getLeadById, markLeadAfterOutboundMessage, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadMessage } from "@/lib/leads/repository";
-import { leadSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema } from "@/lib/leads/validation";
+import { clearLeadAction, correctInboundResponseForAdvisor, createLead, createLeadMessage, findLeadByPhone, getCarModelImageUrl, getInboundMessageCreatedAtForAdvisor, getLeadById, markLeadAfterOutboundMessage, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadMessage } from "@/lib/leads/repository";
+import { correctInboundResponseSchema, leadSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema } from "@/lib/leads/validation";
 import { ensureEvolutionWebhook, sendWhatsappMedia, sendWhatsappText } from "@/lib/whatsapp/service";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
 
@@ -142,6 +142,39 @@ export async function clearLeadActionAction(leadId: string): Promise<ActionRespo
   if (auth) return auth;
   const persisted = await clearLeadAction(leadId);
   return { success: persisted, data: persisted ? { leadId } : undefined, error: persisted ? undefined : "No pudimos actualizar el seguimiento." };
+}
+
+export async function correctInboundResponseAction(input: {
+  leadId: string;
+  decision: "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED";
+  sourceMessageId?: string;
+  actionId?: string;
+  expectedActionVersion?: number;
+  idempotencyKey?: string;
+}): Promise<ActionResponse<{ action: FollowUpAction | null; status: string; manualDecision: string }>> {
+  const parsed = correctInboundResponseSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "La corrección manual no es válida." };
+  const auth = await requireAdvisorAction<{ action: FollowUpAction | null; status: string; manualDecision: string }>();
+  if (auth) return auth;
+
+  try {
+    let scheduledFor: string | undefined;
+    if (parsed.data.decision === "REQUIRES_RESPONSE" && parsed.data.sourceMessageId) {
+      const createdAt = await getInboundMessageCreatedAtForAdvisor(parsed.data.sourceMessageId, parsed.data.leadId);
+      if (!createdAt) return { success: false, error: "No encontramos el mensaje inbound para corregirlo." };
+      scheduledFor = new Date(new Date(createdAt).getTime() + 60 * 60 * 1000).toISOString();
+    }
+    const result = await correctInboundResponseForAdvisor({
+      ...parsed.data,
+      idempotencyKey: parsed.data.idempotencyKey ?? crypto.randomUUID(),
+      scheduledFor,
+    });
+    if (!result) return { success: false, error: "No pudimos aplicar la corrección manual." };
+    if (result.status === "STALE_ACTION") return { success: false, data: result, error: "La acción cambió antes de aplicar la corrección. Actualiza el seguimiento." };
+    return { success: Boolean(result.action), data: result, error: result.action ? undefined : "No encontramos una acción de respuesta abierta." };
+  } catch {
+    return { success: false, error: "No pudimos aplicar la corrección manual sin cambiar parcialmente el estado." };
+  }
 }
 
 export async function updateLeadConversationAction(input: { leadId: string; state: ConversationState }): Promise<ActionResponse<{ leadId: string; state: ConversationState }>> {

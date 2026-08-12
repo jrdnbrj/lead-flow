@@ -31,7 +31,8 @@ export type LeadTemperature = "HIGH" | "MEDIUM" | "LOW";
 export type LeadStatus = "NUEVO" | "CONTACTADO" | "COTIZADO" | "PERDIDO" | "CERRADO";
 export type WhatsappStatus = "PENDING" | "SENT" | "SERVER_ACK" | "DELIVERY_ACK" | "READ" | "PLAYED" | "RECEIVED" | "FAILED";
 export type ConversationState = "NEW" | "ACTIVE" | "WAITING_CUSTOMER" | "CLOSED";
-export type NextActionType = "CALL" | "WHATSAPP" | "QUOTE" | "OTHER";
+export type InboundClassification = "NO_SUGGESTION" | "PENDING" | "REVIEW";
+export type NextActionType = "CALL" | "WHATSAPP" | "QUOTE" | "OTHER" | "RESPONSE";
 export type FollowUpActionStatus = "PENDING" | "DONE" | "POSTPONED" | "IGNORED" | "CANCELED";
 export type MessageDirection = "INBOUND" | "OUTBOUND";
 
@@ -47,6 +48,7 @@ export interface FollowUpAction {
   updatedAt: string;
   actionVersion?: number;
   origin?: "MANUAL" | "SUGGESTED";
+  sourceMessageId?: string | null;
 }
 
 export interface ExistingLeadSummary {
@@ -82,6 +84,11 @@ export interface Lead {
   lastCustomerMessagePreview: string | null;
   lastMessageDirection: MessageDirection | null;
   lastMessagePreview: string | null;
+  lastInboundMessageId: string | null;
+  lastInboundMessageAt: string | null;
+  lastInboundMessagePreview: string | null;
+  inboundClassification: InboundClassification | null;
+  inboundManualDecision: "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED" | null;
   deletedAt: string | null;
   status: LeadStatus;
   followUpActions: FollowUpAction[];
@@ -186,7 +193,7 @@ export function getConversationStateLabel(state: ConversationState): string {
 }
 
 export function getNextActionLabel(action: NextActionType): string {
-  return { CALL: "Llamar", WHATSAPP: "Escribir por WhatsApp", QUOTE: "Enviar cotización", OTHER: "Otra acción" }[action];
+  return { CALL: "Llamar", WHATSAPP: "Escribir por WhatsApp", QUOTE: "Enviar cotización", OTHER: "Otra acción", RESPONSE: "Responder al cliente" }[action];
 }
 
 export function getFollowUpActionStatusLabel(status: FollowUpActionStatus): string {

@@ -6,9 +6,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
-import type { ConversationState, FollowUpAction, Lead, LeadStatus, LeadTemperature, WhatsappStatus } from "@/lib/domain/lead";
+import type { ConversationState, FollowUpAction, InboundClassification, Lead, LeadStatus, LeadTemperature, WhatsappStatus } from "@/lib/domain/lead";
 import { formatPhoneForWhatsapp, getConversationStateLabel, getNextActionLabel, getStatusLabel, getTemperatureLabel, getWhatsappStatusLabel } from "@/lib/domain/lead";
-import { deleteLeadAction, sendLeadWhatsappAction, updateLeadConversationAction } from "@/lib/leads/actions";
+import { correctInboundResponseAction, deleteLeadAction, sendLeadWhatsappAction, updateLeadConversationAction } from "@/lib/leads/actions";
 import { formatNextActionDate, getDashboardLeadBucket, isLeadReminderDue, sortLeadsForDashboard } from "@/lib/leads/follow-up";
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -70,6 +70,9 @@ function isDueAction(action: FollowUpAction): boolean {
 function getNextOpenAction(lead: Lead): FollowUpAction | null {
   return lead.followUpActions.filter(isOpenAction).sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime())[0] ?? null;
 }
+
+function inboundClassificationLabel(classification: InboundClassification): string { return { NO_SUGGESTION: "Sin respuesta sugerida", PENDING: "Respuesta pendiente", REVIEW: "Revisar" }[classification]; }
+function inboundClassificationClasses(classification: InboundClassification): string { return { NO_SUGGESTION: "bg-[#edf0f4] text-[#59616d]", PENDING: "bg-[#fff0bd] text-[#765000]", REVIEW: "bg-[#f4eaff] text-[#6c3d91]" }[classification]; }
 
 export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
   const router = useRouter();
@@ -243,6 +246,8 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [manualDecision, setManualDecision] = useState<Lead["inboundManualDecision"]>(lead.inboundManualDecision);
+  const [isCorrectingInbound, setIsCorrectingInbound] = useState(false);
   const [, startStateSync] = useTransition();
 
   useEffect(() => {
@@ -250,12 +255,34 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
       setWhatsappStatus(lead.whatsappStatus);
       setConversationState(lead.conversationState);
       setFollowUpActions(lead.followUpActions);
+      setManualDecision(lead.inboundManualDecision);
     });
-  }, [lead.conversationState, lead.followUpActions, lead.whatsappStatus]);
+  }, [lead.conversationState, lead.followUpActions, lead.whatsappStatus, lead.inboundManualDecision]);
 
   const isReminderDue = followUpActions.some(isDueAction);
   const canSend = whatsappStatus === "PENDING" || whatsappStatus === "FAILED";
   const nextOpenAction = getNextOpenAction({ ...lead, followUpActions });
+  const inboundClassification = lead.inboundClassification;
+
+  async function correctInbound(decision: "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED") {
+    if (isCorrectingInbound || !inboundClassification) return;
+    setIsCorrectingInbound(true);
+    setSendError(null);
+    setSendInfo(null);
+    const responseAction = followUpActions.find((action) => action.actionType === "RESPONSE" && isOpenAction(action));
+    const response = await correctInboundResponseAction({ leadId: lead.id, decision, sourceMessageId: decision === "REQUIRES_RESPONSE" ? lead.lastInboundMessageId ?? undefined : undefined, actionId: responseAction?.id, expectedActionVersion: responseAction?.actionVersion });
+    if (response.success && response.data) {
+      setManualDecision(decision);
+      if (response.data.action) setFollowUpActions((current) => {
+        const withoutOtherOpenResponse = current.filter((action) => !(action.actionType === "RESPONSE" && isOpenAction(action) && action.id !== response.data!.action!.id));
+        const exists = withoutOtherOpenResponse.some((action) => action.id === response.data!.action!.id);
+        return exists ? withoutOtherOpenResponse.map((action) => action.id === response.data!.action!.id ? response.data!.action! : action) : [...withoutOtherOpenResponse, response.data!.action!];
+      });
+      setSendInfo(decision === "REQUIRES_RESPONSE" ? "Marcado como respuesta pendiente." : "Marcado como no requiere respuesta.");
+      router.refresh();
+    } else setSendError(response.error || "No pudimos aplicar la corrección. Puedes reintentarlo.");
+    setIsCorrectingInbound(false);
+  }
 
   async function sendMessage() {
     if (isSending || !canSend) return;
@@ -307,6 +334,8 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
     </div>
 
     {isExpanded && lead.lastMessageDirection ? <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f6f3ed] px-2.5 py-2 text-[11px]"><p className="min-w-0 truncate text-[var(--muted)]"><strong className="text-[var(--ink)]">{lead.lastMessageDirection === "INBOUND" ? "Último mensaje · Cliente:" : "Último mensaje · Tú:"}</strong> {lead.lastMessagePreview || "Mensaje sin texto"}</p>{conversationState === "ACTIVE" ? <button type="button" onClick={() => changeConversationState("CLOSED")} className="shrink-0 font-black text-[var(--muted)] hover:text-[var(--ink)]">Cerrar conversación</button> : conversationState === "CLOSED" ? <button type="button" onClick={() => changeConversationState("ACTIVE")} className="shrink-0 font-black text-[#18733a]">Reabrir</button> : null}</div> : null}
+
+    {isExpanded && inboundClassification ? <section className="mt-3 rounded-2xl border border-[#dce5ef] bg-[#f8fbff] p-3" aria-label="Estado inbound"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Clasificación inbound</p><span className={`mt-1 inline-flex rounded-full px-2 py-1 text-[10px] font-black ${inboundClassificationClasses(inboundClassification)}`}>{manualDecision === "REQUIRES_RESPONSE" ? "Respuesta pendiente" : manualDecision === "NO_RESPONSE_REQUIRED" ? "No requiere respuesta" : inboundClassificationLabel(inboundClassification)}</span></div><p className="text-[10px] font-semibold text-[var(--muted)]">{lead.lastInboundMessageAt ? formatRelativeDate(lead.lastInboundMessageAt) : "Sin fecha"}</p></div><p className="mt-2 text-xs leading-5 text-[var(--ink)]">{lead.lastInboundMessagePreview || "Mensaje sin texto"}</p>{inboundClassification !== "NO_SUGGESTION" ? <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={isCorrectingInbound} onClick={() => void correctInbound("REQUIRES_RESPONSE")} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isCorrectingInbound ? "Guardando…" : "Sí requiere respuesta"}</button><button type="button" disabled={isCorrectingInbound} onClick={() => void correctInbound("NO_RESPONSE_REQUIRED")} className="button-secondary min-h-9 px-3 py-2 text-[11px]">No requiere respuesta</button></div> : null}</section> : null}
 
     {isExpanded ? <FollowUpActions leadId={lead.id} actions={followUpActions} onActionsChange={(actions) => { setFollowUpActions(actions); router.refresh(); }} onConversationWaiting={() => setConversationState("WAITING_CUSTOMER")} onError={setSendError} onInfo={setSendInfo} /> : null}
     {isExpanded && lead.lastCustomerMessageAt ? <p className="mt-3 text-[11px] text-[var(--muted)]">Última respuesta del cliente registrada. Las acciones pendientes se cancelan cuando llega una nueva respuesta.</p> : null}

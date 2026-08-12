@@ -58,7 +58,7 @@ export function formatNextActionDate(nextActionAt: string | null, reference = ne
 }
 
 export function getNextActionDefaultLabel(actionType: NextActionType): string {
-  return { CALL: "Llamar", WHATSAPP: "Escribir", QUOTE: "Cotizar", OTHER: "Seguimiento" }[actionType];
+  return { CALL: "Llamar", WHATSAPP: "Escribir", QUOTE: "Cotizar", OTHER: "Seguimiento", RESPONSE: "Responder al cliente" }[actionType];
 }
 
 export function getDashboardLeadBucket(lead: Lead, reference = new Date()): 0 | 1 | 2 | 3 {
