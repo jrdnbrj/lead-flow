@@ -6,7 +6,7 @@ import { requireAdvisor } from "@/lib/auth/advisor";
 import { executeFirstContact, retryFirstContact } from "@/lib/first-contact/command";
 import { createEvolutionFirstContactProvider } from "@/lib/first-contact/provider";
 import type { FirstContactOperationResult } from "@/lib/first-contact/types";
-import { getStartOfSellerDayAfter } from "@/lib/leads/follow-up";
+import { getStartOfSellerDayAfter, resolveScheduleShortcut } from "@/lib/leads/follow-up";
 import { clearLeadAction, correctInboundResponseForAdvisor, createLead, findLeadByPhone, getInboundMessageCreatedAtForAdvisor, getLeadById, recordPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState } from "@/lib/leads/repository";
 import { correctInboundResponseSchema, firstContactRetrySchema, leadSchema, purchaseDecisionSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema } from "@/lib/leads/validation";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
@@ -136,7 +136,9 @@ export async function updateFollowUpActionAction(input: UpdateFollowUpActionInpu
   const auth = await requireAdvisorAction<{ action: FollowUpAction }>();
   if (auth) return auth;
 
-  const scheduledFor = parsed.data.status === "POSTPONED" ? getStartOfSellerDayAfter(parsed.data.postponeDays ?? 1) : undefined;
+  const scheduledFor = parsed.data.status === "POSTPONED"
+    ? parsed.data.shortcut ? resolveScheduleShortcut(parsed.data.shortcut) : getStartOfSellerDayAfter(parsed.data.postponeDays ?? 1)
+    : undefined;
   const action = await updateFollowUpAction(parsed.data.actionId, parsed.data.status, scheduledFor, parsed.data.note, parsed.data.expectedActionVersion, parsed.data.idempotencyKey);
   return action
     ? { success: true, data: { action } }

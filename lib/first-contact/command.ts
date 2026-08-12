@@ -37,7 +37,8 @@ export async function executeFirstContact(lead: FirstContactLead, provider: Firs
     const claimTokenDigest = digest(`${idempotencyKey}:${item.id}:${crypto.randomUUID()}`);
     const claim = await claimFirstContactEffect(item.effectId, claimTokenDigest);
     if (!claim || claim.status !== "CLAIMED") continue;
-    if (!(await beginFirstContactEffect(item.effectId, claim.attemptNo, claimTokenDigest))) continue;
+    const payloadDigest = digest(JSON.stringify({ resource: item.resourceKind, version: item.resourceVersion, text: item.resourceKind === "MESSAGE" ? request.text : null, imageUrl: item.resourceKind === "PHOTOS" ? request.imageUrl : null }));
+    if (!(await beginFirstContactEffect(item.effectId, claim.attemptNo, claimTokenDigest, payloadDigest))) continue;
     const outcome = item.resourceKind === "MESSAGE"
       ? await provider.sendMessage({ phone: lead.phone, text: request.text })
       : await provider.sendPhoto({ phone: lead.phone, imageUrl: request.imageUrl ?? "", caption: `Información de ${lead.carModels[0] ?? "tu vehículo"}`, fileName: `leadflow-${(lead.carModels[0] ?? "vehiculo").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg` });
@@ -57,7 +58,8 @@ export async function retryFirstContact(lead: FirstContactLead, effectId: string
   }
   const item = request.items.find((candidate) => candidate.resourceKind === claim.resource_kind);
   if (!item || item.availability !== "AVAILABLE") return null;
-  if (!(await beginFirstContactEffect(effectId, claim.attempt_no, claim.claim_token_digest))) return null;
+  const payloadDigest = digest(JSON.stringify({ resource: item.resourceKind, version: item.resourceVersion, text: item.resourceKind === "MESSAGE" ? request.text : null, imageUrl: item.resourceKind === "PHOTOS" ? request.imageUrl : null }));
+  if (!(await beginFirstContactEffect(effectId, claim.attempt_no, claim.claim_token_digest, payloadDigest))) return null;
   const outcome = item.resourceKind === "MESSAGE"
     ? await provider.sendMessage({ phone: lead.phone, text: request.text })
     : await provider.sendPhoto({ phone: lead.phone, imageUrl: request.imageUrl ?? "", caption: `Información de ${lead.carModels[0] ?? "tu vehículo"}`, fileName: `leadflow-${(lead.carModels[0] ?? "vehiculo").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg` });

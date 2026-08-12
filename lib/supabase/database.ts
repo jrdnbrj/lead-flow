@@ -166,6 +166,7 @@ export type Database = {
           failed_at: string | null;
           raw_payload: Record<string, unknown> | null;
           inbound_classification: "NO_SUGGESTION" | "PENDING" | "REVIEW" | null;
+          external_effect_id: string | null;
         };
         Insert: {
           id?: string;
@@ -181,6 +182,7 @@ export type Database = {
           failed_at?: string | null;
           raw_payload?: Record<string, unknown> | null;
           inbound_classification?: "NO_SUGGESTION" | "PENDING" | "REVIEW" | null;
+          external_effect_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["lead_messages"]["Insert"]>;
         Relationships: [];
@@ -252,7 +254,7 @@ export type Database = {
       };
       request_first_contact_v1: { Args: { p_lead_id: string; p_configuration_digest: string; p_items: unknown; p_idempotency_key: string }; Returns: Record<string, unknown> };
       claim_first_contact_effect_v1: { Args: { p_effect_id: string; p_claim_token_digest: string }; Returns: Record<string, unknown> };
-      begin_first_contact_effect_io_v1: { Args: { p_effect_id: string; p_attempt_no: number; p_claim_token_digest: string }; Returns: Record<string, unknown> };
+      begin_first_contact_effect_io_v1: { Args: { p_effect_id: string; p_attempt_no: number; p_claim_token_digest: string; p_payload_digest?: string | null }; Returns: Record<string, unknown> };
       record_first_contact_effect_result_v1: { Args: { p_effect_id: string; p_attempt_no: number; p_claim_token_digest: string; p_result_kind: string; p_provider_message_id?: string | null; p_provider_status?: string | null; p_message_body?: string | null }; Returns: Record<string, unknown> };
       retry_first_contact_effect_v1: { Args: { p_effect_id: string; p_expected_effect_version?: number | null; p_idempotency_key: string }; Returns: Record<string, unknown> };
       get_first_contact_v1: { Args: { p_lead_id: string }; Returns: Record<string, unknown> | null };

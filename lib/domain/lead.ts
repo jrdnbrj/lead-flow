@@ -37,6 +37,7 @@ export type InboundClassification = "NO_SUGGESTION" | "PENDING" | "REVIEW";
 export type NextActionType = "CALL" | "WHATSAPP" | "QUOTE" | "OTHER" | "RESPONSE";
 export type FollowUpActionStatus = "PENDING" | "DONE" | "POSTPONED" | "IGNORED" | "CANCELED";
 export type MessageDirection = "INBOUND" | "OUTBOUND";
+export type ScheduleShortcut = "POSTPONE_PLUS_ONE_HOUR" | "POSTPONE_LATER" | "POSTPONE_TOMORROW" | "POSTPONE_IN_THREE_DAYS";
 export interface FollowUpAction {
   id: string;
   leadId: string;
@@ -126,6 +127,7 @@ export interface UpdateFollowUpActionInput {
   actionId: string;
   status: "DONE" | "POSTPONED" | "IGNORED" | "CANCELED";
   postponeDays?: number;
+  shortcut?: ScheduleShortcut;
   note?: string;
   expectedActionVersion?: number;
   idempotencyKey?: string;

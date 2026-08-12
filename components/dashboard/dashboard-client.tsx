@@ -12,6 +12,7 @@ import { correctInboundResponseAction, deleteLeadAction, recordPurchaseDecisionA
 import { formatNextActionDate, getDashboardLeadBucket, isLeadReminderDue, sortLeadsForDashboard } from "@/lib/leads/follow-up";
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { FirstContactSummary } from "@/components/leads/first-contact-summary";
+import { PendingNotifications } from "@/components/leads/pending-notifications";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type TemperatureFilter = "ALL" | LeadTemperature;
@@ -186,6 +187,8 @@ function refreshAllLeads() {
         <span className={`size-1.5 rounded-full ${realtimeState === "live" ? "bg-[#39a85c]" : realtimeState === "error" ? "bg-[#d25445]" : "bg-[#d5a82f]"}`} />
         {realtimeState === "live" ? "Actualización automática activa" : realtimeState === "error" ? "Actualización automática no disponible; usa Actualizar datos" : "Conectando actualización automática…"}
       </p>
+
+      <PendingNotifications leads={leads} />
 
       <section className="grid grid-cols-3 gap-2 sm:gap-3">
         <MetricCard icon={<UserRound size={16} />} label="Total leads" value={String(leads.length)} helper="capturados" tone="dark" />

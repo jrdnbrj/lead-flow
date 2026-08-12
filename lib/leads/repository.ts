@@ -529,10 +529,10 @@ export async function claimFirstContactEffect(effectId: string, claimTokenDigest
   return typeof result.status === "string" && typeof result.effect_id === "string" && typeof result.attempt_no === "number" ? { status: result.status, effectId: result.effect_id, attemptNo: result.attempt_no } : null;
 }
 
-export async function beginFirstContactEffect(effectId: string, attemptNo: number, claimTokenDigest: string): Promise<boolean> {
+export async function beginFirstContactEffect(effectId: string, attemptNo: number, claimTokenDigest: string, payloadDigest?: string): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
-  const { data, error } = await supabase.rpc("begin_first_contact_effect_io_v1", { p_effect_id: effectId, p_attempt_no: attemptNo, p_claim_token_digest: claimTokenDigest });
+  const { data, error } = await supabase.rpc("begin_first_contact_effect_io_v1", { p_effect_id: effectId, p_attempt_no: attemptNo, p_claim_token_digest: claimTokenDigest, p_payload_digest: payloadDigest ?? null });
   return !error && Boolean(data);
 }
 
