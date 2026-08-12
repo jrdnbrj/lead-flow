@@ -1,6 +1,6 @@
 # Story 4.5a: Registry canónico e infraestructura de append de eventos
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

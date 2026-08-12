@@ -8,6 +8,7 @@ export function trimAsciiSpaces(value: string): string {
 export function canonicalComponentValue(value: string | number | null, recipe?: IdentityRecipeComponent, fingerprintKind?: string): string {
   if (value === null) return 'NULL';
   let text = String(value);
+  if (recipe?.type === 'fingerprint_kind') text = text.toUpperCase();
   if (recipe?.type === 'uuid') text = text.toLowerCase();
   if (recipe?.type === 'positive_int') text = text.replace(/^0+/, '') || '0';
   if (recipe?.type === 'digest_hex' || (recipe?.type === 'fingerprint_value' && fingerprintKind === 'RAW_BODY_SHA256')) text = text.toLowerCase();

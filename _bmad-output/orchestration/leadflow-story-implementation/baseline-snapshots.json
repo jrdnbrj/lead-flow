@@ -75,15 +75,51 @@
     },
     "SNAP-E4-S5a-RUN-E4-S5a-20260811-001-1-1": {
       "artifact_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S5a/RUN-E4-S5a-20260811-001/baseline-snapshot.json",
-        "artifact_sha256": "7a8f33a48cc3557f0d7e007547ebed26148b87a3da2df586b627bff313b0e927",
+      "artifact_sha256": "7a8f33a48cc3557f0d7e007547ebed26148b87a3da2df586b627bff313b0e927",
       "baseline_commit": "f20a6ff7880bd42323f32a608575124452a98677",
       "created_at": "2026-08-11T21:14:16Z",
-        "file_map_fingerprint": "68a97d9ab83bdcf7f50d950018c2ff19656b4bc85021a26fc7592ec6f3653911",
+      "file_map_fingerprint": "68a97d9ab83bdcf7f50d950018c2ff19656b4bc85021a26fc7592ec6f3653911",
       "generation": 1,
       "iteration": 1,
       "run_id": "RUN-E4-S5a-20260811-001",
       "snapshot_id": "SNAP-E4-S5a-RUN-E4-S5a-20260811-001-1-1",
       "story_id": "E4-S5a"
+    },
+    "SNAP-E4-S5b-RUN-E4-S5b-20260811-001-1-1": {
+      "artifact_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S5b/RUN-E4-S5b-20260811-001/baseline-snapshot.json",
+      "artifact_sha256": "0defca7fb48fab05d75c479211b3a7fec262ddab2c9038673ae69fb1c145ca6d",
+      "baseline_commit": "2614f6abd91081d95ff0bc0c771d7862864ba082",
+      "created_at": "2026-08-11T23:27:49Z",
+      "file_map_fingerprint": "3d8fc10d5c1c0f971e33a2bf4af3eddbd18f5de21cb64c7d1ed264ea27abebee",
+      "generation": 1,
+      "iteration": 1,
+      "run_id": "RUN-E4-S5b-20260811-001",
+      "snapshot_id": "SNAP-E4-S5b-RUN-E4-S5b-20260811-001-1-1",
+      "story_id": "E4-S5b"
+    },
+    "SNAP-E4-S6-RUN-E4-S6-20260811-001-1-1": {
+      "artifact_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S6/RUN-E4-S6-20260811-001/baseline-snapshot.json",
+      "artifact_sha256": "59fb4a9e5c8cd21668424567df8353d870d5b5b96caaad747f505a4dd4a9d86d",
+      "baseline_commit": "2614f6abd91081d95ff0bc0c771d7862864ba082",
+      "created_at": "2026-08-11T23:46:13Z",
+      "file_map_fingerprint": "7006d35ab9176fcc2de1584aab0375874088fd73f37c7210982034d21fc833b6",
+      "generation": 1,
+      "iteration": 1,
+      "run_id": "RUN-E4-S6-20260811-001",
+      "snapshot_id": "SNAP-E4-S6-RUN-E4-S6-20260811-001-1-1",
+      "story_id": "E4-S6"
+    },
+    "SNAP-E4-S7-RUN-E4-S7-20260811-001-1-1": {
+      "artifact_ref": "_bmad-output/orchestration/leadflow-story-implementation/runs/E4-S7/RUN-E4-S7-20260811-001/baseline-snapshot.json",
+      "artifact_sha256": "ee92b4c3ee1ce2f291a98c84e51e907432ce0f68d5f87524ba16d3e170de7b9f",
+      "baseline_commit": "2614f6abd91081d95ff0bc0c771d7862864ba082",
+      "created_at": "2026-08-11T23:56:08Z",
+      "file_map_fingerprint": "d2aaa55f305c5919c1143d77aa51221ff068c81350526f10071d3117c1a7ebda",
+      "generation": 1,
+      "iteration": 1,
+      "run_id": "RUN-E4-S7-20260811-001",
+      "snapshot_id": "SNAP-E4-S7-RUN-E4-S7-20260811-001-1-1",
+      "story_id": "E4-S7"
     }
   }
 }

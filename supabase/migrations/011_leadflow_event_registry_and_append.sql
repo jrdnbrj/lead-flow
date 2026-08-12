@@ -216,6 +216,7 @@ begin
     if value_text <> 'NULL' and (r.identity_recipe->(c.ordinality::int-1))->>'normalization'='UUID_LOWERCASE' then value_text := lower(value_text); end if;
     if value_text <> 'NULL' and (r.identity_recipe->(c.ordinality::int-1))->>'type'='positive_int' then value_text := ltrim(value_text,'0'); if value_text='' then value_text := '0'; end if; end if;
     if value_text <> 'NULL' and (r.identity_recipe->(c.ordinality::int-1))->>'type'='digest_hex' then value_text := lower(value_text); end if;
+    if value_text <> 'NULL' and (r.identity_recipe->(c.ordinality::int-1))->>'type'='fingerprint_kind' then value_text := upper(value_text); end if;
     if value_text <> 'NULL' and (r.identity_recipe->(c.ordinality::int-1))->>'normalization'='TRIM_ASCII_THEN_NFC' then value_text := normalize(btrim(value_text,' '),NFC); end if;
     if (r.identity_recipe->(c.ordinality::int-1))->>'component'='fingerprint_kind' then fingerprint_kind_text := value_text; end if;
     if (r.identity_recipe->(c.ordinality::int-1))->>'component'='fingerprint_value' and fingerprint_kind_text='RAW_BODY_SHA256' then value_text := lower(value_text); end if;

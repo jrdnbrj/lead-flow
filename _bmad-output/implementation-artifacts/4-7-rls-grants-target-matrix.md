@@ -1,6 +1,6 @@
 # Story 4.7: Matriz objetivo de RLS, grants y actores
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

@@ -9,6 +9,8 @@ import { extractEvolutionMessageId, normalizeEvolutionStatus } from "@/lib/whats
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_API_INSTANCE_NAME?.trim() ?? "";
+
 type JsonRecord = Record<string, unknown>;
 
 function asRecord(value: unknown): JsonRecord | null {
@@ -128,13 +130,14 @@ async function processIncomingMessage(item: JsonRecord): Promise<boolean> {
   if (!lead) return false;
 
   const providerMessageId = extractEvolutionMessageId(item);
+  if (!providerMessageId || !EVOLUTION_INSTANCE) return false;
   const body = extractMessageBody(item);
   const createdAt = getMessageTimestamp(item);
-  const existing = providerMessageId ? await findLeadMessageByProviderIdForProvider(providerMessageId) : null;
+  const existing = await findLeadMessageByProviderIdForProvider(providerMessageId, EVOLUTION_INSTANCE);
   if (existing) {
     await updateLeadMessageForProvider(existing.id, { status: "RECEIVED", body, phone, rawPayload: item });
   } else {
-    await createLeadMessageForProvider({ leadId: lead.id, providerMessageId, direction: "INBOUND", status: "RECEIVED", body, phone, createdAt, rawPayload: item });
+    await createLeadMessageForProvider({ leadId: lead.id, evolutionInstance: EVOLUTION_INSTANCE, providerMessageId, direction: "INBOUND", status: "RECEIVED", body, phone, createdAt, rawPayload: item });
   }
   await markLeadCustomerReplyForProvider(lead.id, body, createdAt);
   return true;
@@ -143,9 +146,9 @@ async function processIncomingMessage(item: JsonRecord): Promise<boolean> {
 async function processOutboundEvent(item: JsonRecord): Promise<boolean> {
   if (!isFromMe(item)) return false;
   const providerMessageId = extractEvolutionMessageId(item);
-  if (!providerMessageId) return false;
+  if (!providerMessageId || !EVOLUTION_INSTANCE) return false;
   const incomingStatus = normalizeEvolutionStatus(getStatusValue(item));
-  const existing = await findLeadMessageByProviderIdForProvider(providerMessageId);
+  const existing = await findLeadMessageByProviderIdForProvider(providerMessageId, EVOLUTION_INSTANCE);
   const timestamp = getMessageTimestamp(item);
   if (existing) {
     if (!shouldApplyStatus(existing.status, incomingStatus)) return false;
@@ -158,7 +161,7 @@ async function processOutboundEvent(item: JsonRecord): Promise<boolean> {
   if (!phone) return false;
   const lead = await findLeadByPhoneForProvider(phone);
   if (!lead) return false;
-  await createLeadMessageForProvider({ leadId: lead.id, providerMessageId, direction: "OUTBOUND", status: incomingStatus, body: extractMessageBody(item), phone, createdAt: timestamp, rawPayload: item, ...statusTimestamps(incomingStatus, timestamp) });
+  await createLeadMessageForProvider({ leadId: lead.id, evolutionInstance: EVOLUTION_INSTANCE, providerMessageId, direction: "OUTBOUND", status: incomingStatus, body: extractMessageBody(item), phone, createdAt: timestamp, rawPayload: item, ...statusTimestamps(incomingStatus, timestamp) });
   await updateLeadWhatsappStatusForProvider(lead.id, incomingStatus);
   return true;
 }

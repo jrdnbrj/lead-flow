@@ -1,6 +1,6 @@
 # Story 4.5b: Enforcement del registry y atomicidad de eventos
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

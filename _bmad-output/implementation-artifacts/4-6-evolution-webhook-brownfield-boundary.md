@@ -1,6 +1,6 @@
 # Story 4.6: Boundary brownfield autenticado del webhook Evolution
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

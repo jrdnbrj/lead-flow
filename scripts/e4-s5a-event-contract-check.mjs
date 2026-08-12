@@ -90,6 +90,8 @@ const identityRegistry = { ...registry, event_type: 'inbound_message_rejected', 
 const keyA = buildEventKey(identityRegistry, [{ name: 'evolution_instance_canonical', value: '  MiInstancia  ' }, { name: 'fingerprint_kind', value: 'PROVIDER_MESSAGE_ID' }, { name: 'fingerprint_value', value: '  Msg-1  ' }]);
 const keyB = buildEventKey(identityRegistry, [{ name: 'evolution_instance_canonical', value: 'MiInstancia' }, { name: 'fingerprint_kind', value: 'PROVIDER_MESSAGE_ID' }, { name: 'fingerprint_value', value: 'Msg-1' }]);
 assert.equal(keyA, keyB);
+const keyLowerKind = buildEventKey(identityRegistry, [{ name: 'evolution_instance_canonical', value: 'MiInstancia' }, { name: 'fingerprint_kind', value: 'provider_message_id' }, { name: 'fingerprint_value', value: 'Msg-1' }]);
+assert.equal(keyLowerKind, keyB);
 assert.throws(() => buildEventKey(identityRegistry, [{ name: 'evolution_instance_canonical', value: 'x' }, { name: 'fingerprint_kind', value: '' }, { name: 'fingerprint_value', value: 'x' }]), /fingerprint kind/);
 console.log('E4_S5A_TYPESCRIPT_CONTRACT_PASS');
 `], { encoding: 'utf8' });
