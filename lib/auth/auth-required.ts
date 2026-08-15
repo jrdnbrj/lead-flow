@@ -11,7 +11,9 @@ export type AuthRequiredResult = {
 export const AUTH_REQUIRED_MESSAGE = "Tu sesión venció. Ingresa nuevamente para continuar.";
 
 export function isAuthRequiredEnabled(): boolean {
-  return process.env.AUTH_REQUIRED === "true";
+  // LeadFlow has no anonymous mode: missing or stale configuration must never
+  // make private lead data public.
+  return true;
 }
 
 export function authRequiredResult(): AuthRequiredResult {

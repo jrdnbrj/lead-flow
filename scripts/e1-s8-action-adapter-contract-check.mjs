@@ -23,9 +23,10 @@ for (const [name, source] of [["create", create], ["update", update], ["clear", 
   }
 }
 
-if (!create.includes('rpc("create_lead_follow_up_action_v1"')) throw new Error("create adapter does not call canonical RPC");
-if (!update.includes('rpc("transition_lead_follow_up_action_v1"')) throw new Error("update adapter does not call canonical transition RPC");
-if (!clear.includes('rpc("transition_lead_follow_up_action_v1"')) throw new Error("clear adapter does not use canonical transition RPC");
+const usesRpc = (source, name) => source.includes(`rpc("${name}"`) || (source.includes("invokeRpc(") && source.includes(`"${name}"`));
+if (!usesRpc(create, "create_lead_follow_up_action_v1")) throw new Error("create adapter does not call canonical RPC");
+if (!usesRpc(update, "transition_lead_follow_up_action_v1")) throw new Error("update adapter does not call canonical transition RPC");
+if (!usesRpc(clear, "transition_lead_follow_up_action_v1")) throw new Error("clear adapter does not use canonical transition RPC");
 if (!update.includes("p_expected_action_version: version")) throw new Error("update adapter does not propagate expected version");
 if (!clear.includes("p_expected_action_version: action.action_version")) throw new Error("clear adapter does not use stored action version");
 if (!actions.includes("Promise<ActionResponse")) throw new Error("server actions lost ActionResponse contract");

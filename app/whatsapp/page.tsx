@@ -1,16 +1,14 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import { CheckCircle2, CircleAlert, LayoutDashboard, MessageCircle } from "lucide-react";
 
 import { SellerProfileForm } from "@/components/whatsapp/seller-profile-form";
 import { MessageTemplateEditor } from "@/components/whatsapp/message-template-editor";
-import { RefreshQrButton } from "@/components/whatsapp/refresh-qr-button";
-import { UnlinkWhatsappButton } from "@/components/whatsapp/unlink-button";
+import { WhatsappConnectionSection } from "@/components/whatsapp/whatsapp-connection-section";
 import { requireAdvisorOrRedirect } from "@/lib/auth/advisor";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-template";
 import { getPersistentSettings } from "@/lib/config/persistent-settings";
-import { getEvolutionConnectionStatus, getEvolutionErrorMessage } from "@/lib/whatsapp/service";
+import { getEvolutionConnectionStatus, getEvolutionErrorMessage, normalizeEvolutionConnectionState } from "@/lib/whatsapp/service";
+import type { EvolutionConnectionState } from "@/lib/whatsapp/service";
 
 export const metadata: Metadata = { title: "Conectar WhatsApp" };
 export const dynamic = "force-dynamic";
@@ -26,14 +24,14 @@ type ConnectionStatePayload = {
   state?: string;
 };
 
-type WhatsappConnection = { qr: string | null; error: string | null; state: string | null };
+type WhatsappConnection = { qr: string | null; error: string | null; state: EvolutionConnectionState | null };
 
-function getState(payload: ConnectionStatePayload | null): string | null {
+function getState(payload: ConnectionStatePayload | null): EvolutionConnectionState {
   const state = payload?.instance?.state ?? payload?.state ?? null;
-  return typeof state === "string" ? state.toLowerCase() : null;
+  return normalizeEvolutionConnectionState(state);
 }
 
-async function getWhatsappConnection(forceRefresh = false): Promise<{ qr: string | null; error: string | null; state: string | null }> {
+async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConnection> {
   const apiUrl = process.env.EVOLUTION_API_URL;
   const apiKey = process.env.EVOLUTION_API_KEY;
   const instanceName = process.env.EVOLUTION_API_INSTANCE_NAME;
@@ -80,46 +78,6 @@ async function getWhatsappConnection(forceRefresh = false): Promise<{ qr: string
   } catch {
     return { qr: null, error: "No se pudo conectar con Evolution API. Verifica que el servicio esté levantado.", state: null };
   }
-}
-
-function stateCopy(state: string | null): { title: string; description: string; className: string } {
-  if (state === "open") return { title: "WhatsApp conectado", description: "La cuenta está vinculada y lista para enviar mensajes desde el resumen de contactos.", className: "border-emerald-200 bg-emerald-50 text-emerald-900" };
-  if (state === "connecting") return { title: "Esperando vinculación", description: "Escanea el QR con WhatsApp en tu celular. El estado cambiará automáticamente cuando termine.", className: "border-amber-200 bg-amber-50 text-amber-900" };
-  if (state === "close") return { title: "WhatsApp desconectado", description: "La instancia está disponible, pero todavía no hay un celular vinculado. Genera un QR nuevo.", className: "border-amber-200 bg-amber-50 text-amber-900" };
-  return { title: "Estado no disponible", description: "No pudimos confirmar el estado de la cuenta. Actualiza la página para volver a consultarlo.", className: "border-black/10 bg-[#faf9f6] text-[var(--ink)]" };
-}
-
-function WhatsappConnectionSection({ connection }: { connection: WhatsappConnection }) {
-  const status = stateCopy(connection.state);
-  const isConnected = connection.state === "open";
-
-  return <section className="rounded-[30px] border border-black/[0.06] bg-white p-5 shadow-[0_16px_50px_rgba(16,24,40,0.06)] sm:p-8">
-    <div className="flex items-start gap-3">
-      <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#dff7e7] text-[#11743d]"><MessageCircle size={21} /></span>
-      <div>
-        <h2 className="text-lg font-black">Vinculación de WhatsApp</h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">WhatsApp → Dispositivos vinculados → Vincular un dispositivo.</p>
-      </div>
-    </div>
-
-    <div className={`mt-6 flex items-start gap-3 rounded-2xl border px-4 py-4 ${status.className}`}>
-      {isConnected ? <CheckCircle2 size={20} className="mt-0.5 shrink-0" /> : <CircleAlert size={20} className="mt-0.5 shrink-0" />}
-      <div><p className="font-black">{status.title}</p><p className="mt-1 text-sm font-semibold opacity-80">{connection.error || status.description}</p></div>
-    </div>
-
-    {connection.qr && !isConnected ? (
-      <div className="mt-7 flex flex-col items-center">
-        <div className="rounded-[24px] bg-white p-3 shadow-[0_10px_30px_rgba(16,24,40,0.1)] ring-1 ring-black/[0.06]"><Image src={connection.qr} alt="Código QR para conectar WhatsApp" width={320} height={320} unoptimized className="size-64 sm:size-80" /></div>
-        <p className="mt-5 text-center text-sm font-bold text-[var(--muted)]">Este código caduca. Si no escanea, genera otro QR y vuelve a intentarlo de inmediato.</p>
-      </div>
-    ) : null}
-
-    <div className="mt-7 flex flex-wrap items-center gap-2">
-      <RefreshQrButton label={isConnected ? "Actualizar estado" : "Generar QR nuevo"} />
-      {isConnected ? <UnlinkWhatsappButton /> : null}
-      <a href="/dashboard" className="button-secondary"><LayoutDashboard size={17} />Ir al dashboard</a>
-    </div>
-  </section>;
 }
 
 export default async function WhatsappPage({ searchParams }: { searchParams: Promise<{ refresh?: string }> }) {

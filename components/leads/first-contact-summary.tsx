@@ -5,8 +5,7 @@ import { useState } from "react";
 
 import type { Lead } from "@/lib/domain/lead";
 import { retryFirstContactResourceAction, startFirstContactAction } from "@/lib/leads/actions";
-import { firstContactResourceLabel } from "@/lib/first-contact/command";
-import type { FirstContactOperationResult, FirstContactResource, FirstContactResult } from "@/lib/first-contact/types";
+import { firstContactResourceLabel, type FirstContactOperationResult, type FirstContactResource, type FirstContactResult } from "@/lib/first-contact/types";
 
 const resultLabel: Record<FirstContactResult, string> = { ACCEPTED: "Aceptado", FAILED: "Falló", UNKNOWN: "Resultado incierto", NOT_AVAILABLE: "No disponible" };
 const resultClass: Record<FirstContactResult, string> = { ACCEPTED: "bg-[#eef6d7] text-[#4b6905]", FAILED: "bg-[#fff0ee] text-[#b33a2c]", UNKNOWN: "bg-[#fff8df] text-[#8a5b00]", NOT_AVAILABLE: "bg-[#f1f2f4] text-[var(--muted)]" };

@@ -1,0 +1,8 @@
+# Single current LeadFlow environment. Future multi-environment deployments
+# must restore an explicit target guard before remote mutations.
+LEADFLOW_ENVIRONMENT=development
+SUPABASE_PROJECT_REF=
+SUPABASE_SCHEMA=public
+EVOLUTION_API_URL=
+EVOLUTION_API_INSTANCE_NAME=
+EDGE_FUNCTION_NAMES=send-whatsapp-welcome

@@ -53,7 +53,7 @@ Diseña e implementa la solución siguiendo principios de **Clean Architecture /
 
 2. **Edge Function (`/supabase/functions/send-whatsapp-welcome/index.ts`):**
    - Recibe evento vía Database Webhook tras un nuevo `INSERT`.
-   - Lee variables de entorno (`EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE_NAME`).
+   - Lee variables de entorno (`EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_API_INSTANCE_NAME`).
    - Construye el payload en formato JSON para Evolution API (`/message/sendText`).
    - Implementa `try/catch`, logging estructurado y actualización de estado (`whatsapp_status = 'SENT'` o `'FAILED'`).
 

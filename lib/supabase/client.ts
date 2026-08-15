@@ -4,7 +4,7 @@ import type { Database } from "@/lib/supabase/database";
 
 export function createSupabaseBrowserClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!supabaseUrl || !publishableKey) return null;
+  return createBrowserClient<Database>(supabaseUrl, publishableKey);
 }

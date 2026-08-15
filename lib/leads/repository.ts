@@ -39,6 +39,12 @@ type LeadRow = {
 
 type FollowUpActionRow = Database["public"]["Tables"]["lead_follow_up_actions"]["Row"];
 type LeadflowDbClient = NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>;
+type RpcResult = { data: Record<string, unknown> | null; error: { message?: string } | null };
+
+async function invokeRpc(client: LeadflowDbClient, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
+  return (client.rpc as unknown as (name: string, parameters: Record<string, unknown>) => Promise<RpcResult>)(functionName, args);
+}
+
 type ActionRpcPayload = {
   id: string;
   lead_id: string;
@@ -66,7 +72,7 @@ function toDomainAction(row: FollowUpActionRow): FollowUpAction {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     actionVersion: row.action_version,
-    origin: row.origin,
+    origin: row.origin as FollowUpAction["origin"],
     sourceMessageId: row.source_message_id,
   };
 }
@@ -121,7 +127,7 @@ function toDomainLead(row: LeadRow, followUpActions: FollowUpAction[] = []): Lea
 async function attachFirstContact(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
   if (leads.length === 0) return leads;
   const results = await Promise.all(leads.map(async (lead) => {
-    const { data } = await supabase.rpc("get_first_contact_v1", { p_lead_id: lead.id });
+    const { data } = await invokeRpc(supabase, "get_first_contact_v1", { p_lead_id: lead.id });
     return [lead.id, data && typeof data === "object" ? toFirstContactResult(data as Record<string, unknown>) : null] as const;
   }));
   const byLead = new Map(results);
@@ -156,8 +162,8 @@ async function attachLatestMessages(supabase: LeadflowDbClient, leads: Lead[]): 
   const latestByLead = new Map<string, { direction: MessageDirection; preview: string | null }>();
   const latestInboundByLead = new Map<string, { id: string; createdAt: string; preview: string | null; classification: Lead["inboundClassification"] }>();
   data.forEach((row) => {
-    if (!latestByLead.has(row.lead_id)) latestByLead.set(row.lead_id, { direction: row.direction, preview: row.body?.slice(0, 240) ?? null });
-    if (row.direction === "INBOUND" && !latestInboundByLead.has(row.lead_id)) latestInboundByLead.set(row.lead_id, { id: row.id, createdAt: row.created_at, preview: row.body?.slice(0, 500) ?? null, classification: row.inbound_classification });
+    if (!latestByLead.has(row.lead_id)) latestByLead.set(row.lead_id, { direction: row.direction as MessageDirection, preview: row.body?.slice(0, 240) ?? null });
+    if (row.direction === "INBOUND" && !latestInboundByLead.has(row.lead_id)) latestInboundByLead.set(row.lead_id, { id: row.id, createdAt: row.created_at, preview: row.body?.slice(0, 500) ?? null, classification: row.inbound_classification as Lead["inboundClassification"] });
   });
   return leads.map((lead) => {
     const latest = latestByLead.get(lead.id);
@@ -171,7 +177,7 @@ async function attachInboundManualDecisions(supabase: LeadflowDbClient, leads: L
   const { data } = await supabase.from("lead_inbound_manual_decisions").select("lead_id,decision,created_at").in("lead_id", leads.map((lead) => lead.id)).order("created_at", { ascending: false });
   if (!data) return leads;
   const latest = new Map<string, "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED">();
-  data.forEach((row) => { if (!latest.has(row.lead_id)) latest.set(row.lead_id, row.decision); });
+  data.forEach((row) => { if (!latest.has(row.lead_id)) latest.set(row.lead_id, row.decision as "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED"); });
   return leads.map((lead) => ({ ...lead, inboundManualDecision: latest.get(lead.id) ?? null }));
 }
 
@@ -199,7 +205,7 @@ export async function getLeads(): Promise<Lead[]> {
     : await query.is("user_id", null);
 
   if (error || !data) return [];
-  return attachLeadRelations(supabase, data.map((row) => toDomainLead(row)));
+  return attachLeadRelations(supabase, data.map((row) => toDomainLead(row as unknown as LeadRow)));
 }
 
 export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; warning?: string }> {
@@ -241,7 +247,7 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
   };
 
   const supabase = await createSupabaseServerClient();
-  if (!supabase) throw new Error("Supabase no está configurado. Completa NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY para guardar el contacto en la nube.");
+  if (!supabase) throw new Error("Supabase no está configurado. Completa NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY para guardar el contacto en la nube.");
 
   const { data: userData, error: authError } = await supabase.auth.getUser();
   if (authError && authError.name !== "AuthSessionMissingError") {
@@ -274,7 +280,7 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
     throw new Error(error?.message || "Supabase no confirmó la persistencia del contacto.");
   }
 
-  return { lead: toDomainLead(data), warning: "Lead guardado en Supabase. Envíalo desde el dashboard cuando estés listo." };
+  return { lead: toDomainLead(data as unknown as LeadRow), warning: "Lead guardado en Supabase. Envíalo desde el dashboard cuando estés listo." };
 }
 
 export async function getLeadById(id: string): Promise<Lead | null> {
@@ -288,7 +294,7 @@ export async function getLeadById(id: string): Promise<Lead | null> {
     : await query.is("user_id", null).maybeSingle();
 
   if (error || !data) return null;
-  const [lead] = await attachLeadRelations(supabase, [toDomainLead(data)]);
+  const [lead] = await attachLeadRelations(supabase, [toDomainLead(data as unknown as LeadRow)]);
   return lead ?? null;
 }
 
@@ -351,7 +357,7 @@ async function findProviderOwnedMessageById(context: { supabase: LeadflowDbClien
     .maybeSingle();
   if (error || !data) return null;
   const owned = await isProviderOwnedLead(context, data.lead_id);
-  return owned ? toDomainMessage(data) : null;
+  return owned ? toDomainMessage(data as unknown as LeadMessageRow) : null;
 }
 
 async function findProviderOwnedMessageByProviderId(context: { supabase: LeadflowDbClient; advisorUserId: string }, providerMessageId: string): Promise<LeadMessage | null> {
@@ -362,7 +368,7 @@ async function findProviderOwnedMessageByProviderId(context: { supabase: Leadflo
     .maybeSingle();
   if (error || !data) return null;
   const owned = await isProviderOwnedLead(context, data.lead_id);
-  return owned ? toDomainMessage(data) : null;
+  return owned ? toDomainMessage(data as unknown as LeadMessageRow) : null;
 }
 
 export async function findLeadByPhoneForProvider(phone: string): Promise<Lead | null> {
@@ -380,7 +386,7 @@ export async function findLeadByPhoneForProvider(phone: string): Promise<Lead | 
   const normalizedPhone = formatPhoneForWhatsapp(phone);
   const row = data.find((candidate) => formatPhoneForWhatsapp(candidate.phone) === normalizedPhone);
   if (!row) return null;
-  const [lead] = await attachLeadRelations(context.supabase, [toDomainLead(row)]);
+  const [lead] = await attachLeadRelations(context.supabase, [toDomainLead(row as unknown as LeadRow)]);
   return lead ?? null;
 }
 
@@ -409,7 +415,7 @@ export async function persistInboundMessageForProvider(input: {
 }): Promise<Record<string, unknown> | null> {
   const context = await getProviderContext();
   if (!context) return null;
-  const { data, error } = await context.supabase.rpc("persist_inbound_message_v1", {
+  const { data, error } = await invokeRpc(context.supabase, "persist_inbound_message_v1", {
     p_lead_id: input.leadId,
     p_evolution_instance: input.evolutionInstance,
     p_provider_message_id: input.providerMessageId,
@@ -432,7 +438,7 @@ export async function upsertInboundResponseActionForProvider(input: {
 }): Promise<FollowUpAction | null> {
   const context = await getProviderContext();
   if (!context) return null;
-  const { data, error } = await context.supabase.rpc("upsert_inbound_response_action_v1", {
+  const { data, error } = await invokeRpc(context.supabase, "upsert_inbound_response_action_v1", {
     p_lead_id: input.leadId,
     p_source_message_id: input.sourceMessageId,
     p_classification: input.classification,
@@ -453,7 +459,7 @@ export async function correctInboundResponseForAdvisor(input: {
 }): Promise<{ action: FollowUpAction | null; status: string; manualDecision: string } | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data, error } = await supabase.rpc("correct_inbound_response_v1", {
+  const { data, error } = await invokeRpc(supabase, "correct_inbound_response_v1", {
     p_lead_id: input.leadId,
     p_decision: input.decision,
     p_source_message_id: input.sourceMessageId ?? null,
@@ -490,7 +496,7 @@ function toPurchaseDecisionMilestone(value: unknown): PurchaseDecisionMilestone 
 export async function recordPurchaseDecision(leadId: string, idempotencyKey: string): Promise<{ status: string; replayed: boolean; milestone: PurchaseDecisionMilestone } | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data, error } = await supabase.rpc("record_purchase_decision_v1", { p_lead_id: leadId, p_idempotency_key: idempotencyKey, p_recorded_at: new Date().toISOString() });
+  const { data, error } = await invokeRpc(supabase, "record_purchase_decision_v1", { p_lead_id: leadId, p_idempotency_key: idempotencyKey, p_recorded_at: new Date().toISOString() });
   if (error || !data || typeof data !== "object") return null;
   const result = data as Record<string, unknown>;
   const milestone = toPurchaseDecisionMilestone(result.milestone);
@@ -516,14 +522,14 @@ function toFirstContactResult(value: unknown): FirstContactOperationResult | nul
 export async function requestFirstContact(input: { leadId: string; configurationDigest: string; items: Array<{ resourceKind: FirstContactResource; itemKey: string; resourceVersion: string; availability: "AVAILABLE" | "NOT_AVAILABLE" }>; idempotencyKey: string }): Promise<FirstContactOperationResult | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data, error } = await supabase.rpc("request_first_contact_v1", { p_lead_id: input.leadId, p_configuration_digest: input.configurationDigest, p_items: input.items.map((item) => ({ resource_kind: item.resourceKind, item_key: item.itemKey, resource_version: item.resourceVersion, availability: item.availability })), p_idempotency_key: input.idempotencyKey });
+  const { data, error } = await invokeRpc(supabase, "request_first_contact_v1", { p_lead_id: input.leadId, p_configuration_digest: input.configurationDigest, p_items: input.items.map((item) => ({ resource_kind: item.resourceKind, item_key: item.itemKey, resource_version: item.resourceVersion, availability: item.availability })), p_idempotency_key: input.idempotencyKey });
   return error ? null : toFirstContactResult(data);
 }
 
 export async function claimFirstContactEffect(effectId: string, claimTokenDigest: string): Promise<{ status: string; effectId: string; attemptNo: number } | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data, error } = await supabase.rpc("claim_first_contact_effect_v1", { p_effect_id: effectId, p_claim_token_digest: claimTokenDigest });
+  const { data, error } = await invokeRpc(supabase, "claim_first_contact_effect_v1", { p_effect_id: effectId, p_claim_token_digest: claimTokenDigest });
   if (error || !data || typeof data !== "object") return null;
   const result = data as Record<string, unknown>;
   return typeof result.status === "string" && typeof result.effect_id === "string" && typeof result.attempt_no === "number" ? { status: result.status, effectId: result.effect_id, attemptNo: result.attempt_no } : null;
@@ -532,21 +538,21 @@ export async function claimFirstContactEffect(effectId: string, claimTokenDigest
 export async function beginFirstContactEffect(effectId: string, attemptNo: number, claimTokenDigest: string, payloadDigest?: string): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
-  const { data, error } = await supabase.rpc("begin_first_contact_effect_io_v1", { p_effect_id: effectId, p_attempt_no: attemptNo, p_claim_token_digest: claimTokenDigest, p_payload_digest: payloadDigest ?? null });
+  const { data, error } = await invokeRpc(supabase, "begin_first_contact_effect_io_v1", { p_effect_id: effectId, p_attempt_no: attemptNo, p_claim_token_digest: claimTokenDigest, p_payload_digest: payloadDigest ?? null });
   return !error && Boolean(data);
 }
 
 export async function recordFirstContactEffectResult(effectId: string, attemptNo: number, claimTokenDigest: string, outcome: ProviderOutcome & { messageBody?: string | null }): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
-  const { error } = await supabase.rpc("record_first_contact_effect_result_v1", { p_effect_id: effectId, p_attempt_no: attemptNo, p_claim_token_digest: claimTokenDigest, p_result_kind: outcome.result, p_provider_message_id: outcome.providerMessageId ?? null, p_provider_status: outcome.providerStatus ?? null, p_message_body: outcome.messageBody ?? null });
+  const { error } = await invokeRpc(supabase, "record_first_contact_effect_result_v1", { p_effect_id: effectId, p_attempt_no: attemptNo, p_claim_token_digest: claimTokenDigest, p_result_kind: outcome.result, p_provider_message_id: outcome.providerMessageId ?? null, p_provider_status: outcome.providerStatus ?? null, p_message_body: outcome.messageBody ?? null });
   return !error;
 }
 
 export async function retryFirstContactEffect(effectId: string, expectedEffectVersion: number | undefined, idempotencyKey: string): Promise<Record<string, unknown> | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data, error } = await supabase.rpc("retry_first_contact_effect_v1", { p_effect_id: effectId, p_expected_effect_version: expectedEffectVersion ?? null, p_idempotency_key: idempotencyKey });
+  const { data, error } = await invokeRpc(supabase, "retry_first_contact_effect_v1", { p_effect_id: effectId, p_expected_effect_version: expectedEffectVersion ?? null, p_idempotency_key: idempotencyKey });
   return error || !data || typeof data !== "object" ? null : data as Record<string, unknown>;
 }
 
@@ -596,7 +602,7 @@ export async function createFollowUpAction(id: string, actionType: NextActionTyp
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
 
-  const { data, error } = await supabase.rpc("create_lead_follow_up_action_v1", {
+  const { data, error } = await invokeRpc(supabase, "create_lead_follow_up_action_v1", {
     p_lead_id: id,
     p_action_type: actionType,
     p_scheduled_for: scheduledFor,
@@ -619,7 +625,7 @@ export async function updateFollowUpAction(actionId: string, status: FollowUpAct
   }
   if (!version) return null;
 
-  const { data, error } = await supabase.rpc("transition_lead_follow_up_action_v1", {
+  const { data, error } = await invokeRpc(supabase, "transition_lead_follow_up_action_v1", {
     p_action_id: actionId,
     p_status: status,
     p_expected_action_version: version,
@@ -642,7 +648,7 @@ export async function clearLeadAction(id: string): Promise<boolean> {
   const { data: actions, error: readError } = await supabase.from("lead_follow_up_actions").select("id,action_version").eq("lead_id", id).in("status", ["PENDING", "POSTPONED"]);
   if (readError) return false;
   for (const action of actions ?? []) {
-    const { data, error } = await supabase.rpc("transition_lead_follow_up_action_v1", {
+    const { data, error } = await invokeRpc(supabase, "transition_lead_follow_up_action_v1", {
       p_action_id: action.id,
       p_status: "IGNORED",
       p_expected_action_version: action.action_version,
@@ -660,8 +666,8 @@ export async function softDeleteLead(id: string): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
 
-  const { data, error } = await supabase.rpc("soft_delete_lead", { p_lead_id: id });
-  return !error && data === true;
+  const { data, error } = await invokeRpc(supabase, "soft_delete_lead", { p_lead_id: id });
+  return !error && (data as unknown) === true;
 }
 
 export async function markLeadCustomerReply(id: string, preview: string | null, messageAt: string): Promise<boolean> {
@@ -795,7 +801,7 @@ async function updateLeadMessageWithClient(supabase: LeadflowDbClient, id: strin
   if (input.deliveredAt !== undefined) update.delivered_at = input.deliveredAt;
   if (input.readAt !== undefined) update.read_at = input.readAt;
   if (input.failedAt !== undefined) update.failed_at = input.failedAt;
-  if (input.rawPayload !== undefined) update.raw_payload = input.rawPayload;
+  if (input.rawPayload !== undefined) update.raw_payload = input.rawPayload as unknown as Database["public"]["Tables"]["lead_messages"]["Update"]["raw_payload"];
   const { error } = await supabase.from("lead_messages").update(update).eq("id", id);
   return !error;
 }
@@ -817,7 +823,7 @@ async function findLeadMessageByProviderIdWithClient(supabase: LeadflowDbClient,
   let query = supabase.from("lead_messages").select("id,lead_id,provider_message_id,direction,status,body,phone,created_at,delivered_at,read_at,failed_at").eq("provider_message_id", providerMessageId);
   if (evolutionInstance) query = query.filter("evolution_instance", "eq", evolutionInstance);
   const { data, error } = await query.maybeSingle();
-  return error || !data ? null : toDomainMessage(data);
+  return error || !data ? null : toDomainMessage(data as unknown as LeadMessageRow);
 }
 
 export async function findLeadMessageByProviderIdForProvider(providerMessageId: string, evolutionInstance: string): Promise<LeadMessage | null> {
@@ -825,7 +831,7 @@ export async function findLeadMessageByProviderIdForProvider(providerMessageId: 
   if (!context) return null;
   const { data, error } = await context.supabase.from("lead_messages").select("id,lead_id,provider_message_id,direction,status,body,phone,created_at,delivered_at,read_at,failed_at").eq("provider_message_id", providerMessageId).filter("evolution_instance", "eq", evolutionInstance).maybeSingle();
   if (error || !data) return null;
-  return (await isProviderOwnedLead(context, data.lead_id)) ? toDomainMessage(data) : null;
+  return (await isProviderOwnedLead(context, data.lead_id)) ? toDomainMessage(data as unknown as LeadMessageRow) : null;
 }
 
 export async function updateLeadMessageByProviderId(providerMessageId: string, input: Omit<Partial<LeadMessageInput>, "leadId" | "direction">): Promise<boolean> {
@@ -839,7 +845,7 @@ export async function updateLeadMessageByProviderId(providerMessageId: string, i
   if (input.deliveredAt !== undefined) update.delivered_at = input.deliveredAt;
   if (input.readAt !== undefined) update.read_at = input.readAt;
   if (input.failedAt !== undefined) update.failed_at = input.failedAt;
-  if (input.rawPayload !== undefined) update.raw_payload = input.rawPayload;
+  if (input.rawPayload !== undefined) update.raw_payload = input.rawPayload as unknown as Database["public"]["Tables"]["lead_messages"]["Update"]["raw_payload"];
   const { error } = await supabase.from("lead_messages").update(update).eq("provider_message_id", providerMessageId);
   return !error;
 }

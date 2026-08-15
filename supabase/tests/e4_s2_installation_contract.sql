@@ -147,17 +147,17 @@ select col_not_null('public', 'leadflow_settings', 'user_id', 'settings owner is
 select col_is_fk('public', 'leadflow_settings', 'user_id', 'settings owner references auth.users');
 select ok((select indisunique from pg_index where indexrelid = 'public.leadflow_settings_user_id_key'::regclass), 'settings owner index is truly unique');
 select is((select count(*) from public.leadflow_installation), 1::bigint, 'exactly one installation row exists');
-select is((select advisor_user_id from public.leadflow_installation), 'a746e8b8-0f7f-48c0-b68c-cadd7fa4aeab'::uuid, 'installation uses only the approved advisor id');
-select ok((select not exists (select 1 from public.leadflow_settings where user_id is distinct from 'a746e8b8-0f7f-48c0-b68c-cadd7fa4aeab'::uuid)), 'any existing settings rows remain attached to the approved owner');
+select is((select advisor_user_id from public.leadflow_installation), 'd463c836-6eeb-422a-aef8-44e725b984c8'::uuid, 'installation uses only the approved advisor id');
+select ok((select not exists (select 1 from public.leadflow_settings where user_id is distinct from 'd463c836-6eeb-422a-aef8-44e725b984c8'::uuid)), 'any existing settings rows remain attached to the approved owner');
 
 select throws_ok(
-  $$insert into public.leadflow_installation (singleton, advisor_user_id) values (true, 'a746e8b8-0f7f-48c0-b68c-cadd7fa4aeab')$$,
+  $$insert into public.leadflow_installation (singleton, advisor_user_id) values (true, 'd463c836-6eeb-422a-aef8-44e725b984c8')$$,
   '23505',
   null,
   'duplicate singleton is rejected'
 );
 select throws_ok(
-  $$insert into public.leadflow_installation (singleton, advisor_user_id) values (false, 'a746e8b8-0f7f-48c0-b68c-cadd7fa4aeab')$$,
+  $$insert into public.leadflow_installation (singleton, advisor_user_id) values (false, 'd463c836-6eeb-422a-aef8-44e725b984c8')$$,
   '23514',
   null,
   'false singleton fixture is rejected'
@@ -176,7 +176,7 @@ select throws_ok(
 );
 select is((select count(*) from public.leadflow_installation), 1::bigint, 'failed conflict fixtures do not create a second singleton');
 select lives_ok(
-  $$select public.e4_s2_apply_installation_migration_fixture('a746e8b8-0f7f-48c0-b68c-cadd7fa4aeab'::uuid)$$,
+  $$select public.e4_s2_apply_installation_migration_fixture('d463c836-6eeb-422a-aef8-44e725b984c8'::uuid)$$,
   'migration fixture reruns idempotently against the approved state'
 );
 select throws_ok(
@@ -200,7 +200,7 @@ select throws_ok(
         created_at timestamptz not null default now(),
         updated_at timestamptz not null default now()
       );
-      perform public.e4_s2_apply_installation_migration_fixture('a746e8b8-0f7f-48c0-b68c-cadd7fa4aeab'::uuid);
+      perform public.e4_s2_apply_installation_migration_fixture('d463c836-6eeb-422a-aef8-44e725b984c8'::uuid);
     end
   $$;$case$,
   'E4-S2 existing leadflow_installation.singleton definition is incompatible',
@@ -215,7 +215,7 @@ select throws_ok(
       values (conflicting_user_id, 'authenticated', 'authenticated', 'e4-s2-conflict@example.invalid', '', now(), now(), now())
       on conflict (id) do nothing;
       update public.leadflow_installation set advisor_user_id = conflicting_user_id where singleton = true;
-      perform public.e4_s2_apply_installation_migration_fixture('a746e8b8-0f7f-48c0-b68c-cadd7fa4aeab'::uuid);
+      perform public.e4_s2_apply_installation_migration_fixture('d463c836-6eeb-422a-aef8-44e725b984c8'::uuid);
     end
   $$;$case$,
   'E4-S2 cannot replace an existing advisor_user_id',
@@ -232,7 +232,7 @@ select throws_ok(
       insert into public.leadflow_settings (id, user_id)
       values ('default', conflicting_user_id)
       on conflict (id) do update set user_id = excluded.user_id;
-      perform public.e4_s2_apply_installation_migration_fixture('a746e8b8-0f7f-48c0-b68c-cadd7fa4aeab'::uuid);
+      perform public.e4_s2_apply_installation_migration_fixture('d463c836-6eeb-422a-aef8-44e725b984c8'::uuid);
     end
   $$;$case$,
   'E4-S2 cannot replace an existing leadflow_settings owner',

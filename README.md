@@ -6,7 +6,7 @@ LeadFlow es una aplicación móvil-first para capturar prospectos automotrices d
 
 ```bash
 npm install
-cp .env.example .env.local
+cp .env.example .env
 npm run dev
 ```
 
@@ -20,9 +20,9 @@ Abre [http://localhost:3000](http://localhost:3000). Supabase y el PostgreSQL de
 
 ## Variables de entorno
 
-`.env` contiene la configuración local existente y `.env.example` mantiene la misma estructura y líneas para nuevos entornos. Las variables `NEXT_PUBLIC_SELLER_*` alimentan la vCard del QR. `EVOLUTION_WEBHOOK_TOKEN` protege los eventos entrantes; `SUPABASE_SERVICE_ROLE_KEY` es un secreto de servidor y nunca debe exponerse al frontend.
+`.env` contiene la configuración local del único environment actual y `.env.example` mantiene la misma estructura para nuevos entornos. Las variables `NEXT_PUBLIC_SELLER_*` alimentan la vCard del QR. `EVOLUTION_WEBHOOK_TOKEN` protege los eventos entrantes; `SUPABASE_SERVICE_ROLE_KEY` es un secreto de servidor y nunca debe exponerse al frontend.
 
-Para activar el guardado compartido del perfil y la plantilla: en Supabase abre **Project Settings → API**, revela la clave `service_role` del proyecto y cópiala en `SUPABASE_SERVICE_ROLE_KEY` tanto en `.env` como en `.env.local`. No la pongas en una variable `NEXT_PUBLIC_*`, no la pegues en el navegador ni la subas a git. Luego reinicia `docker compose up -d --build` o el servidor de desarrollo. Los leads, seguimientos y mensajes ya usan Supabase con la clave pública; esta clave privada se reserva para la configuración global del vendedor.
+Para activar el guardado compartido del perfil y la plantilla: en Supabase abre **Project Settings → API**, revela la clave `service_role` del proyecto y cópiala en `SUPABASE_SERVICE_ROLE_KEY` en `.env`. No la pongas en una variable `NEXT_PUBLIC_*`, no la pegues en el navegador ni la subas a git. Luego reinicia `docker compose up -d --build` o el servidor de desarrollo. Los leads, seguimientos y mensajes ya usan Supabase con la clave pública; esta clave privada se reserva para la configuración global del vendedor.
 
 ## Arquitectura
 
@@ -59,17 +59,17 @@ El dashboard no consulta cada cierto número de segundos: escucha cambios de Sup
 
 Evolution API es el gateway HTTP que mantiene una instancia conectada a WhatsApp y expone el endpoint `message/sendText`. No es el número ni reemplaza WhatsApp: el número se vincula escaneando el QR de una instancia desde **WhatsApp → Dispositivos vinculados → Vincular un dispositivo**.
 
-1. `docker compose up -d --build` levanta Evolution API y Redis; Evolution usa el PostgreSQL remoto de Supabase mediante `EVOLUTION_DATABASE_URL`. La API queda en `http://localhost:8081` para desarrollo local y en `http://evolution-api:8080` desde el contenedor de LeadFlow.
+1. `docker compose up -d --build` levanta Evolution API y Redis; el contenedor de Evolution usa su conexión PostgreSQL configurada por `EVOLUTION_DATABASE_URL`. La API queda en `http://localhost:8081` para desarrollo local y en `http://evolution-api:8080` desde el contenedor de LeadFlow.
 2. Usa la instancia indicada por `EVOLUTION_API_INSTANCE_NAME`. Créala en Evolution API desde su panel o endpoint de creación de instancias; los nombres exactos pueden variar según la versión instalada.
 3. Abre [http://localhost:3000/whatsapp](http://localhost:3000/whatsapp), escanea el QR con el celular que enviará los mensajes y espera estado `open`. Si el código no escanea, **Generar QR nuevo** reinicia solo la instancia y solicita otro QR; no borra el PostgreSQL remoto.
-4. Reinicia Next.js después de cambiar `.env.local`. El botón del dashboard enviará a ese número usando `POST /message/sendText/{EVOLUTION_API_INSTANCE_NAME}`.
+4. Reinicia Next.js después de cambiar `.env`. El botón del dashboard enviará a ese número usando `POST /message/sendText/{EVOLUTION_API_INSTANCE_NAME}`.
 5. El webhook de Evolution se configura automáticamente al usar **Enviar**. También puedes revisar que `EVOLUTION_WEBHOOK_URL` apunte a `/api/webhooks/evolution` y que `EVOLUTION_WEBHOOK_TOKEN` sea el mismo secreto en Next y Evolution.
 
 `/qr` tiene otro objetivo: muestra la vCard del vendedor para que el prospecto guarde su nombre, teléfono y correo. No vincula la sesión de Evolution ni sirve para escanear WhatsApp Web.
 
 Los celulares locales de Ecuador se normalizan automáticamente: `0984790449` se envía como `593984790449`. Para otro país se debe escribir el código internacional, por ejemplo `+57 315 204 8890`; si Evolution no encuentra una cuenta, la aplicación muestra un mensaje claro en lugar del error técnico crudo. En `/qr`, **Abrir WhatsApp** abre WhatsApp Web sin iniciar un chat específico.
 
-En `/whatsapp`, cuando la instancia está conectada aparecen primero el perfil y la plantilla, y la vinculación/QR queda al final. Mientras WhatsApp no esté conectado no se muestran esos formularios. El perfil y la plantilla no se guardan en cookies ni en `localStorage`: deben persistir en `leadflow_settings` de Supabase. Para habilitar la escritura del servidor configura `SUPABASE_SERVICE_ROLE_KEY` en `.env` y `.env.local` usando la clave `service_role` del proyecto; es un secreto, no debe empezar por `NEXT_PUBLIC_`, no se debe subir a git y hay que reiniciar Docker/Next después de cambiarlo. Si falta, la aplicación lo informa y no finge haber guardado una copia temporal. Los campos vacíos vuelven a usar el valor correspondiente del `.env`. El QR es una vCard que se regenera al abrir o recargar `/qr`.
+En `/whatsapp`, cuando la instancia está conectada aparecen primero el perfil y la plantilla, y la vinculación/QR queda al final. Mientras WhatsApp no esté conectado no se muestran esos formularios. El perfil y la plantilla no se guardan en cookies ni en `localStorage`: deben persistir en `leadflow_settings` de Supabase. Para habilitar la escritura del servidor configura `SUPABASE_SERVICE_ROLE_KEY` en `.env` usando la clave `service_role` del proyecto; es un secreto, no debe empezar por `NEXT_PUBLIC_`, no se debe subir a git y hay que reiniciar Docker/Next después de cambiarlo. Si falta, la aplicación lo informa y no finge haber guardado una copia temporal. Los campos vacíos vuelven a usar el valor correspondiente del `.env`. El QR es una vCard que se regenera al abrir o recargar `/qr`.
 
 La plantilla acepta estas variables: `{{nombre}}`, `{{numero}}` y `{{carro}}` para el cliente; `{{nombre_vendedor}}`, `{{correo_vendedor}}`, `{{empresa_vendedor}}` y `{{numero_vendedor}}` para el vendedor. Las variables se validan y se reemplazan antes de enviar. Un lead puede elegir uno o varios modelos Changan; `{{carro}}` los lista separados por comas y el primer modelo puede adjuntar su imagen desde `car_model_images`.
 
@@ -79,11 +79,10 @@ Variables de la aplicación:
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 EVOLUTION_API_URL
-EVOLUTION_DATABASE_URL
 EVOLUTION_API_KEY
 EVOLUTION_API_INSTANCE_NAME
 EVOLUTION_WEBHOOK_URL

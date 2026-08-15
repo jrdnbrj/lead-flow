@@ -13,8 +13,10 @@ export interface EvolutionSendResult {
   payload: Record<string, unknown> | null;
 }
 
+export type EvolutionConnectionState = "open" | "connecting" | "close" | "unknown";
+
 export type EvolutionConnectionResult = {
-  state: string | null;
+  state: EvolutionConnectionState | null;
   ready: boolean;
   error: string | null;
 };
@@ -62,6 +64,14 @@ export function getEvolutionErrorMessage(statusCode: number, payload: unknown, f
   return fallback;
 }
 
+export function normalizeEvolutionConnectionState(value: unknown): EvolutionConnectionState {
+  const state = typeof value === "string" ? value.trim().toLowerCase().replace(/[\s_-]+/g, "") : "";
+  if (["open", "connected", "online", "ready"].includes(state)) return "open";
+  if (["connecting", "pairing", "qr", "qrcode", "awaitingpairing"].includes(state)) return "connecting";
+  if (["close", "closed", "disconnected", "offline", "logout", "loggedout"].includes(state)) return "close";
+  return "unknown";
+}
+
 export async function getEvolutionConnectionStatus(): Promise<EvolutionConnectionResult> {
   const config = getEvolutionConfig();
   if (!config) return { state: null, ready: false, error: "Evolution API no está configurada en el servidor." };
@@ -73,19 +83,12 @@ export async function getEvolutionConnectionStatus(): Promise<EvolutionConnectio
     const stateRecord = asRecord(statePayload);
     const instance = asRecord(stateRecord?.instance);
     const stateValue = instance?.state ?? stateRecord?.state;
-    const state = typeof stateValue === "string" ? stateValue.toLowerCase() : null;
+    const state = normalizeEvolutionConnectionState(stateValue);
     if (!stateResponse.ok || state !== "open") return { state, ready: false, error: getEvolutionErrorMessage(stateResponse.status, statePayload, "Evolution todavía no reporta una sesión abierta.") };
 
-    // `/connectionState` can be stale after WhatsApp removes a device. This
-    // harmless lookup verifies that Baileys can really use the session.
-    const probeResponse = await fetch(`${baseUrl}/chat/whatsappNumbers/${encodeURIComponent(config.instanceName)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: config.apiKey },
-      body: JSON.stringify({ numbers: ["593000000000"] }),
-      cache: "no-store",
-    });
-    const probePayload = await probeResponse.json().catch(() => null);
-    if (!probeResponse.ok) return { state: "close", ready: false, error: getEvolutionErrorMessage(probeResponse.status, probePayload, "Evolution reporta la instancia abierta, pero WhatsApp no está disponible para operar.") };
+    // Do not probe with a synthetic phone number here. Evolution can reject
+    // that number independently of the session state, which would turn a
+    // valid linked session into a false "disconnected" result.
     return { state: "open", ready: true, error: null };
   } catch {
     return { state: null, ready: false, error: "No se pudo consultar Evolution API. Verifica que el servicio esté levantado." };

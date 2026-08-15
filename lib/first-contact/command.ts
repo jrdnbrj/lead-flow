@@ -5,7 +5,7 @@ import { renderWhatsappMessageTemplate } from "@/lib/config/message-template-sha
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { claimFirstContactEffect, beginFirstContactEffect, recordFirstContactEffectResult, requestFirstContact, retryFirstContactEffect } from "@/lib/leads/repository";
 import type { Lead } from "@/lib/domain/lead";
-import type { FirstContactOperationResult, FirstContactProvider, FirstContactResource } from "@/lib/first-contact/types";
+import type { FirstContactOperationResult, FirstContactProvider } from "@/lib/first-contact/types";
 
 function digest(value: string): string { return createHash("sha256").update(value).digest("hex"); }
 
@@ -48,7 +48,6 @@ export async function executeFirstContact(lead: FirstContactLead, provider: Firs
 }
 
 export function retryableFirstContactResult(result: string | null): boolean { return result === "FAILED"; }
-export function firstContactResourceLabel(resource: FirstContactResource): string { return { MESSAGE: "Mensaje", PHOTOS: "Fotos", TECHNICAL_SHEET: "Ficha técnica" }[resource]; }
 
 export async function retryFirstContact(lead: FirstContactLead, effectId: string, expectedEffectVersion: number | undefined, idempotencyKey: string, provider: FirstContactProvider): Promise<FirstContactOperationResult | null> {
   const request = await buildFirstContactRequest(lead);

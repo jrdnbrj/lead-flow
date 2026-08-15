@@ -10,6 +10,7 @@ import { carModels, getStatusLabel, leadTimeframes, paymentMethods, type Existin
 import { leadSchema, type LeadFormValues } from "@/lib/leads/validation";
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { FirstContactSummary } from "@/components/leads/first-contact-summary";
+import { LeadContactActions } from "@/components/leads/lead-contact-actions";
 
 function FieldError({ message }: { message?: string }) {
   return message ? <p className="mt-1.5 text-xs font-semibold text-red-600">{message}</p> : null;
@@ -60,9 +61,10 @@ export function LeadCaptureForm() {
       <div className="rounded-2xl bg-[#eef6d7] px-4 py-4"><p className="eyebrow">Lead guardado</p><h2 className="mt-2 text-2xl font-black">Sin próxima acción</h2><p className="mt-1 text-sm font-semibold text-[var(--muted)]">El contacto quedó listo. Elige qué quieres hacer ahora.</p></div>
       {existingLead ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm"><p className="font-black">Este teléfono ya aparece en otro lead</p><p className="mt-1 text-[var(--muted)]">{existingLead.fullName} · {existingLead.carModels.join(", ")} · {getStatusLabel(existingLead.status)}</p><div className="mt-3 flex flex-wrap gap-2"><a className="button-secondary" href={`/dashboard?leadId=${encodeURIComponent(existingLead.id)}`}>Abrir lead existente</a><a className="button-primary" href={`/dashboard?leadId=${encodeURIComponent(savedLeadId)}`}>Crear nueva oportunidad</a></div></div> : null}
       <FollowUpActions leadId={savedLeadId} actions={savedActions} onActionsChange={setSavedActions} onConversationWaiting={() => undefined} onError={setSubmitError} onInfo={setWarning} />
+      <LeadContactActions contact={{ name: values.fullName || "Cliente", phone: values.phone || "" }} />
       <FirstContactSummary lead={{ id: savedLeadId, fullName: values.fullName || "Cliente", phone: values.phone || "", carModels: values.carModels || [] }} />
       {submitError ? <p className="rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]" role="alert">{submitError}</p> : null}
-      <div className="grid gap-2 sm:grid-cols-2"><a className="button-primary" href="/dashboard"><ExternalLink size={16} />Ir al dashboard</a><a className="button-secondary" href={`/qr?leadId=${encodeURIComponent(savedLeadId)}&name=${encodeURIComponent(values.fullName || "")}`}><QrCode size={16} />Compartir contacto/QR</a><a className="button-secondary" href={`/dashboard?leadId=${encodeURIComponent(savedLeadId)}`}>Programar acción</a><a className="button-secondary" href={`/dashboard?leadId=${encodeURIComponent(savedLeadId)}`}>Enviar primer contacto por WhatsApp</a></div>
+      <div className="grid gap-2 sm:grid-cols-2"><a className="button-primary" href="/dashboard"><ExternalLink size={16} />Ir al dashboard</a><a className="button-secondary" href={`/qr?leadId=${encodeURIComponent(savedLeadId)}&name=${encodeURIComponent(values.fullName || "")}`}><QrCode size={16} />Compartir mi contacto/QR</a><a className="button-secondary" href={`/dashboard?leadId=${encodeURIComponent(savedLeadId)}`}>Programar acción</a><a className="button-secondary" href={`/dashboard?leadId=${encodeURIComponent(savedLeadId)}`}>Enviar primer contacto por WhatsApp</a></div>
       {warning ? <p className="text-xs text-[var(--muted)]">{warning}</p> : null}
     </section>;
   }

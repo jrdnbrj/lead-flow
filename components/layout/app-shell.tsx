@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe2, LayoutDashboard, MessageCircle, Plus, QrCode, Sparkles, UserRound, WifiOff } from "lucide-react";
+import { Globe2, LayoutDashboard, LogOut, MessageCircle, Plus, QrCode, Sparkles, UserRound, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
+
+import { logoutAction } from "@/app/login/actions";
 
 const navigation = [
   { href: "/dashboard", label: "Resumen", icon: LayoutDashboard },
@@ -55,6 +57,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="hidden sm:inline">{isOnline ? "En línea" : "Modo offline"}</span>
             </div>
             <Link href="/whatsapp" aria-label="Configurar vendedor y WhatsApp" title="Configurar vendedor y WhatsApp" className="hidden size-10 place-items-center rounded-full bg-[#e7dfd1] text-[var(--ink)] transition hover:bg-[#dcd0bd] sm:grid"><UserRound size={17} /></Link>
+            <form action={logoutAction}>
+              <button type="submit" aria-label="Cerrar sesión" title="Cerrar sesión" className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3 text-xs font-black text-[var(--ink)] transition hover:bg-black/[0.04]"><LogOut size={16} /><span className="hidden sm:inline">Salir</span></button>
+            </form>
           </div>
         </div>
       </header>

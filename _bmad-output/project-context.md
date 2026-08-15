@@ -46,7 +46,7 @@ _Este archivo contiene reglas y patrones críticos que los agentes de IA deben s
 - Mantener las mutaciones en Server Actions con `"use server"` y validar allí nuevamente la entrada, aunque el formulario ya valide en el cliente.
 - Consultar Supabase mediante el repositorio y los clientes existentes; no llamar directamente a Supabase desde componentes de UI.
 - Usar el cliente server-side para Server Components/Actions, el cliente browser para Realtime y el cliente admin exclusivamente para operaciones protegidas.
-- Las variables `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` deben estar disponibles durante el build Docker porque el navegador crea el cliente Realtime en tiempo de ejecución.
+- Las variables `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` deben estar disponibles durante el build Docker porque el navegador crea el cliente Realtime en tiempo de ejecución.
 - Mantener las credenciales privadas —`SUPABASE_SERVICE_ROLE_KEY`, `EVOLUTION_API_KEY` y tokens de webhook— exclusivamente en el servidor.
 - Los Route Handlers de Evolution deben ejecutarse en `nodejs`, validar el token `x-evolution-webhook-token` y devolver respuestas `{ success, ... }`.
 - Correlacionar mensajes mediante `provider_message_id` y respetar la progresión de estados de WhatsApp; no aplicar estados antiguos sobre estados más avanzados.

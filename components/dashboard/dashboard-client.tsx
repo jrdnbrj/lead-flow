@@ -12,6 +12,7 @@ import { correctInboundResponseAction, deleteLeadAction, recordPurchaseDecisionA
 import { formatNextActionDate, getDashboardLeadBucket, isLeadReminderDue, sortLeadsForDashboard } from "@/lib/leads/follow-up";
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { FirstContactSummary } from "@/components/leads/first-contact-summary";
+import { LeadContactActions } from "@/components/leads/lead-contact-actions";
 import { PendingNotifications } from "@/components/leads/pending-notifications";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -84,7 +85,7 @@ export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [hiddenLeadIds, setHiddenLeadIds] = useState<string[]>([]);
-  const [realtimeState, setRealtimeState] = useState<RealtimeState>(() => process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "connecting" : "error");
+  const [realtimeState, setRealtimeState] = useState<RealtimeState>(() => process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ? "connecting" : "error");
   const [isRefreshing, startRefresh] = useTransition();
 
   useEffect(() => {
@@ -245,6 +246,7 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
   const [conversationState, setConversationState] = useState<ConversationState>(lead.conversationState);
   const [followUpActions, setFollowUpActions] = useState<FollowUpAction[]>(lead.followUpActions);
   const [isSending, setIsSending] = useState(false);
+  const [isChangingConversation, setIsChangingConversation] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendInfo, setSendInfo] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -325,13 +327,23 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
   }
 
   async function changeConversationState(state: ConversationState) {
-    const response = await updateLeadConversationAction({ leadId: lead.id, state });
-    if (response.success) {
-      setConversationState(state);
-      setSendInfo(state === "CLOSED" ? "Conversación cerrada. Puedes reabrirla cuando lo necesites." : "Conversación reabierta.");
-      router.refresh();
-    } else {
-      setSendError(response.message || response.error || "No pudimos actualizar la conversación.");
+    if (isChangingConversation) return;
+    setIsChangingConversation(true);
+    setSendError(null);
+    setSendInfo(null);
+    try {
+      const response = await updateLeadConversationAction({ leadId: lead.id, state });
+      if (response.success) {
+        setConversationState(state);
+        setSendInfo(state === "CLOSED" ? "Conversación cerrada. Puedes reabrirla cuando lo necesites." : "Conversación reabierta.");
+        router.refresh();
+      } else {
+        setSendError(response.message || response.error || "No pudimos actualizar la conversación.");
+      }
+    } catch {
+      setSendError("No pudimos actualizar la conversación. Puedes reintentarlo.");
+    } finally {
+      setIsChangingConversation(false);
     }
   }
 
@@ -357,13 +369,14 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
       <div className="flex items-center gap-1.5 sm:shrink-0"><span className="mr-auto rounded-lg bg-[#f6f3ed] px-2 py-1.5 text-center sm:mr-1"><strong className="block text-base font-black leading-none">{lead.score}</strong><span className="text-[8px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">score</span></span><a onClick={(event) => event.stopPropagation()} aria-label={`Llamar a ${lead.fullName}`} href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} className="icon-action icon-action-phone" title="Llamar"><Phone size={15} /></a><button type="button" aria-label={`Enviar WhatsApp a ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); void sendMessage(); }} disabled={isSending || !canSend} className={`send-whatsapp-button ${!canSend ? "send-whatsapp-button-sent" : ""}`} title={!canSend ? "Mensaje automático ya enviado" : whatsappStatus === "FAILED" ? "Reintentar envío automático" : "Enviar WhatsApp automáticamente"}>{isSending ? <LoaderCircle size={15} className="animate-spin" /> : !canSend ? <CheckCircle2 size={15} /> : <Send size={15} />}<span className="hidden sm:inline">{isSending ? "Enviando" : !canSend ? "Enviado" : whatsappStatus === "FAILED" ? "Reintentar" : "Enviar"}</span></button><a onClick={(event) => event.stopPropagation()} aria-label={`Abrir WhatsApp manual para ${lead.fullName}`} href={`https://wa.me/${formatPhoneForWhatsapp(lead.phone)}`} target="_blank" rel="noreferrer" className="icon-action icon-action-whatsapp" title="Abrir chat de WhatsApp"><WhatsAppLogo /></a><button type="button" aria-expanded={isExpanded} aria-label={isExpanded ? `Ocultar detalles de ${lead.fullName}` : `Mostrar detalles de ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); toggleExpanded(); }} className="icon-action" title={isExpanded ? "Ocultar detalles" : "Ver detalles"}>{isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button></div>
     </div>
 
-    {isExpanded && lead.lastMessageDirection ? <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f6f3ed] px-2.5 py-2 text-[11px]"><p className="min-w-0 truncate text-[var(--muted)]"><strong className="text-[var(--ink)]">{lead.lastMessageDirection === "INBOUND" ? "Último mensaje · Cliente:" : "Último mensaje · Tú:"}</strong> {lead.lastMessagePreview || "Mensaje sin texto"}</p>{conversationState === "ACTIVE" ? <button type="button" onClick={() => changeConversationState("CLOSED")} className="shrink-0 font-black text-[var(--muted)] hover:text-[var(--ink)]">Cerrar conversación</button> : conversationState === "CLOSED" ? <button type="button" onClick={() => changeConversationState("ACTIVE")} className="shrink-0 font-black text-[#18733a]">Reabrir</button> : null}</div> : null}
+    {isExpanded && lead.lastMessageDirection ? <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f6f3ed] px-2.5 py-2 text-[11px]"><p className="min-w-0 truncate text-[var(--muted)]"><strong className="text-[var(--ink)]">{lead.lastMessageDirection === "INBOUND" ? "Último mensaje · Cliente:" : "Último mensaje · Tú:"}</strong> {lead.lastMessagePreview || "Mensaje sin texto"}</p>{conversationState === "ACTIVE" ? <button type="button" disabled={isChangingConversation} aria-busy={isChangingConversation} onClick={() => void changeConversationState("CLOSED")} className="shrink-0 font-black text-[var(--muted)] hover:text-[var(--ink)] disabled:cursor-wait disabled:opacity-50">{isChangingConversation ? "Cerrando…" : "Cerrar conversación"}</button> : conversationState === "CLOSED" ? <button type="button" disabled={isChangingConversation} aria-busy={isChangingConversation} onClick={() => void changeConversationState("ACTIVE")} className="shrink-0 font-black text-[#18733a] disabled:cursor-wait disabled:opacity-50">{isChangingConversation ? "Reabriendo…" : "Reabrir"}</button> : null}</div> : null}
 
     {isExpanded && inboundClassification ? <section className="mt-3 rounded-2xl border border-[#dce5ef] bg-[#f8fbff] p-3" aria-label="Estado inbound"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Clasificación inbound</p><span className={`mt-1 inline-flex rounded-full px-2 py-1 text-[10px] font-black ${inboundClassificationClasses(inboundClassification)}`}>{manualDecision === "REQUIRES_RESPONSE" ? "Respuesta pendiente" : manualDecision === "NO_RESPONSE_REQUIRED" ? "No requiere respuesta" : inboundClassificationLabel(inboundClassification)}</span></div><p className="text-[10px] font-semibold text-[var(--muted)]">{lead.lastInboundMessageAt ? formatRelativeDate(lead.lastInboundMessageAt) : "Sin fecha"}</p></div><p className="mt-2 text-xs leading-5 text-[var(--ink)]">{lead.lastInboundMessagePreview || "Mensaje sin texto"}</p>{inboundClassification !== "NO_SUGGESTION" ? <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={isCorrectingInbound} onClick={() => void correctInbound("REQUIRES_RESPONSE")} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isCorrectingInbound ? "Guardando…" : "Sí requiere respuesta"}</button><button type="button" disabled={isCorrectingInbound} onClick={() => void correctInbound("NO_RESPONSE_REQUIRED")} className="button-secondary min-h-9 px-3 py-2 text-[11px]">No requiere respuesta</button></div> : null}</section> : null}
 
     {isExpanded ? <section className="mt-3 rounded-2xl border border-[#e6dfd0] bg-[#fffdf8] p-3" aria-label="Decisión de compra"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Compra</p><p className="mt-1 text-sm font-black">{purchaseDecisionAt ? "Compra registrada" : "Aún no registrada"}</p>{purchaseDecisionAt ? <p className="mt-1 text-[11px] text-[var(--muted)]">Registrada el {new Intl.DateTimeFormat("es-EC", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Guayaquil" }).format(new Date(purchaseDecisionAt))}</p> : null}</div>{!purchaseDecisionAt && !isPurchaseConfirming ? <button type="button" onClick={() => setIsPurchaseConfirming(true)} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cliente decidió comprar</button> : null}</div>{isPurchaseConfirming ? <div className="mt-3 rounded-xl border border-[#ead7a8] bg-[#fff8df] p-3"><p className="text-xs font-bold">¿Registrar esta decisión con la fecha y hora de ahora?</p><div className="mt-2 flex flex-wrap gap-2"><button type="button" disabled={isRecordingPurchase} onClick={() => void recordPurchaseDecision()} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isRecordingPurchase ? "Registrando…" : "Registrar"}</button><button type="button" disabled={isRecordingPurchase} onClick={() => setIsPurchaseConfirming(false)} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cancelar</button></div></div> : null}</section> : null}
 
     {isExpanded ? <FollowUpActions leadId={lead.id} actions={followUpActions} onActionsChange={(actions) => { setFollowUpActions(actions); router.refresh(); }} onConversationWaiting={() => setConversationState("WAITING_CUSTOMER")} onError={setSendError} onInfo={setSendInfo} /> : null}
+    {isExpanded ? <LeadContactActions contact={{ name: lead.fullName, phone: lead.phone }} /> : null}
     {isExpanded ? <FirstContactSummary lead={lead} initialOperation={lead.firstContact} /> : null}
     {isExpanded && lead.lastCustomerMessageAt ? <p className="mt-3 text-[11px] text-[var(--muted)]">Última respuesta del cliente registrada. Las acciones pendientes se cancelan cuando llega una nueva respuesta.</p> : null}
     {isExpanded && <div className="mt-3 flex items-center justify-between gap-3 border-t border-black/[0.06] pt-3"><span className="text-[11px] text-[var(--muted)]">Se ocultará de la lista y dejará de generar recordatorios.</span><button type="button" onClick={(event) => { event.stopPropagation(); setIsDeleteModalOpen(true); setSendError(null); }} disabled={isDeleting} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-black text-[#b33a2c] hover:bg-[#fff0ee] disabled:opacity-50"><Trash2 size={14} />Eliminar contacto</button></div>}

@@ -2,6 +2,10 @@ export type FirstContactResource = "MESSAGE" | "PHOTOS" | "TECHNICAL_SHEET";
 export type FirstContactResult = "ACCEPTED" | "FAILED" | "UNKNOWN" | "NOT_AVAILABLE";
 export type FirstContactAvailability = "AVAILABLE" | "NOT_AVAILABLE";
 
+export function firstContactResourceLabel(resource: FirstContactResource): string {
+  return { MESSAGE: "Mensaje", PHOTOS: "Fotos", TECHNICAL_SHEET: "Ficha técnica" }[resource];
+}
+
 export type FirstContactItem = {
   id: string;
   resourceKind: FirstContactResource;

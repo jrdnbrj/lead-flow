@@ -249,6 +249,7 @@ declare
   event_identity jsonb;
   result jsonb;
   next_version bigint;
+  action_lead_id uuid;
 begin
   owner_id := public.leadflow_action_owner_v1();
   if p_status not in ('DONE', 'IGNORED', 'POSTPONED', 'CANCELED') then

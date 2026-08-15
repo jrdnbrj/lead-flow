@@ -1,33 +1,36 @@
 "use client";
 
-import { Download, ExternalLink, Maximize2, MessageCircle, Share2, UserRound, X } from "lucide-react";
+import { Download, Maximize2, MessageCircle, Share2, UserRound, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 
 import type { SellerProfile } from "@/lib/domain/lead";
-
-function escapeVCard(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/;/g, "\\;").replace(/,/g, "\\,");
-}
+import { copyVCard as copyVCardToClipboard, shareVCard } from "@/lib/contacts/browser-actions";
+import { buildVCard } from "@/lib/contacts/vcard";
+import { buildWhatsAppUrl } from "@/lib/whatsapp/links";
 
 export function QrCard({ seller, leadName }: { seller: SellerProfile; leadName?: string }) {
   const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<"share" | "copy" | null>(null);
   const [isQrPreviewOpen, setIsQrPreviewOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const vCard = useMemo(() => [
-    "BEGIN:VCARD",
-    "VERSION:3.0",
-    `FN:${escapeVCard(seller.name)}`,
-    `ORG:${escapeVCard(seller.company)}`,
-    `TEL;TYPE=CELL:${seller.phone}`,
-    `EMAIL:${seller.email}`,
-    "END:VCARD",
-  ].join("\n"), [seller]);
+  const vCardContact = useMemo(() => ({ name: seller.name, phone: seller.phone, organization: seller.company, email: seller.email }), [seller]);
+  const vCard = useMemo(() => buildVCard(vCardContact), [vCardContact]);
 
   async function copyVCard() {
-    await navigator.clipboard.writeText(vCard);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2200);
+    setBusyAction("copy");
+    setFeedback("Copiando…");
+    try {
+      await copyVCardToClipboard(vCardContact);
+      setCopied(true);
+      setFeedback("Contacto copiado.");
+      window.setTimeout(() => setCopied(false), 2200);
+    } catch {
+      setFeedback("No se pudo copiar el contacto.");
+    } finally {
+      setBusyAction(null);
+    }
   }
 
   function downloadQr() {
@@ -37,22 +40,25 @@ export function QrCard({ seller, leadName }: { seller: SellerProfile; leadName?:
     link.download = "contacto-leadflow.png";
     link.href = canvas.toDataURL("image/png");
     link.click();
+    setFeedback("QR descargado.");
   }
 
   async function shareContact() {
-    if (!navigator.share) {
-      await copyVCard();
-      return;
+    setBusyAction("share");
+    setFeedback("Compartiendo…");
+    try {
+      const result = await shareVCard(vCardContact);
+      setFeedback(result === "shared" ? "Contacto compartido." : result === "copied" ? "Contacto copiado para compartir." : "Archivo de contacto descargado.");
+    } catch {
+      setFeedback("No se pudo compartir el contacto.");
+    } finally {
+      setBusyAction(null);
     }
-    await navigator.share({ title: `Contacto de ${seller.name}`, text: vCard });
   }
 
   function openWhatsApp() {
-    const fallbackTimer = window.setTimeout(() => {
-      if (document.visibilityState === "visible") window.open("https://web.whatsapp.com/", "_blank", "noopener,noreferrer");
-    }, 900);
-    window.setTimeout(() => window.clearTimeout(fallbackTimer), 2500);
-    window.location.href = "whatsapp://";
+    setFeedback("Abriendo WhatsApp…");
+    window.location.assign(buildWhatsAppUrl(seller.phone));
   }
 
   return (
@@ -74,11 +80,12 @@ export function QrCard({ seller, leadName }: { seller: SellerProfile; leadName?:
         <h1 className="mt-3 max-w-lg text-3xl font-black leading-[0.98] tracking-[-0.06em] sm:text-5xl">Que tu cliente pueda encontrarte cuando lo necesite.</h1>
         <p className="mt-5 max-w-md text-base leading-7 text-[var(--muted)]">{leadName ? <><strong className="text-[var(--ink)]">{leadName}</strong>, guarda los datos de tu asesor</> : "Comparte este código para que tu cliente guarde los datos de su asesor"} y pueda escribirte fácilmente cuando quiera retomar la conversación.</p>
         <div className="mt-7 grid gap-2.5 sm:grid-cols-2">
-          <button type="button" onClick={shareContact} className="action-button bg-[var(--ink)] text-white hover:bg-[#24334e]"><Share2 size={17} />Compartir contacto</button>
-          <button type="button" onClick={copyVCard} className="action-button border border-black/[0.1] bg-white text-[var(--ink)] hover:bg-[#faf8f3]"><MessageCircle size={17} />{copied ? "¡Copiado!" : "Copiar vCard"}</button>
+          <button type="button" disabled={busyAction !== null} onClick={() => void shareContact()} className="action-button bg-[var(--ink)] text-white hover:bg-[#24334e] disabled:opacity-60"><Share2 size={17} />{busyAction === "share" ? "Compartiendo…" : "Compartir contacto"}</button>
+          <button type="button" disabled={busyAction !== null} onClick={() => void copyVCard()} className="action-button border border-black/[0.1] bg-white text-[var(--ink)] hover:bg-[#faf8f3] disabled:opacity-60"><MessageCircle size={17} />{busyAction === "copy" ? "Copiando…" : copied ? "¡Copiado!" : "Copiar vCard"}</button>
           <button type="button" onClick={downloadQr} className="action-button border border-black/[0.1] bg-white text-[var(--ink)] hover:bg-[#faf8f3]"><Download size={17} />Descargar QR</button>
-          <button type="button" onClick={openWhatsApp} className="action-button border border-black/[0.1] bg-[#e4f8e9] text-[#18733a] hover:bg-[#d4f1dc]"><ExternalLink size={17} />Abrir WhatsApp</button>
+          <button type="button" onClick={openWhatsApp} className="action-button border border-black/[0.1] bg-[#e4f8e9] text-[#18733a] hover:bg-[#d4f1dc]"><MessageCircle size={17} />Abrir WhatsApp</button>
         </div>
+        {feedback ? <p className="mt-3 text-xs font-bold text-[var(--muted)]" aria-live="polite">{feedback}</p> : null}
         <p className="mt-5 text-xs font-medium text-[var(--muted)]">vCard 3.0 · {seller.phone} · {seller.email}</p>
     </div>
     {isQrPreviewOpen ? <div role="presentation" onClick={() => setIsQrPreviewOpen(false)} className="fixed inset-0 z-[60] grid place-items-center bg-[#101828]/75 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby="qr-preview-title" onClick={(event) => event.stopPropagation()} className="relative flex max-h-[92vh] w-full max-w-lg flex-col items-center overflow-auto rounded-[30px] bg-white p-5 shadow-[0_24px_80px_rgba(16,24,40,0.28)] sm:p-8"><button type="button" onClick={() => setIsQrPreviewOpen(false)} aria-label="Cerrar vista previa del QR" className="absolute right-4 top-4 grid size-9 place-items-center rounded-full bg-[#f6f3ed] text-[var(--ink)] hover:bg-[#e9e4da]"><X size={18} /></button><p id="qr-preview-title" className="eyebrow">Vista previa del código QR</p><div className="mt-5 rounded-[26px] bg-[#f5f1e9] p-4 sm:p-6"><QRCodeCanvas value={vCard} size={420} bgColor="#ffffff" fgColor="#101828" level="M" includeMargin className="h-auto max-w-full" /></div><p className="mt-4 text-center text-sm font-semibold text-[var(--muted)]">Escanea este código para guardar los datos de {seller.name}.</p><button type="button" onClick={() => setIsQrPreviewOpen(false)} className="button-secondary mt-5">Cerrar</button></div></div> : null}
