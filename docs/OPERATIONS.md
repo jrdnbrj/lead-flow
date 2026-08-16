@@ -15,8 +15,18 @@ LeadFlow currently uses one environment: `development`. The project identity is
 - Evolution: HTTP API plus authenticated webhook using the `EVOLUTION_API_*`
   and `EVOLUTION_WEBHOOK_*` variables. `EVOLUTION_DATABASE_URL` is consumed by
   the local Evolution container, not by LeadFlow application code.
-- Push remains deferred. Secrets are local or managed by the platform; never
-  print or commit them.
+- Push runtime is implemented locally but remains unvalidated on a physical
+  device. Secrets are local or managed by the platform; never print or commit them.
+
+## Push runtime
+
+The real Push runtime uses `NEXT_PUBLIC_VAPID_PUBLIC_KEY` in the browser and
+`VAPID_PRIVATE_KEY` only in the `dispatch-push` Edge Function. `036_epic5_push_runtime.sql`
+adds owned subscriptions and delivery projections while E1 remains the only
+action state machine. The dispatcher is intended to be invoked by the
+platform scheduler at a bounded cadence; exact-second delivery is not
+guaranteed. Physical Android/PWA notification acceptance is required before
+calling Push runtime complete.
 
 Use `.env` as the single local configuration file. `.env.local` may remain for
 the existing Next.js developer workflow, but new configuration belongs in
@@ -54,5 +64,5 @@ changes require explicit authorization.
 
 Edge Functions read secrets from environment variables and must not hardcode
 service-role keys, Evolution keys or webhook tokens. Evolution remains an HTTP
-integration; LeadFlow must not access its internal database directly. Push,
-provider smoke tests and other real-infrastructure checks are deferred.
+integration; LeadFlow must not access its internal database directly. Provider
+smoke tests and physical Push acceptance remain deferred.

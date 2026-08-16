@@ -14,6 +14,7 @@ import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { FirstContactSummary } from "@/components/leads/first-contact-summary";
 import { LeadContactActions } from "@/components/leads/lead-contact-actions";
 import { PendingNotifications } from "@/components/leads/pending-notifications";
+import { PushNotifications } from "@/components/leads/push-notifications";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type TemperatureFilter = "ALL" | LeadTemperature;
@@ -179,6 +180,8 @@ function refreshAllLeads() {
         <span className={`size-1.5 rounded-full ${realtimeState === "live" ? "bg-[#39a85c]" : realtimeState === "error" ? "bg-[#d25445]" : "bg-[#d5a82f]"}`} />
         {realtimeState === "live" ? "Actualización automática activa" : realtimeState === "error" ? "Actualización automática no disponible; usa Actualizar datos" : "Conectando actualización automática…"}
       </p>
+
+      <PushNotifications />
 
       <PendingNotifications leads={leads} />
       <section className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-[0_10px_30px_rgba(16,24,40,0.04)] sm:p-4">

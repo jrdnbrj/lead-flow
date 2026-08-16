@@ -1,1 +1,4 @@
 project_id = "qixdcdpihrckyhqvdvln"
+
+[functions.dispatch-push]
+verify_jwt = true
