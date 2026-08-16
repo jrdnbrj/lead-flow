@@ -32,9 +32,9 @@ export function FirstContactSummary({ lead, initialOperation }: { lead: Pick<Lea
     setRetrying(null);
   }
 
-  return <section className="mt-3 rounded-2xl border border-[#dce5ef] bg-[#f8fbff] p-3" aria-label="Resumen del primer contacto">
+  return <section className="mt-2 rounded-xl border border-[#dce5ef] bg-[#f8fbff] p-2.5" aria-label="Resumen del primer contacto">
     <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Primer contacto</p><h3 className="mt-1 text-sm font-black">{operation ? "Resultados guardados" : "Aún no iniciado"}</h3></div>{!operation ? <button type="button" disabled={isSending} onClick={() => void start()} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isSending ? <LoaderCircle size={14} className="animate-spin" /> : <Send size={14} />}<span>{isSending ? "Preparando…" : "Iniciar"}</span></button> : null}</div>
-    {operation ? <div className="mt-3 grid gap-2 sm:grid-cols-3">{operation.items.map((item) => <ResourceResult key={item.id} item={item} retrying={retrying === item.id} onRetry={() => void retry(item)} />)}</div> : <p className="mt-1 text-xs text-[var(--muted)]">Mensaje, fotos y ficha técnica se muestran por separado.</p>}
+    {operation ? <div className="mt-2 grid gap-1.5 sm:grid-cols-3">{operation.items.map((item) => <ResourceResult key={item.id} item={item} retrying={retrying === item.id} onRetry={() => void retry(item)} />)}</div> : <p className="mt-1 text-[11px] text-[var(--muted)]">Mensaje, fotos y ficha técnica se muestran por separado.</p>}
     {error ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-red-600" role="alert"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{error}</p> : null}
   </section>;
 }
@@ -42,5 +42,5 @@ export function FirstContactSummary({ lead, initialOperation }: { lead: Pick<Lea
 function ResourceResult({ item, retrying, onRetry }: { item: FirstContactOperationResult["items"][number]; retrying: boolean; onRetry: () => void }) {
   const resource = item.resourceKind as FirstContactResource;
   const result = item.result ?? (item.availability === "NOT_AVAILABLE" ? "NOT_AVAILABLE" : "UNKNOWN") as FirstContactResult;
-  return <div className="rounded-xl border border-black/[0.06] bg-white p-2.5"><p className="text-xs font-black">{firstContactResourceLabel(resource)}</p><span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-black ${resultClass[result]}`}>{resultLabel[result]}</span>{result === "FAILED" ? <button type="button" disabled={retrying} onClick={onRetry} className="mt-2 inline-flex items-center gap-1 text-[10px] font-black text-[var(--ink)] underline">{retrying ? <LoaderCircle size={12} className="animate-spin" /> : <RefreshCw size={12} />}Reintentar</button> : null}</div>;
+  return <div className="rounded-lg border border-black/[0.06] bg-white p-2"><p className="text-xs font-black">{firstContactResourceLabel(resource)}</p><span className={`mt-1.5 inline-flex rounded-full px-2 py-1 text-[10px] font-black ${resultClass[result]}`}>{resultLabel[result]}</span>{result === "FAILED" ? <button type="button" disabled={retrying} onClick={onRetry} className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-black text-[var(--ink)] underline">{retrying ? <LoaderCircle size={12} className="animate-spin" /> : <RefreshCw size={12} />}Reintentar</button> : null}</div>;
 }

@@ -57,10 +57,10 @@ export function LeadCaptureForm() {
   }
 
   if (savedLeadId) {
-    return <section className="space-y-3 rounded-[28px] border border-black/[0.06] bg-white p-4 shadow-[0_16px_50px_rgba(16,24,40,0.06)] sm:p-6">
-      <div className="rounded-2xl bg-[#eef6d7] px-4 py-4"><p className="eyebrow">Lead guardado</p><h2 className="mt-2 text-2xl font-black">Sin próxima acción</h2><p className="mt-1 text-sm font-semibold text-[var(--muted)]">El contacto quedó listo. Elige qué quieres hacer ahora.</p></div>
+    return <section className="space-y-2 rounded-2xl border border-black/[0.06] bg-white p-3 shadow-[0_12px_36px_rgba(16,24,40,0.05)] sm:p-4">
+      <div className="rounded-xl bg-[#eef6d7] px-3 py-3"><p className="eyebrow">Lead guardado</p><h2 className="mt-1 text-xl font-black">Sin próxima acción</h2><p className="mt-1 text-xs font-semibold text-[var(--muted)]">El contacto quedó listo. Elige el siguiente paso.</p></div>
       {existingLead ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm"><p className="font-black">Este teléfono ya aparece en otro lead</p><p className="mt-1 text-[var(--muted)]">{existingLead.fullName} · {existingLead.carModels.join(", ")} · {getStatusLabel(existingLead.status)}</p><div className="mt-3 flex flex-wrap gap-2"><a className="button-secondary" href={`/dashboard?leadId=${encodeURIComponent(existingLead.id)}`}>Abrir lead existente</a><a className="button-primary" href={`/dashboard?leadId=${encodeURIComponent(savedLeadId)}`}>Crear nueva oportunidad</a></div></div> : null}
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-1.5 sm:grid-cols-2">
         <a className="button-primary min-h-11" href={`/qr?leadId=${encodeURIComponent(savedLeadId)}&name=${encodeURIComponent(values.fullName || "")}`}><QrCode size={16} />Mi contacto / QR del asesor</a>
         <a className="button-secondary min-h-11" href="/dashboard"><ExternalLink size={16} />Ir al dashboard</a>
       </div>
