@@ -1,33 +1,35 @@
 "use client";
 
-import { Download, Maximize2, MessageCircle, Share2, UserRound, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { Download, Maximize2, Share2, UserRound, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 
 import type { SellerProfile } from "@/lib/domain/lead";
-import { copyVCard as copyVCardToClipboard, shareVCard } from "@/lib/contacts/browser-actions";
+import { downloadVCard, isWebShareAvailable, shareVCard } from "@/lib/contacts/browser-actions";
 import { buildVCard } from "@/lib/contacts/vcard";
-import { buildWhatsAppUrl } from "@/lib/whatsapp/links";
 
 export function QrCard({ seller, leadName }: { seller: SellerProfile; leadName?: string }) {
-  const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<"share" | "copy" | null>(null);
+  const [busyAction, setBusyAction] = useState<"save" | "share" | null>(null);
+  const [shareAvailable, setShareAvailable] = useState(false);
   const [isQrPreviewOpen, setIsQrPreviewOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const vCardContact = useMemo(() => ({ name: seller.name, phone: seller.phone, organization: seller.company, email: seller.email }), [seller]);
   const vCard = useMemo(() => buildVCard(vCardContact), [vCardContact]);
 
-  async function copyVCard() {
-    setBusyAction("copy");
-    setFeedback("Copiando…");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShareAvailable(isWebShareAvailable()), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  function saveContact() {
+    setBusyAction("save");
+    setFeedback("Abriendo contacto…");
     try {
-      await copyVCardToClipboard(vCardContact);
-      setCopied(true);
-      setFeedback("Contacto copiado.");
-      window.setTimeout(() => setCopied(false), 2200);
+      downloadVCard(vCardContact);
+      setFeedback("Contacto listo para guardar.");
     } catch {
-      setFeedback("No se pudo copiar el contacto.");
+      setFeedback("No se pudo preparar el contacto.");
     } finally {
       setBusyAction(null);
     }
@@ -48,17 +50,12 @@ export function QrCard({ seller, leadName }: { seller: SellerProfile; leadName?:
     setFeedback("Compartiendo…");
     try {
       const result = await shareVCard(vCardContact);
-      setFeedback(result === "shared" ? "Contacto compartido." : result === "copied" ? "Contacto copiado para compartir." : "Archivo de contacto descargado.");
-    } catch {
-      setFeedback("No se pudo compartir el contacto.");
+      setFeedback(result === "shared" ? "Contacto compartido." : "No se pudo compartir el contacto.");
+    } catch (error) {
+      setFeedback(error instanceof DOMException && error.name === "AbortError" ? "Compartir cancelado." : "No se pudo compartir el contacto.");
     } finally {
       setBusyAction(null);
     }
-  }
-
-  function openWhatsApp() {
-    setFeedback("Abriendo WhatsApp…");
-    window.location.assign(buildWhatsAppUrl(seller.phone));
   }
 
   return (
@@ -80,10 +77,9 @@ export function QrCard({ seller, leadName }: { seller: SellerProfile; leadName?:
         <h1 className="mt-3 max-w-lg text-3xl font-black leading-[0.98] tracking-[-0.06em] sm:text-5xl">Que tu cliente pueda encontrarte cuando lo necesite.</h1>
         <p className="mt-5 max-w-md text-base leading-7 text-[var(--muted)]">{leadName ? <><strong className="text-[var(--ink)]">{leadName}</strong>, guarda los datos de tu asesor</> : "Comparte este código para que tu cliente guarde los datos de su asesor"} y pueda escribirte fácilmente cuando quiera retomar la conversación.</p>
         <div className="mt-7 grid gap-2.5 sm:grid-cols-2">
-          <button type="button" disabled={busyAction !== null} onClick={() => void shareContact()} className="action-button bg-[var(--ink)] text-white hover:bg-[#24334e] disabled:opacity-60"><Share2 size={17} />{busyAction === "share" ? "Compartiendo…" : "Compartir contacto"}</button>
-          <button type="button" disabled={busyAction !== null} onClick={() => void copyVCard()} className="action-button border border-black/[0.1] bg-white text-[var(--ink)] hover:bg-[#faf8f3] disabled:opacity-60"><MessageCircle size={17} />{busyAction === "copy" ? "Copiando…" : copied ? "¡Copiado!" : "Copiar vCard"}</button>
+          <button type="button" disabled={busyAction !== null} onClick={saveContact} className="action-button bg-[var(--ink)] text-white hover:bg-[#24334e] disabled:opacity-60"><Download size={17} />{busyAction === "save" ? "Abriendo…" : "Guardar contacto"}</button>
+          {shareAvailable ? <button type="button" disabled={busyAction !== null} onClick={() => void shareContact()} className="action-button border border-black/[0.1] bg-white text-[var(--ink)] hover:bg-[#faf8f3] disabled:opacity-60"><Share2 size={17} />{busyAction === "share" ? "Compartiendo…" : "Compartir contacto"}</button> : null}
           <button type="button" onClick={downloadQr} className="action-button border border-black/[0.1] bg-white text-[var(--ink)] hover:bg-[#faf8f3]"><Download size={17} />Descargar QR</button>
-          <button type="button" onClick={openWhatsApp} className="action-button border border-black/[0.1] bg-[#e4f8e9] text-[#18733a] hover:bg-[#d4f1dc]"><MessageCircle size={17} />Abrir WhatsApp</button>
         </div>
         {feedback ? <p className="mt-3 text-xs font-bold text-[var(--muted)]" aria-live="polite">{feedback}</p> : null}
         <p className="mt-5 text-xs font-medium text-[var(--muted)]">vCard 3.0 · {seller.phone} · {seller.email}</p>

@@ -23,7 +23,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className="h-full antialiased">
-      <body className="min-h-full"><AppShell>{children}</AppShell></body>
+      <body className="min-h-[100dvh]"><AppShell>{children}</AppShell></body>
     </html>
   );
 }

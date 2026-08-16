@@ -30,7 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[var(--surface)] text-[var(--ink)]">
+    <div className="min-h-[100dvh] bg-[var(--surface)] text-[var(--ink)]">
       <header className="sticky top-0 z-40 border-b border-black/[0.06] bg-[var(--surface)]/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
           <Link href="/dashboard" className="flex items-center gap-3" aria-label="LeadFlow, ir al resumen">
@@ -64,11 +64,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto min-h-[calc(100vh-73px)] max-w-7xl px-5 pb-28 pt-7 sm:px-8 sm:pb-12 sm:pt-10">
+      <main className="mobile-app-main mx-auto min-h-[calc(100dvh-73px)] max-w-7xl px-5 pb-28 pt-7 sm:px-8 sm:pb-12 sm:pt-10">
         {children}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-black/[0.06] bg-[var(--surface)]/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_32px_rgba(16,24,40,0.06)] backdrop-blur-xl sm:hidden" aria-label="Navegación principal">
+      <nav className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-50 border-t border-black/[0.06] bg-[var(--surface)]/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_32px_rgba(16,24,40,0.06)] backdrop-blur-xl sm:hidden" aria-label="Navegación principal">
         <div className="mx-auto grid max-w-md grid-cols-4 gap-1">
           {navigation.map((item) => {
             const Icon = item.icon;

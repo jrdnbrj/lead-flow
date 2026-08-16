@@ -1,14 +1,23 @@
 "use client";
 
-import { Ban, CalendarClock, Check, Plus, RotateCcw, X } from "lucide-react";
+import { Ban, CalendarClock, Check, LoaderCircle, Plus, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
 
-import type { FollowUpAction, NextActionType } from "@/lib/domain/lead";
+import type { FollowUpAction, NextActionType, ScheduleShortcut } from "@/lib/domain/lead";
 import { getFollowUpActionStatusLabel, getNextActionLabel } from "@/lib/domain/lead";
 import { clearLeadActionAction, scheduleLeadActionAction, updateFollowUpActionAction } from "@/lib/leads/actions";
 import { formatNextActionDate, isLeadReminderDue } from "@/lib/leads/follow-up";
 
 type TransitionStatus = "DONE" | "POSTPONED" | "IGNORED" | "CANCELED";
+type SchedulePreset = ScheduleShortcut | "CUSTOM";
+
+const schedulePresets: Array<{ value: SchedulePreset; label: string }> = [
+  { value: "POSTPONE_PLUS_ONE_HOUR", label: "En 1 hora" },
+  { value: "POSTPONE_LATER", label: "Más tarde" },
+  { value: "POSTPONE_TOMORROW", label: "Mañana" },
+  { value: "POSTPONE_IN_THREE_DAYS", label: "En 3 días" },
+  { value: "CUSTOM", label: "Elegir fecha y hora" },
+];
 
 function actionStatusClasses(status: FollowUpAction["status"]): string {
   return {
@@ -40,7 +49,8 @@ export function FollowUpActions({
   onInfo?: (message: string | null) => void;
 }) {
   const [actionType, setActionType] = useState<NextActionType>("CALL");
-  const [days, setDays] = useState("3");
+  const [schedulePreset, setSchedulePreset] = useState<SchedulePreset>("POSTPONE_TOMORROW");
+  const [customDateTime, setCustomDateTime] = useState("");
   const [note, setNote] = useState("");
   const [isScheduling, setIsScheduling] = useState(false);
   const [isIgnoringAll, setIsIgnoringAll] = useState(false);
@@ -49,10 +59,15 @@ export function FollowUpActions({
 
   async function schedule() {
     if (isScheduling) return;
+    const scheduledFor = schedulePreset === "CUSTOM" && customDateTime ? new Date(`${customDateTime}:00-05:00`).toISOString() : undefined;
+    if (schedulePreset === "CUSTOM" && !scheduledFor) {
+      onError?.("Elige una fecha y hora para programar la acción.");
+      return;
+    }
     setIsScheduling(true);
     onError?.(null);
     onInfo?.(null);
-    const response = await scheduleLeadActionAction({ leadId, actionType, days: Number(days), note });
+    const response = await scheduleLeadActionAction({ leadId, actionType, shortcut: schedulePreset === "CUSTOM" ? undefined : schedulePreset, scheduledFor, note });
     if (response.success && response.data) {
       onActionsChange([...actions, response.data.action]);
       onConversationWaiting?.();
@@ -108,6 +123,6 @@ export function FollowUpActions({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-2 py-1 text-[10px] font-black ${actionStatusClasses(action.status)}`}>{getFollowUpActionStatusLabel(action.status)}</span><span className={`text-xs font-black ${due ? "text-[#b94910]" : "text-[var(--ink)]"}`}>{due ? "Para hoy · " : ""}{getNextActionLabel(action.actionType)}</span><span className="text-[11px] text-[var(--muted)]">{formatNextActionDate(action.scheduledFor)}</span></div>{action.note ? <p className="mt-1 line-clamp-1 text-[11px] text-[var(--muted)]">{action.note}</p> : null}</div>{isOpenAction(action) ? <div className="flex flex-wrap gap-1.5"><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "DONE")} className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#e4f8e9] px-2.5 text-[11px] font-black text-[#18733a] disabled:opacity-50"><Check size={13} />Hecha</button><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "POSTPONED")} className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#edf3ff] px-2.5 text-[11px] font-black text-[#3c5f9b] disabled:opacity-50"><RotateCcw size={13} />+1 día</button><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "IGNORED")} className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#f1f1f1] px-2.5 text-[11px] font-black text-[#777c86] disabled:opacity-50"><Ban size={13} />Ignorar</button><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "CANCELED")} className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#f1f1f1] px-2.5 text-[11px] font-black text-[#777c86] disabled:opacity-50"><X size={13} />Cancelar</button></div> : null}</div>
       </div>;
     })}</div> : <p className="mt-2 text-xs font-semibold text-[var(--muted)]">Sin próxima acción.</p>}
-    <div className="mt-3 flex flex-col gap-2 border-t border-black/[0.06] pt-3 sm:flex-row sm:flex-wrap sm:items-center"><span className="flex items-center gap-1.5 text-[11px] font-black text-[var(--muted)]"><Plus size={14} />Agregar acción</span><select aria-label="Tipo de siguiente acción" value={actionType} onChange={(event) => setActionType(event.target.value as NextActionType)} className="h-9 rounded-lg border border-black/10 bg-white px-2 text-xs font-bold"><option value="CALL">Llamar</option><option value="WHATSAPP">WhatsApp</option><option value="QUOTE">Cotizar</option><option value="OTHER">Otra</option></select><select aria-label="Días para el recordatorio" value={days} onChange={(event) => setDays(event.target.value)} className="h-9 rounded-lg border border-black/10 bg-white px-2 text-xs font-bold"><option value="1">Mañana</option><option value="3">En 3 días</option><option value="7">En 7 días</option><option value="14">En 14 días</option></select><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nota opcional" className="h-9 min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-2 text-xs font-semibold outline-none placeholder:text-[#9a9b9b]" /><button type="button" onClick={() => void schedule()} disabled={isScheduling || isIgnoringAll} className="h-9 rounded-lg bg-[var(--ink)] px-3 text-xs font-black text-white disabled:opacity-60">{isScheduling ? "Guardando" : "Programar"}</button></div>
+    <div className="mt-3 flex flex-col gap-2 border-t border-black/[0.06] pt-3 sm:flex-row sm:flex-wrap sm:items-center"><span className="flex items-center gap-1.5 text-[11px] font-black text-[var(--muted)]"><Plus size={14} />Agregar acción</span><select aria-label="Tipo de siguiente acción" value={actionType} onChange={(event) => setActionType(event.target.value as NextActionType)} className="h-10 rounded-lg border border-black/10 bg-white px-2 text-xs font-bold"><option value="CALL">Llamar</option><option value="WHATSAPP">WhatsApp</option><option value="QUOTE">Cotizar</option><option value="OTHER">Otra</option></select><select aria-label="Cuándo programar el recordatorio" value={schedulePreset} onChange={(event) => setSchedulePreset(event.target.value as SchedulePreset)} className="h-10 rounded-lg border border-black/10 bg-white px-2 text-xs font-bold">{schedulePresets.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}</select>{schedulePreset === "CUSTOM" ? <input aria-label="Fecha y hora de la acción" type="datetime-local" value={customDateTime} onChange={(event) => setCustomDateTime(event.target.value)} className="h-10 rounded-lg border border-black/10 bg-white px-2 text-xs font-bold" /> : null}<input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nota opcional" className="h-10 min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-2 text-xs font-semibold outline-none placeholder:text-[#9a9b9b]" /><button type="button" onClick={() => void schedule()} disabled={isScheduling || isIgnoringAll} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[var(--ink)] px-3 text-xs font-black text-white disabled:opacity-60">{isScheduling ? <><LoaderCircle size={13} className="animate-spin" />Guardando</> : "Programar"}</button></div>
   </div>;
 }

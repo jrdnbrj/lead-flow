@@ -17,9 +17,13 @@ export const firstContactRetrySchema = z.object({
 export const scheduleLeadActionSchema = z.object({
   leadId: z.string().trim().min(1),
   actionType: z.enum(["CALL", "WHATSAPP", "QUOTE", "OTHER"]),
-  days: z.number().int().min(1).max(365),
+  days: z.number().int().min(1).max(365).optional(),
+  shortcut: z.enum(["POSTPONE_PLUS_ONE_HOUR", "POSTPONE_LATER", "POSTPONE_TOMORROW", "POSTPONE_IN_THREE_DAYS"]).optional(),
+  scheduledFor: z.string().datetime().optional(),
   note: z.string().trim().max(240, "La nota no puede superar 240 caracteres").optional(),
   idempotencyKey: z.string().trim().min(16).max(200).optional(),
+}).superRefine((value, context) => {
+  if (!value.days && !value.shortcut && !value.scheduledFor) context.addIssue({ code: z.ZodIssueCode.custom, path: ["days"], message: "Indica cuándo programar la acción." });
 });
 
 export const updateFollowUpActionSchema = z.object({

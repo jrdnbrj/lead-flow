@@ -57,14 +57,17 @@ export function LeadCaptureForm() {
   }
 
   if (savedLeadId) {
-    return <section className="space-y-4 rounded-[28px] border border-black/[0.06] bg-white p-5 shadow-[0_16px_50px_rgba(16,24,40,0.06)] sm:p-7">
+    return <section className="space-y-3 rounded-[28px] border border-black/[0.06] bg-white p-4 shadow-[0_16px_50px_rgba(16,24,40,0.06)] sm:p-6">
       <div className="rounded-2xl bg-[#eef6d7] px-4 py-4"><p className="eyebrow">Lead guardado</p><h2 className="mt-2 text-2xl font-black">Sin próxima acción</h2><p className="mt-1 text-sm font-semibold text-[var(--muted)]">El contacto quedó listo. Elige qué quieres hacer ahora.</p></div>
       {existingLead ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm"><p className="font-black">Este teléfono ya aparece en otro lead</p><p className="mt-1 text-[var(--muted)]">{existingLead.fullName} · {existingLead.carModels.join(", ")} · {getStatusLabel(existingLead.status)}</p><div className="mt-3 flex flex-wrap gap-2"><a className="button-secondary" href={`/dashboard?leadId=${encodeURIComponent(existingLead.id)}`}>Abrir lead existente</a><a className="button-primary" href={`/dashboard?leadId=${encodeURIComponent(savedLeadId)}`}>Crear nueva oportunidad</a></div></div> : null}
-      <FollowUpActions leadId={savedLeadId} actions={savedActions} onActionsChange={setSavedActions} onConversationWaiting={() => undefined} onError={setSubmitError} onInfo={setWarning} />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <a className="button-primary min-h-11" href={`/qr?leadId=${encodeURIComponent(savedLeadId)}&name=${encodeURIComponent(values.fullName || "")}`}><QrCode size={16} />Mi contacto / QR del asesor</a>
+        <a className="button-secondary min-h-11" href="/dashboard"><ExternalLink size={16} />Ir al dashboard</a>
+      </div>
       <LeadContactActions contact={{ name: values.fullName || "Cliente", phone: values.phone || "" }} />
+      <FollowUpActions leadId={savedLeadId} actions={savedActions} onActionsChange={setSavedActions} onConversationWaiting={() => undefined} onError={setSubmitError} onInfo={setWarning} />
       <FirstContactSummary lead={{ id: savedLeadId, fullName: values.fullName || "Cliente", phone: values.phone || "", carModels: values.carModels || [] }} />
       {submitError ? <p className="rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]" role="alert">{submitError}</p> : null}
-      <div className="grid gap-2 sm:grid-cols-2"><a className="button-primary" href="/dashboard"><ExternalLink size={16} />Ir al dashboard</a><a className="button-secondary" href={`/qr?leadId=${encodeURIComponent(savedLeadId)}&name=${encodeURIComponent(values.fullName || "")}`}><QrCode size={16} />Compartir mi contacto/QR</a><a className="button-secondary" href={`/dashboard?leadId=${encodeURIComponent(savedLeadId)}`}>Programar acción</a><a className="button-secondary" href={`/dashboard?leadId=${encodeURIComponent(savedLeadId)}`}>Enviar primer contacto por WhatsApp</a></div>
       {warning ? <p className="text-xs text-[var(--muted)]">{warning}</p> : null}
     </section>;
   }
@@ -149,7 +152,7 @@ export function LeadCaptureForm() {
       {submitError ? <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert"><RefreshCw size={17} className="mt-0.5 shrink-0" />{submitError}</div> : null}
       {warning ? <p className="text-xs text-[var(--muted)]">{warning}</p> : null}
 
-      <div className="sticky bottom-[91px] z-20 -mx-1 rounded-3xl border border-black/[0.06] bg-[var(--surface)]/90 p-2 backdrop-blur-xl sm:static sm:border-0 sm:bg-transparent sm:p-0">
+      <div className="-mx-1 rounded-3xl border border-black/[0.06] bg-[var(--surface)]/90 p-2 backdrop-blur-xl sm:border-0 sm:bg-transparent sm:p-0">
         <button type="submit" disabled={formState.isSubmitting || !formState.isValid} className="flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl bg-[var(--lime)] px-5 text-base font-black text-[var(--ink)] shadow-[0_10px_24px_rgba(171,205,70,0.3)] transition hover:brightness-95 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45">
           {formState.isSubmitting ? <><LoaderCircle size={19} className="animate-spin" />Guardando lead...</> : <>Guardar lead <ArrowRight size={19} /></>}
         </button>

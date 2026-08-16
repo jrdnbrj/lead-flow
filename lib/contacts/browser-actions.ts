@@ -2,30 +2,20 @@ import { buildVCard, type VCardContact, vCardFilename } from "@/lib/contacts/vca
 
 export type ContactActionResult = "shared" | "copied" | "downloaded";
 
+export function isWebShareAvailable(): boolean {
+  return typeof navigator !== "undefined" && typeof navigator.share === "function";
+}
+
 export async function shareVCard(contact: VCardContact): Promise<ContactActionResult> {
+  if (!isWebShareAvailable()) throw new Error("Este dispositivo no permite compartir desde el navegador.");
   const vCard = buildVCard(contact);
-  if (navigator.share) {
-    const file = typeof File === "undefined" ? null : new File([vCard], vCardFilename(contact.name), { type: "text/vcard;charset=utf-8" });
-    try {
-      if (file && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: `Contacto de ${contact.name}` });
-      } else {
-        await navigator.share({ title: `Contacto de ${contact.name}`, text: vCard });
-      }
-      return "shared";
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") throw error;
-      downloadVCard(contact);
-      return "downloaded";
-    }
+  const file = typeof File === "undefined" ? null : new File([vCard], vCardFilename(contact.name), { type: "text/vcard;charset=utf-8" });
+  if (file && navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ files: [file], title: `Contacto de ${contact.name}` });
+  } else {
+    await navigator.share({ title: `Contacto de ${contact.name}`, text: vCard });
   }
-  try {
-    await copyVCard(contact);
-    return "copied";
-  } catch {
-    downloadVCard(contact);
-    return "downloaded";
-  }
+  return "shared";
 }
 
 export async function copyVCard(contact: VCardContact): Promise<void> {

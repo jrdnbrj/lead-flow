@@ -51,4 +51,11 @@ button, a { touch-action: manipulation; }
 .compact-follow-up button { min-height: 32px; }
 .template-editor-layer { font-family: Arial, Helvetica, sans-serif; font-size: .875rem; font-weight: 400; letter-spacing: normal; line-height: 1.5rem; word-spacing: normal; }
 
+/* When the visual viewport is short (for example, while a mobile keyboard is open),
+   let the form own the viewport instead of leaving a fixed nav floating over it. */
+@media (max-width: 639px) and (max-height: 560px) {
+  .mobile-bottom-nav { display: none; }
+  .mobile-app-main { min-height: auto; padding-bottom: 1.5rem; }
+}
+
 @media (min-width: 640px) { .field-input { padding: 1rem 1.1rem; } }

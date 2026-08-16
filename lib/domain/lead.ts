@@ -118,7 +118,9 @@ export interface SendLeadInput {
 export interface ScheduleLeadActionInput {
   leadId: string;
   actionType: NextActionType;
-  days: number;
+  days?: number;
+  shortcut?: ScheduleShortcut;
+  scheduledFor?: string;
   note?: string;
   idempotencyKey?: string;
 }

@@ -123,7 +123,7 @@ export async function scheduleLeadActionAction(input: ScheduleLeadActionInput): 
   const auth = await requireAdvisorAction<{ action: FollowUpAction; nextActionAt: string; actionType: ScheduleLeadActionInput["actionType"] }>();
   if (auth) return auth;
 
-  const nextActionAt = getStartOfSellerDayAfter(parsed.data.days);
+  const nextActionAt = parsed.data.scheduledFor ?? (parsed.data.shortcut ? resolveScheduleShortcut(parsed.data.shortcut) : getStartOfSellerDayAfter(parsed.data.days ?? 1));
   const action = await scheduleLeadAction(parsed.data.leadId, parsed.data.actionType, nextActionAt, parsed.data.note, parsed.data.idempotencyKey);
   return action
     ? { success: true, data: { action, nextActionAt, actionType: parsed.data.actionType } }
