@@ -32,6 +32,7 @@ export async function executeFirstContact(lead: FirstContactLead, provider: Firs
   const request = await buildFirstContactRequest(lead);
   const initial = await requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });
   if (!initial) return null;
+  let providerAttempted = false;
   for (const item of initial.items) {
     if (item.availability !== "AVAILABLE" || !item.effectId || item.result === "ACCEPTED") continue;
     const claimTokenDigest = digest(`${idempotencyKey}:${item.id}:${crypto.randomUUID()}`);
@@ -39,12 +40,14 @@ export async function executeFirstContact(lead: FirstContactLead, provider: Firs
     if (!claim || claim.status !== "CLAIMED") continue;
     const payloadDigest = digest(JSON.stringify({ resource: item.resourceKind, version: item.resourceVersion, text: item.resourceKind === "MESSAGE" ? request.text : null, imageUrl: item.resourceKind === "PHOTOS" ? request.imageUrl : null }));
     if (!(await beginFirstContactEffect(item.effectId, claim.attemptNo, claimTokenDigest, payloadDigest))) continue;
+    providerAttempted = true;
     const outcome = item.resourceKind === "MESSAGE"
       ? await provider.sendMessage({ phone: lead.phone, text: request.text })
       : await provider.sendPhoto({ phone: lead.phone, imageUrl: request.imageUrl ?? "", caption: `Información de ${lead.carModels[0] ?? "tu vehículo"}`, fileName: `leadflow-${(lead.carModels[0] ?? "vehiculo").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg` });
     await recordFirstContactEffectResult(item.effectId, claim.attemptNo, claimTokenDigest, { ...outcome, messageBody: item.resourceKind === "MESSAGE" ? request.text : null });
   }
-  return requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });
+  const final = await requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });
+  return final ? { ...final, replayed: initial.replayed && !providerAttempted } : null;
 }
 
 export function retryableFirstContactResult(result: string | null): boolean { return result === "FAILED"; }

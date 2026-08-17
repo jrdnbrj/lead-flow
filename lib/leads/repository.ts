@@ -673,10 +673,22 @@ export async function softDeleteLead(id: string): Promise<boolean> {
 export async function markLeadCustomerReply(id: string, preview: string | null, messageAt: string): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
-  return markLeadCustomerReplyWithClient(supabase, id, preview, messageAt);
+  return (await markLeadCustomerReplyWithClient(supabase, id, preview, messageAt)).ok;
 }
 
-async function markLeadCustomerReplyWithClient(supabase: LeadflowDbClient, id: string, preview: string | null, messageAt: string): Promise<boolean> {
+type CustomerReplyProjection = { ok: boolean; stale: boolean };
+
+async function markLeadCustomerReplyWithClient(supabase: LeadflowDbClient, id: string, preview: string | null, messageAt: string): Promise<CustomerReplyProjection> {
+  const { data: lead, error: leadReadError } = await supabase
+    .from("leads")
+    .select("last_customer_message_at")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (leadReadError || !lead) return { ok: false, stale: false };
+  const incomingAt = Date.parse(messageAt);
+  const currentAt = lead.last_customer_message_at ? Date.parse(lead.last_customer_message_at) : Number.NaN;
+  if (Number.isFinite(currentAt) && Number.isFinite(incomingAt) && incomingAt <= currentAt) return { ok: true, stale: true };
   const { error: actionsError } = await supabase.from("lead_follow_up_actions").update({
     status: "CANCELED",
     completed_at: messageAt,
@@ -691,14 +703,23 @@ async function markLeadCustomerReplyWithClient(supabase: LeadflowDbClient, id: s
     last_customer_message_preview: preview?.slice(0, 180) ?? null,
   }).eq("id", id).is("deleted_at", null);
   if (!actionsError && !error) await supabase.from("leads").update({ status: "CONTACTADO" }).eq("id", id).eq("status", "NUEVO").is("deleted_at", null);
-  return !actionsError && !error;
+  return { ok: !actionsError && !error, stale: false };
 }
 
-export async function markLeadCustomerReplyForProvider(id: string, preview: string | null, messageAt: string): Promise<boolean> {
+export async function markLeadCustomerReplyForProvider(id: string, preview: string | null, messageAt: string): Promise<CustomerReplyProjection> {
+  const context = await getProviderContext();
+  if (!context) return { ok: false, stale: false };
+  const owned = await isProviderOwnedLead(context, id);
+  return owned ? markLeadCustomerReplyWithClient(context.supabase, id, preview, messageAt) : { ok: false, stale: false };
+}
+
+export async function markLeadConversationActiveForProvider(id: string): Promise<boolean> {
   const context = await getProviderContext();
   if (!context) return false;
   const owned = await isProviderOwnedLead(context, id);
-  return owned ? markLeadCustomerReplyWithClient(context.supabase, id, preview, messageAt) : false;
+  if (!owned) return false;
+  const { error } = await context.supabase.from("leads").update({ conversation_state: "ACTIVE" }).eq("id", id).is("deleted_at", null);
+  return !error;
 }
 
 export async function updateLeadConversationState(id: string, state: ConversationState): Promise<boolean> {

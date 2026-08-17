@@ -34,6 +34,7 @@ button, a { touch-action: manipulation; }
 .button-primary:hover, .button-secondary:hover, .action-button:hover { transform: translateY(-1px); }
 .action-button { min-height: 48px; }
 .filter-pill { white-space: nowrap; border: 1px solid rgba(16,24,40,.1); border-radius: 999px; background: white; padding: .62rem .85rem; color: var(--muted); font-size: .72rem; font-weight: 900; transition: all .2s; }
+.dashboard-filter-pill { padding: .5rem .75rem; }
 .filter-pill:hover { border-color: rgba(16,24,40,.25); color: var(--ink); }
 .filter-pill-active { border-color: var(--ink); background: var(--ink); color: var(--lime); }
 .filter-pill-active-muted { border-color: #cdd2da; background: #eef0f3; color: var(--ink); }
@@ -46,7 +47,17 @@ button, a { touch-action: manipulation; }
 .send-whatsapp-button:hover { background: #25d366; color: white; }
 .send-whatsapp-button:disabled { cursor: not-allowed; opacity: .72; }
 .send-whatsapp-button-sent { background: #e9eef0; color: #52616b; }
-.compact-lead-header .icon-action, .compact-lead-header .send-whatsapp-button { min-height: 36px; min-width: 36px; border-radius: 11px; padding: .55rem; }
+.compact-lead-header .icon-action, .compact-lead-header .send-whatsapp-button { min-height: 42px; min-width: 42px; border-radius: 12px; padding: 0; }
+.compact-lead-header .send-whatsapp-button { padding-inline: .75rem; }
+.compact-lead-actions { overflow: visible; }
+.compact-lead-header .icon-action-whatsapp { min-height: 42px; min-width: 42px; padding: 0; border-color: #b7ecc9; background: #e9fff0; }
+.compact-lead-header .icon-action-whatsapp svg { display: block; width: 24px; height: 24px; }
+.compact-lead-header .compact-expand-action { min-height: 42px; min-width: 42px; padding: 0; }
+.compact-lead-header .lead-contact-save { min-height: 42px; min-width: 42px; padding: 0; border-color: #b9df73; background: var(--lime); color: var(--ink); }
+.compact-lead-header .lead-contact-save:hover { border-color: #91bd3d; background: #b7e94f; }
+.compact-lead-header .purchase-action { border-color: #ead7a8; background: #fff8df; color: #8a5b00; }
+.compact-lead-header .purchase-action:hover { border-color: #cba44c; background: #ffefb7; }
+.compact-lead-header .purchase-action-registered { border-color: #9bd3a8; background: #e4f8e9; color: #18733a; opacity: 1; }
 .compact-follow-up select, .compact-follow-up input { height: 34px; }
 .compact-follow-up button { min-height: 32px; }
 .template-editor-layer { font-family: Arial, Helvetica, sans-serif; font-size: .875rem; font-weight: 400; letter-spacing: normal; line-height: 1.5rem; word-spacing: normal; }

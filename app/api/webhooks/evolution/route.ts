@@ -6,7 +6,7 @@ import { formatPhoneForWhatsapp } from "@/lib/domain/lead";
 import { classifyInboundMessage } from "@/lib/leads/inbound-classifier";
 import { InboundMessageLedger } from "@/lib/leads/inbound-dedup";
 import { normalizeInboundPayload } from "@/lib/leads/inbound-dto";
-import { findLeadByPhoneForProvider, findLeadMessageByProviderIdForProvider, persistInboundMessageForProvider, resolveInboundLeadMatchForProvider, updateLeadMessageForProvider, updateLeadWhatsappStatusForProvider, upsertInboundResponseActionForProvider, createLeadMessageForProvider } from "@/lib/leads/repository";
+import { findLeadByPhoneForProvider, findLeadMessageByProviderIdForProvider, markLeadConversationActiveForProvider, markLeadCustomerReplyForProvider, persistInboundMessageForProvider, resolveInboundLeadMatchForProvider, updateLeadMessageForProvider, updateLeadWhatsappStatusForProvider, upsertInboundResponseActionForProvider, createLeadMessageForProvider } from "@/lib/leads/repository";
 import { extractEvolutionMessageId, normalizeEvolutionStatus } from "@/lib/whatsapp/service";
 
 export const runtime = "nodejs";
@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_API_INSTANCE_NAME?.trim() ?? "";
 
 type JsonRecord = Record<string, unknown>;
+type WebhookProcessingResult = { handled: boolean; retryable: boolean };
 
 function asRecord(value: unknown): JsonRecord | null {
   return typeof value === "object" && value !== null ? value as JsonRecord : null;
@@ -125,15 +126,15 @@ function statusTimestamps(status: WhatsappStatus, timestamp: string): { delivere
   };
 }
 
-async function processIncomingMessage(item: JsonRecord, event: string, ledger: InboundMessageLedger): Promise<boolean> {
+async function processIncomingMessage(item: JsonRecord, event: string, ledger: InboundMessageLedger): Promise<WebhookProcessingResult> {
   const normalized = normalizeInboundPayload(item, event, EVOLUTION_INSTANCE);
-  if (!normalized.accepted) return false;
+  if (!normalized.accepted) return { handled: false, retryable: false };
   const identity = ledger.accept({ evolutionInstance: normalized.dto.evolutionInstance, providerMessageId: normalized.dto.providerMessageId });
-  if (!identity.accepted) return identity.replay;
+  if (!identity.accepted) return { handled: "replay" in identity && identity.replay, retryable: false };
 
   const classification = classifyInboundMessage(normalized.dto.body ?? "").classification;
   const match = await resolveInboundLeadMatchForProvider(normalized.dto.phone);
-  if (match.status === "NO_MATCH") return false;
+  if (match.status === "NO_MATCH") return { handled: false, retryable: false };
   const persisted = await persistInboundMessageForProvider({
     leadId: match.leadId,
     evolutionInstance: normalized.dto.evolutionInstance,
@@ -145,10 +146,14 @@ async function processIncomingMessage(item: JsonRecord, event: string, ledger: I
     associationStatus: match.status === "AMBIGUOUS" ? "AMBIGUOUS" : "MATCHED",
     matchAmbiguous: match.status === "AMBIGUOUS",
   });
-  if (!persisted) return false;
-  if (classification === "NO_SUGGESTION") return true;
+  if (!persisted) return { handled: false, retryable: true };
+  if (persisted.replayed === true || persisted.status === "REPLAYED") return { handled: true, retryable: false };
+  const replyProjection = await markLeadCustomerReplyForProvider(match.leadId, normalized.dto.body, normalized.dto.timestamp);
+  if (!replyProjection.ok) return { handled: false, retryable: true };
+  if (replyProjection.stale) return { handled: true, retryable: false };
+  if (classification === "NO_SUGGESTION") return { handled: true, retryable: false };
   const sourceMessageId = typeof persisted.message_id === "string" ? persisted.message_id : null;
-  if (!sourceMessageId) return false;
+  if (!sourceMessageId) return { handled: false, retryable: true };
   const scheduledFor = new Date(new Date(normalized.dto.timestamp).getTime() + 60 * 60 * 1000).toISOString();
   const action = await upsertInboundResponseActionForProvider({
     leadId: match.leadId,
@@ -157,7 +162,8 @@ async function processIncomingMessage(item: JsonRecord, event: string, ledger: I
     scheduledFor,
     idempotencyKey: `evolution-inbound-response:${normalized.dto.evolutionInstance}:${normalized.dto.providerMessageId}`,
   });
-  return Boolean(action);
+  const actionApplied = Boolean(action) && await markLeadConversationActiveForProvider(match.leadId);
+  return { handled: actionApplied, retryable: !actionApplied };
 }
 
 async function processOutboundEvent(item: JsonRecord): Promise<boolean> {
@@ -200,14 +206,19 @@ export async function POST(request: Request) {
   const items = flattenEventData(payload.data ?? payload);
   const inboundLedger = new InboundMessageLedger();
   let processed = 0;
+  let retryableFailures = 0;
   for (const item of items) {
-    const handled = event === "MESSAGES_UPSERT" || event === "MESSAGES_SET"
-      ? await processIncomingMessage(item, event, inboundLedger) || await processOutboundEvent(item)
-      : event === "MESSAGES_UPDATE" || event === "SEND_MESSAGE"
-        ? await processOutboundEvent(item)
-        : false;
+    let handled = false;
+    if (event === "MESSAGES_UPSERT" || event === "MESSAGES_SET") {
+      const inbound = await processIncomingMessage(item, event, inboundLedger);
+      retryableFailures += inbound.retryable ? 1 : 0;
+      handled = inbound.handled || (!inbound.retryable && await processOutboundEvent(item));
+    } else if (event === "MESSAGES_UPDATE" || event === "SEND_MESSAGE") {
+      handled = await processOutboundEvent(item);
+    }
     if (handled) processed += 1;
   }
 
+  if (retryableFailures > 0) return NextResponse.json({ success: false, error: "Retryable webhook processing failure", event, received: items.length, processed }, { status: 503 });
   return NextResponse.json({ success: true, event, received: items.length, processed });
 }

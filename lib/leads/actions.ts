@@ -78,7 +78,7 @@ export async function sendLeadWhatsappAction(input: SendLeadInput): Promise<Acti
     return {
       success: true,
       data: { leadId: parsed.data.leadId, whatsappStatus: messageItem?.result === "ACCEPTED" ? "SENT" : messageItem?.result === "FAILED" ? "FAILED" : "PENDING", persisted: true, providerMessageId: messageItem?.providerMessageId ?? null, mediaSent: photosItem?.result === "ACCEPTED" },
-      warning: result.replayed ? "El primer contacto ya estaba registrado." : undefined,
+      warning: result.replayed ? "El mensaje ya estaba enviado; no se duplicó." : undefined,
     };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "No fue posible preparar el primer contacto." };

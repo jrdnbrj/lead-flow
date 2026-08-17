@@ -1,13 +1,12 @@
 "use client";
 
 import * as XLSX from "xlsx";
-import { CheckCircle2, ChevronDown, ChevronUp, Download, LoaderCircle, MessageCircle, Phone, RefreshCw, Search, Send, SlidersHorizontal, Target, Trash2, TriangleAlert } from "lucide-react";
-import Link from "next/link";
+import { CheckCircle2, ChevronDown, ChevronUp, CircleDollarSign, Download, FileText, LoaderCircle, Phone, RefreshCw, Search, Send, SlidersHorizontal, Trash2, TriangleAlert, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import type { ConversationState, FollowUpAction, InboundClassification, Lead, LeadStatus, LeadTemperature, WhatsappStatus } from "@/lib/domain/lead";
-import { formatPhoneForWhatsapp, getConversationStateLabel, getNextActionLabel, getStatusLabel, getTemperatureLabel } from "@/lib/domain/lead";
+import { formatPhoneForWhatsapp, getConversationStateLabel, getNextActionLabel, getStatusLabel, getTemperatureLabel, leadTimeframes, paymentMethods } from "@/lib/domain/lead";
 import { correctInboundResponseAction, deleteLeadAction, recordPurchaseDecisionAction, sendLeadWhatsappAction, updateLeadConversationAction } from "@/lib/leads/actions";
 import { formatNextActionDate, getDashboardLeadBucket, isLeadReminderDue, sortLeadsForDashboard } from "@/lib/leads/follow-up";
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
@@ -74,6 +73,14 @@ function getNextOpenAction(lead: Lead): FollowUpAction | null {
 function inboundClassificationLabel(classification: InboundClassification): string { return { NO_SUGGESTION: "Sin respuesta sugerida", PENDING: "Respuesta pendiente", REVIEW: "Revisar" }[classification]; }
 function inboundClassificationClasses(classification: InboundClassification): string { return { NO_SUGGESTION: "bg-[#edf0f4] text-[#59616d]", PENDING: "bg-[#fff0bd] text-[#765000]", REVIEW: "bg-[#f4eaff] text-[#6c3d91]" }[classification]; }
 
+function getTimeframeLabel(value: Lead["timeframe"]): string {
+  return leadTimeframes.find((option) => option.value === value)?.label ?? value;
+}
+
+function getPaymentMethodLabel(value: Lead["paymentMethod"]): string {
+  return paymentMethods.find((option) => option.value === value)?.label ?? value;
+}
+
 export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
   const router = useRouter();
   const [temperature, setTemperature] = useState<TemperatureFilter>("ALL");
@@ -82,6 +89,7 @@ export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [hiddenLeadIds, setHiddenLeadIds] = useState<string[]>([]);
+  const [expandedLeadIds, setExpandedLeadIds] = useState<Set<string>>(() => new Set());
   const [realtimeState, setRealtimeState] = useState<RealtimeState>(() => process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ? "connecting" : "error");
   const [isRefreshing, startRefresh] = useTransition();
 
@@ -89,21 +97,34 @@ export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) return;
     let refreshTimer: number | undefined;
+    let lastRealtimeEventAt = 0;
     const refresh = () => {
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(() => startRefresh(() => router.refresh()), 150);
     };
+    const onRealtimeChange = () => {
+      lastRealtimeEventAt = Date.now();
+      refresh();
+    };
     const channel = supabase
       .channel("leadflow-dashboard-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "lead_messages" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "lead_follow_up_actions" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, onRealtimeChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "lead_messages" }, onRealtimeChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "lead_follow_up_actions" }, onRealtimeChange)
       .subscribe((status) => {
         if (status === "SUBSCRIBED") setRealtimeState("live");
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setRealtimeState("error");
       });
+    const refreshVisibleFallback = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastRealtimeEventAt >= 20_000) refresh();
+    };
+    const fallbackTimer = window.setInterval(refreshVisibleFallback, 15_000);
+    const handleVisibilityChange = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+      window.clearInterval(fallbackTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       void supabase.removeChannel(channel);
     };
   }, [router]);
@@ -111,6 +132,14 @@ export function DashboardClient({ initialLeads }: { initialLeads: Lead[] }) {
 function refreshAllLeads() {
   startRefresh(() => router.refresh());
 }
+
+  function setLeadExpanded(leadId: string, expanded: boolean) {
+    setExpandedLeadIds((current) => {
+      const next = new Set(current);
+      if (expanded) next.add(leadId); else next.delete(leadId);
+      return next;
+    });
+  }
 
   const leads = useMemo(() => {
     return initialLeads.filter((lead) => !hiddenLeadIds.includes(lead.id));
@@ -161,18 +190,12 @@ function refreshAllLeads() {
   }
 
   return (
-    <div className="space-y-5">
-      <section className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
-        <div>
-          <p className="eyebrow">Panel de ventas · {formatToday()}</p>
-          <h1 className="mt-2 max-w-2xl text-3xl font-black leading-[0.98] tracking-[-0.06em] sm:text-4xl">Tu siguiente acción, más clara.</h1>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--muted)]">Qué hacer ahora, con quién y cuándo.</p>
-        </div>
-        <div className="flex flex-wrap gap-2 lg:justify-end">
-          <Link href="/nuevo" className="button-primary"><Target size={17} />Capturar lead</Link>
-          <button type="button" onClick={refreshAllLeads} disabled={isRefreshing} className="button-secondary" aria-label="Actualizar todos los contactos" title="Volver a consultar todos los contactos en Supabase"><RefreshCw size={17} className={isRefreshing ? "animate-spin" : ""} />{isRefreshing ? "Actualizando" : "Actualizar"}</button>
-          <Link href="/whatsapp" className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-black text-[var(--muted)] hover:bg-black/[0.04]"><MessageCircle size={16} />WhatsApp</Link>
-          <button type="button" onClick={exportToXlsx} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-black text-[var(--muted)] hover:bg-black/[0.04]"><Download size={16} />Exportar</button>
+    <div className="space-y-3">
+      <section className="flex flex-wrap items-center justify-between gap-1.5 border-b border-black/[0.06] pb-1">
+        <p className="eyebrow">Panel de ventas · {formatToday()}</p>
+        <div className="flex flex-wrap gap-1.5">
+          <button type="button" onClick={refreshAllLeads} disabled={isRefreshing} className="button-secondary min-h-9 px-3 py-1.5 text-xs" aria-label="Actualizar todos los contactos" title="Volver a consultar todos los contactos en Supabase"><RefreshCw size={15} className={isRefreshing ? "animate-spin" : ""} />{isRefreshing ? "Actualizando" : "Actualizar"}</button>
+          <button type="button" onClick={exportToXlsx} className="inline-flex min-h-9 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-black text-[var(--muted)] hover:bg-black/[0.04]"><Download size={15} />Exportar</button>
         </div>
       </section>
 
@@ -184,43 +207,43 @@ function refreshAllLeads() {
       <PushNotifications />
 
       <PendingNotifications leads={leads} />
-      <section className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-[0_10px_30px_rgba(16,24,40,0.04)] sm:p-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <section className="rounded-2xl border border-black/[0.06] bg-white p-2 shadow-[0_10px_30px_rgba(16,24,40,0.04)] sm:p-2.5">
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-sm font-black"><SlidersHorizontal size={16} />Contactos <span className="text-xs font-semibold text-[var(--muted)]">{filteredLeads.length} visibles</span></div>
-          <label className="flex h-10 w-full items-center gap-2 rounded-xl bg-[#f6f3ed] px-3 text-[var(--muted)] sm:max-w-xs"><Search size={16} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Buscar nombre, celular o modelo" className="w-full bg-transparent text-sm text-[var(--ink)] outline-none placeholder:text-[#9a9b9b]" /></label>
+          <label className="flex h-9 w-full items-center gap-2 rounded-xl bg-[#f6f3ed] px-3 text-[var(--muted)] sm:max-w-xs"><Search size={16} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Buscar nombre, celular o modelo" className="w-full bg-transparent text-sm text-[var(--ink)] outline-none placeholder:text-[#9a9b9b]" /></label>
         </div>
-        <details className="group mt-2">
+        <details className="group mt-1">
           <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-xs font-black text-[var(--muted)] [&::-webkit-details-marker]:hidden">Más filtros <ChevronDown size={14} className="transition group-open:rotate-180" /></summary>
           <div className="space-y-2 pt-1">
         <div className="flex gap-2 overflow-x-auto pb-1">
           {(["ALL", "HIGH", "MEDIUM", "LOW"] as const).map((value) => {
             const label = value === "ALL" ? "Todas las prioridades" : value === "HIGH" ? "🔥 Alta" : value === "MEDIUM" ? "Media" : "Baja";
-            return <button type="button" key={value} onClick={() => { setTemperature(value); setPage(1); }} className={`filter-pill ${temperature === value ? "filter-pill-active" : ""}`}>{label}</button>;
+            return <button type="button" key={value} onClick={() => { setTemperature(value); setPage(1); }} className={`filter-pill dashboard-filter-pill ${temperature === value ? "filter-pill-active" : ""}`}>{label}</button>;
           })}
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {statusFilters.map((filter) => <button type="button" key={filter.value} onClick={() => { setStatus(filter.value); setPage(1); }} className={`filter-pill ${status === filter.value ? "filter-pill-active-muted" : ""}`}>{filter.label}</button>)}
+          {statusFilters.map((filter) => <button type="button" key={filter.value} onClick={() => { setStatus(filter.value); setPage(1); }} className={`filter-pill dashboard-filter-pill ${status === filter.value ? "filter-pill-active-muted" : ""}`}>{filter.label}</button>)}
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {([{ value: "ALL", label: "Parte de pago: todos" }, { value: "YES", label: "Con vehículo" }, { value: "NO", label: "Sin vehículo" }] as const).map((filter) => <button type="button" key={filter.value} onClick={() => { setTradeIn(filter.value); setPage(1); }} className={`filter-pill ${tradeIn === filter.value ? "filter-pill-active-muted" : ""}`}>{filter.label}</button>)}
+          {([{ value: "ALL", label: "Parte de pago: todos" }, { value: "YES", label: "Con vehículo" }, { value: "NO", label: "Sin vehículo" }] as const).map((filter) => <button type="button" key={filter.value} onClick={() => { setTradeIn(filter.value); setPage(1); }} className={`filter-pill dashboard-filter-pill ${tradeIn === filter.value ? "filter-pill-active-muted" : ""}`}>{filter.label}</button>)}
         </div>
           </div>
         </details>
       </section>
 
       {filteredLeads.length ? <Pagination currentPage={currentPage} totalPages={totalPages} visibleCount={visibleLeads.length} totalCount={filteredLeads.length} onPageChange={setPage} /> : null}
-      {visibleActiveLeads.length ? <LeadSection title="Conversaciones activas" helper="Responde primero." leads={visibleActiveLeads} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
-      {visibleReminderLeads.length ? <LeadSection title="Vencidos o para hoy" helper="Resuelve la alerta." leads={visibleReminderLeads} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
-      {visibleNoActionLeads.length ? <LeadSection title="Sin próxima acción" helper="Define el siguiente paso." leads={visibleNoActionLeads} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
-      {visibleRemainingLeads.length ? <LeadSection title="Resto de contactos" helper="Seguimientos futuros." leads={visibleRemainingLeads} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
+      {visibleActiveLeads.length ? <LeadSection title="Conversaciones activas" helper="Responde primero." leads={visibleActiveLeads} expandedLeadIds={expandedLeadIds} onExpandedChange={setLeadExpanded} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
+      {visibleReminderLeads.length ? <LeadSection title="Vencidos o para hoy" helper="Resuelve la alerta." leads={visibleReminderLeads} expandedLeadIds={expandedLeadIds} onExpandedChange={setLeadExpanded} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
+      {visibleNoActionLeads.length ? <LeadSection title="Sin próxima acción" helper="Define el siguiente paso." leads={visibleNoActionLeads} expandedLeadIds={expandedLeadIds} onExpandedChange={setLeadExpanded} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
+      {visibleRemainingLeads.length ? <LeadSection title="Resto de contactos" helper="Seguimientos futuros." leads={visibleRemainingLeads} expandedLeadIds={expandedLeadIds} onExpandedChange={setLeadExpanded} onDeleted={(leadId) => setHiddenLeadIds((current) => [...current, leadId])} /> : null}
       {!visibleLeads.length ? <div className="rounded-[22px] border border-dashed border-black/15 bg-white px-5 py-12 text-center"><Search className="mx-auto text-[var(--muted)]" size={28} /><h3 className="mt-4 font-black">No hay contactos con esos filtros</h3><p className="mt-1 text-sm text-[var(--muted)]">Prueba otra búsqueda o captura un nuevo prospecto.</p></div> : null}
       {filteredLeads.length > pageSize ? <Pagination currentPage={currentPage} totalPages={totalPages} visibleCount={visibleLeads.length} totalCount={filteredLeads.length} onPageChange={setPage} /> : null}
     </div>
   );
 }
 
-function LeadSection({ title, helper, leads, onDeleted }: { title: string; helper: string; leads: Lead[]; onDeleted: (leadId: string) => void }) {
-  return <section className="space-y-2.5"><div><div className="flex items-center justify-between"><h2 className="text-lg font-black tracking-[-0.04em]">{title}</h2><span className="text-xs font-bold text-[var(--muted)]">{leads.length}</span></div><p className="mt-1 text-xs text-[var(--muted)]">{helper}</p></div>{leads.map((lead) => <LeadCard key={lead.id} lead={lead} onDeleted={onDeleted} />)}</section>;
+function LeadSection({ title, helper, leads, expandedLeadIds, onExpandedChange, onDeleted }: { title: string; helper: string; leads: Lead[]; expandedLeadIds: Set<string>; onExpandedChange: (leadId: string, expanded: boolean) => void; onDeleted: (leadId: string) => void }) {
+  return <section className="space-y-2.5"><div><div className="flex items-center justify-between"><h2 className="text-lg font-black tracking-[-0.04em]">{title}</h2><span className="text-xs font-bold text-[var(--muted)]">{leads.length}</span></div><p className="mt-1 text-xs text-[var(--muted)]">{helper}</p></div>{leads.map((lead) => <LeadCard key={lead.id} lead={lead} isExpanded={expandedLeadIds.has(lead.id)} onExpandedChange={(expanded) => onExpandedChange(lead.id, expanded)} onDeleted={onDeleted} />)}</section>;
 }
 
 function Pagination({ currentPage, totalPages, visibleCount, totalCount, onPageChange }: { currentPage: number; totalPages: number; visibleCount: number; totalCount: number; onPageChange: (page: number) => void }) {
@@ -235,7 +258,7 @@ function MetricCard({ icon, label, value, helper, tone }: { icon: React.ReactNod
 }
 */
 
-function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; defaultExpanded?: boolean; onDeleted?: (leadId: string) => void }) {
+function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lead; isExpanded: boolean; onExpandedChange: (expanded: boolean) => void; onDeleted?: (leadId: string) => void }) {
   const router = useRouter();
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsappStatus>(lead.whatsappStatus);
   const [conversationState, setConversationState] = useState<ConversationState>(lead.conversationState);
@@ -244,7 +267,6 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
   const [isChangingConversation, setIsChangingConversation] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendInfo, setSendInfo] = useState<string | null>(null);
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [manualDecision, setManualDecision] = useState<Lead["inboundManualDecision"]>(lead.inboundManualDecision);
@@ -252,6 +274,7 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
   const [purchaseDecisionAt, setPurchaseDecisionAt] = useState(lead.purchaseDecisionAt);
   const [isPurchaseConfirming, setIsPurchaseConfirming] = useState(false);
   const [isRecordingPurchase, setIsRecordingPurchase] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [, startStateSync] = useTransition();
 
   useEffect(() => {
@@ -265,7 +288,8 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
   }, [lead.conversationState, lead.followUpActions, lead.whatsappStatus, lead.inboundManualDecision, lead.purchaseDecisionAt]);
 
   const isReminderDue = followUpActions.some(isDueAction);
-  const canSend = whatsappStatus === "PENDING" || whatsappStatus === "FAILED";
+  const firstContactMessageAccepted = lead.firstContact?.items.some((item) => item.resourceKind === "MESSAGE" && item.result === "ACCEPTED") ?? false;
+  const canSend = !firstContactMessageAccepted && (whatsappStatus === "PENDING" || whatsappStatus === "FAILED");
   const nextOpenAction = getNextOpenAction({ ...lead, followUpActions });
   const inboundClassification = lead.inboundClassification;
 
@@ -356,25 +380,38 @@ function LeadCard({ lead, defaultExpanded = false, onDeleted }: { lead: Lead; de
     }
   }
 
-  const toggleExpanded = () => setIsExpanded((current) => !current);
+  const toggleExpanded = () => onExpandedChange(!isExpanded);
 
-  return <article onClick={() => { if (!isExpanded) setIsExpanded(true); }} className={`rounded-[20px] border bg-white p-3 shadow-[0_8px_24px_rgba(16,24,40,0.04)] transition hover:shadow-[0_12px_30px_rgba(16,24,40,0.07)] ${!isExpanded ? "cursor-pointer" : ""} sm:p-3.5 ${conversationState === "ACTIVE" ? "border-[#75c88b] ring-1 ring-[#75c88b]/20" : isReminderDue ? "border-[#f3b257] ring-1 ring-[#f3b257]/20" : "border-black/[0.06]"}`}>
+  return <article onClick={() => { if (!isExpanded) onExpandedChange(true); }} className={`rounded-[20px] border bg-white p-3 shadow-[0_8px_24px_rgba(16,24,40,0.04)] transition hover:shadow-[0_12px_30px_rgba(16,24,40,0.07)] ${!isExpanded ? "cursor-pointer" : ""} sm:p-3.5 ${conversationState === "ACTIVE" ? "border-[#75c88b] ring-1 ring-[#75c88b]/20" : isReminderDue ? "border-[#f3b257] ring-1 ring-[#f3b257]/20" : "border-black/[0.06]"}`}>
     <div onClick={toggleExpanded} className="compact-lead-header flex cursor-pointer flex-col gap-2.5 sm:flex-row sm:items-center">
-      <div className="flex min-w-0 flex-1 items-start gap-2.5"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#f0eee8] text-xs font-black">{lead.fullName.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="truncate text-sm font-black">{lead.fullName}</h3><span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${temperatureClasses(lead.temperature)}`}>{lead.temperature === "HIGH" ? "🔥 " : ""}{getTemperatureLabel(lead.temperature)}</span></div><p className="mt-0.5 truncate text-xs text-[var(--muted)]">{lead.carModel} <span className="mx-1 text-black/20">·</span> {getStatusLabel(lead.status)} <span className="mx-1 text-black/20">·</span> {formatRelativeDate(lead.createdAt)}</p><div className="mt-1.5 flex flex-wrap gap-1"><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${conversationClasses(conversationState)}`}>{getConversationStateLabel(conversationState)}</span>{isReminderDue ? <span className="rounded-full bg-[#fff8ed] px-1.5 py-0.5 text-[9px] font-black text-[#b94910]">Para hoy</span> : null}</div><p className="mt-1 truncate text-[11px] font-bold text-[var(--muted)]">{nextOpenAction ? `Próxima acción: ${getNextActionLabel(nextOpenAction.actionType)} · ${formatNextActionDate(nextOpenAction.scheduledFor) ?? "sin fecha"}` : "Sin próxima acción"}</p></div></div>
-      <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0" onClick={(event) => event.stopPropagation()}><span className="mr-auto rounded-lg bg-[#f6f3ed] px-2 py-1.5 text-center sm:mr-1"><strong className="block text-base font-black leading-none">{lead.score}</strong><span className="text-[8px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">score</span></span><a aria-label={`Llamar a ${lead.fullName}`} href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} className="icon-action icon-action-phone" title="Llamar"><Phone size={15} /></a><LeadContactActions compact showWhatsApp={false} contact={{ name: lead.fullName, phone: lead.phone }} /><button type="button" aria-label={`Enviar WhatsApp a ${lead.fullName}`} onClick={() => void sendMessage()} disabled={isSending || !canSend} className={`send-whatsapp-button ${!canSend ? "send-whatsapp-button-sent" : ""}`} title={!canSend ? "Mensaje automático ya enviado" : whatsappStatus === "FAILED" ? "Reintentar envío automático" : "Enviar WhatsApp automáticamente"}>{isSending ? <LoaderCircle size={15} className="animate-spin" /> : !canSend ? <CheckCircle2 size={15} /> : <Send size={15} />}<span className="hidden sm:inline">{isSending ? "Enviando" : !canSend ? "Enviado" : whatsappStatus === "FAILED" ? "Reintentar" : "Enviar"}</span></button><a aria-label={`Abrir WhatsApp manual para ${lead.fullName}`} href={`https://wa.me/${formatPhoneForWhatsapp(lead.phone)}`} target="_blank" rel="noreferrer" className="icon-action icon-action-whatsapp" title="Abrir chat de WhatsApp"><WhatsAppLogo /></a><button type="button" aria-expanded={isExpanded} aria-label={isExpanded ? `Ocultar detalles de ${lead.fullName}` : `Mostrar detalles de ${lead.fullName}`} onClick={toggleExpanded} className="icon-action" title={isExpanded ? "Ocultar detalles" : "Ver detalles"}>{isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button></div>
+      <div className="flex min-w-0 flex-1 items-start gap-2.5"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#f0eee8] text-xs font-black">{lead.fullName.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><h3 className="truncate text-sm font-black">{lead.fullName}</h3><span className="text-xs font-bold text-[var(--muted)]">{lead.phone}</span><span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${temperatureClasses(lead.temperature)}`}>{lead.temperature === "HIGH" ? "🔥 " : ""}{getTemperatureLabel(lead.temperature)}</span></div><p className="mt-0.5 truncate text-xs text-[var(--muted)]">{lead.carModel} <span className="mx-1 text-black/20">·</span> {getStatusLabel(lead.status)} <span className="mx-1 text-black/20">·</span> {formatRelativeDate(lead.createdAt)}</p><div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px]"><span className={`rounded-full px-1.5 py-0.5 font-black ${conversationClasses(conversationState)}`}>{getConversationStateLabel(conversationState)}</span>{isReminderDue ? <span className="rounded-full bg-[#fff8ed] px-1.5 py-0.5 font-black text-[#b94910]">Para hoy</span> : null}<span className="font-bold text-[var(--muted)]">{nextOpenAction ? `${getNextActionLabel(nextOpenAction.actionType)} · ${formatNextActionDate(nextOpenAction.scheduledFor) ?? "sin fecha"}` : "Sin próxima acción"}</span></div></div></div>
+      <div className="compact-lead-actions flex w-full items-center gap-1.5 sm:ml-auto sm:w-auto">
+        <span className="shrink-0 rounded-lg bg-[#f6f3ed] px-2 py-1.5 text-center"><strong className="block text-base font-black leading-none">{lead.score}</strong><span className="text-[8px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">score</span></span>
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+          <a aria-label={`Llamar a ${lead.fullName}`} href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} className="icon-action icon-action-phone" title="Llamar" onClick={(event) => event.stopPropagation()}><Phone size={20} /></a>
+          <LeadContactActions compact showWhatsApp={false} showShare={false} contact={{ name: lead.fullName, phone: lead.phone }} />
+          <button type="button" aria-label={`Ver información de ${lead.fullName}`} title="Ver información del lead" onClick={(event) => { event.stopPropagation(); setIsDetailsOpen(true); }} className="icon-action"><FileText size={20} /></button>
+          <button type="button" aria-label={`Enviar WhatsApp a ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); void sendMessage(); }} disabled={isSending || !canSend} className={`send-whatsapp-button ${!canSend ? "send-whatsapp-button-sent" : ""}`} title={!canSend ? "Mensaje ya enviado; no se duplicará" : whatsappStatus === "FAILED" ? "Reintentar envío automático" : "Enviar WhatsApp automáticamente"}>{isSending ? <LoaderCircle size={20} className="animate-spin" /> : !canSend ? <CheckCircle2 size={20} /> : <Send size={20} />}<span className="hidden sm:inline">{isSending ? "Enviando" : !canSend ? "Enviado" : whatsappStatus === "FAILED" ? "Reintentar" : "Enviar"}</span></button>
+          <button type="button" aria-label={purchaseDecisionAt ? "Compra registrada" : "Registrar compra"} title={purchaseDecisionAt ? "Compra registrada" : "Registrar compra"} disabled={Boolean(purchaseDecisionAt)} onClick={(event) => { event.stopPropagation(); if (!purchaseDecisionAt) setIsPurchaseConfirming(true); }} className={`icon-action purchase-action ${purchaseDecisionAt ? "purchase-action-registered" : ""}`}><CircleDollarSign size={20} /></button>
+          <a aria-label={`Abrir WhatsApp manual para ${lead.fullName}`} href={`https://wa.me/${formatPhoneForWhatsapp(lead.phone)}`} target="_blank" rel="noreferrer" className="icon-action icon-action-whatsapp" title="Abrir chat de WhatsApp" onClick={(event) => event.stopPropagation()}><WhatsAppLogo size={24} /></a>
+          <button type="button" aria-expanded={isExpanded} aria-label={isExpanded ? `Ocultar detalles de ${lead.fullName}` : `Mostrar detalles de ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); toggleExpanded(); }} className="icon-action compact-expand-action" title={isExpanded ? "Ocultar detalles" : "Ver detalles"}>{isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
+        </div>
+      </div>
     </div>
 
     {isExpanded && lead.lastMessageDirection ? <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#f6f3ed] px-2.5 py-2 text-[11px]"><p className="min-w-0 truncate text-[var(--muted)]"><strong className="text-[var(--ink)]">{lead.lastMessageDirection === "INBOUND" ? "Último mensaje · Cliente:" : "Último mensaje · Tú:"}</strong> {lead.lastMessagePreview || "Mensaje sin texto"}</p>{conversationState === "ACTIVE" ? <button type="button" disabled={isChangingConversation} aria-busy={isChangingConversation} onClick={() => void changeConversationState("CLOSED")} className="shrink-0 font-black text-[var(--muted)] hover:text-[var(--ink)] disabled:cursor-wait disabled:opacity-50">{isChangingConversation ? "Cerrando…" : "Cerrar conversación"}</button> : conversationState === "CLOSED" ? <button type="button" disabled={isChangingConversation} aria-busy={isChangingConversation} onClick={() => void changeConversationState("ACTIVE")} className="shrink-0 font-black text-[#18733a] disabled:cursor-wait disabled:opacity-50">{isChangingConversation ? "Reabriendo…" : "Reabrir"}</button> : null}</div> : null}
 
-    {isExpanded && inboundClassification ? <section className="mt-3 rounded-2xl border border-[#dce5ef] bg-[#f8fbff] p-3" aria-label="Estado inbound"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Clasificación inbound</p><span className={`mt-1 inline-flex rounded-full px-2 py-1 text-[10px] font-black ${inboundClassificationClasses(inboundClassification)}`}>{manualDecision === "REQUIRES_RESPONSE" ? "Respuesta pendiente" : manualDecision === "NO_RESPONSE_REQUIRED" ? "No requiere respuesta" : inboundClassificationLabel(inboundClassification)}</span></div><p className="text-[10px] font-semibold text-[var(--muted)]">{lead.lastInboundMessageAt ? formatRelativeDate(lead.lastInboundMessageAt) : "Sin fecha"}</p></div><p className="mt-2 text-xs leading-5 text-[var(--ink)]">{lead.lastInboundMessagePreview || "Mensaje sin texto"}</p>{inboundClassification !== "NO_SUGGESTION" ? <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={isCorrectingInbound} onClick={() => void correctInbound("REQUIRES_RESPONSE")} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isCorrectingInbound ? "Guardando…" : "Sí requiere respuesta"}</button><button type="button" disabled={isCorrectingInbound} onClick={() => void correctInbound("NO_RESPONSE_REQUIRED")} className="button-secondary min-h-9 px-3 py-2 text-[11px]">No requiere respuesta</button></div> : null}</section> : null}
+    {isExpanded && inboundClassification ? <section hidden aria-hidden="true" className="hidden" aria-label="Estado inbound"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Clasificación inbound</p><span className={`mt-1 inline-flex rounded-full px-2 py-1 text-[10px] font-black ${inboundClassificationClasses(inboundClassification)}`}>{manualDecision === "REQUIRES_RESPONSE" ? "Respuesta pendiente" : manualDecision === "NO_RESPONSE_REQUIRED" ? "No requiere respuesta" : inboundClassificationLabel(inboundClassification)}</span></div><p className="text-[10px] font-semibold text-[var(--muted)]">{lead.lastInboundMessageAt ? formatRelativeDate(lead.lastInboundMessageAt) : "Sin fecha"}</p></div><p className="mt-2 text-xs leading-5 text-[var(--ink)]">{lead.lastInboundMessagePreview || "Mensaje sin texto"}</p>{inboundClassification !== "NO_SUGGESTION" ? <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={isCorrectingInbound} onClick={() => void correctInbound("REQUIRES_RESPONSE")} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isCorrectingInbound ? "Guardando…" : "Sí requiere respuesta"}</button><button type="button" disabled={isCorrectingInbound} onClick={() => void correctInbound("NO_RESPONSE_REQUIRED")} className="button-secondary min-h-9 px-3 py-2 text-[11px]">No requiere respuesta</button></div> : null}</section> : null}
 
-    {isExpanded ? <section className="mt-2 rounded-xl border border-[#e6dfd0] bg-[#fffdf8] px-2.5 py-2" aria-label="Decisión de compra"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Compra</p><p className="mt-1 text-sm font-black">{purchaseDecisionAt ? "Compra registrada" : "Aún no registrada"}</p>{purchaseDecisionAt ? <p className="mt-1 text-[11px] text-[var(--muted)]">Registrada el {new Intl.DateTimeFormat("es-EC", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Guayaquil" }).format(new Date(purchaseDecisionAt))}</p> : null}</div>{!purchaseDecisionAt && !isPurchaseConfirming ? <button type="button" onClick={() => setIsPurchaseConfirming(true)} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cliente decidió comprar</button> : null}</div>{isPurchaseConfirming ? <div className="mt-2 rounded-lg border border-[#ead7a8] bg-[#fff8df] p-2.5"><p className="text-xs font-bold">¿Registrar esta decisión con la fecha y hora de ahora?</p><div className="mt-2 flex flex-wrap gap-2"><button type="button" disabled={isRecordingPurchase} onClick={() => void recordPurchaseDecision()} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isRecordingPurchase ? "Registrando…" : "Registrar"}</button><button type="button" disabled={isRecordingPurchase} onClick={() => setIsPurchaseConfirming(false)} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cancelar</button></div></div> : null}</section> : null}
+    {isExpanded && purchaseDecisionAt ? <p className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-emerald-700"><CheckCircle2 size={14} />Compra registrada · {new Intl.DateTimeFormat("es-EC", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Guayaquil" }).format(new Date(purchaseDecisionAt))}</p> : null}
 
-    {isExpanded ? <FollowUpActions leadId={lead.id} actions={followUpActions} onActionsChange={(actions) => { setFollowUpActions(actions); router.refresh(); }} onConversationWaiting={() => setConversationState("WAITING_CUSTOMER")} onError={setSendError} onInfo={setSendInfo} /> : null}
+    {isExpanded ? <FollowUpActions leadId={lead.id} actions={followUpActions} onActionsChange={setFollowUpActions} onConversationWaiting={() => setConversationState("WAITING_CUSTOMER")} onError={setSendError} onInfo={setSendInfo} /> : null}
     {isExpanded ? <FirstContactSummary lead={lead} initialOperation={lead.firstContact} /> : null}
     {isExpanded && lead.lastCustomerMessageAt ? <p className="mt-3 text-[11px] text-[var(--muted)]">Última respuesta del cliente registrada. Las acciones pendientes se cancelan cuando llega una nueva respuesta.</p> : null}
     {isExpanded && <div className="mt-3 flex items-center justify-between gap-3 border-t border-black/[0.06] pt-3"><span className="text-[11px] text-[var(--muted)]">Se ocultará de la lista y dejará de generar recordatorios.</span><button type="button" onClick={(event) => { event.stopPropagation(); setIsDeleteModalOpen(true); setSendError(null); }} disabled={isDeleting} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-black text-[#b33a2c] hover:bg-[#fff0ee] disabled:opacity-50"><Trash2 size={14} />Eliminar contacto</button></div>}
     {isExpanded && sendError ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-red-600"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{sendError}</p> : null}{isExpanded && sendInfo ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-emerald-700"><CheckCircle2 size={14} className="mt-0.5 shrink-0" />{sendInfo}</p> : null}
+    {isDetailsOpen ? <div role="presentation" onClick={(event) => { event.stopPropagation(); setIsDetailsOpen(false); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby={`details-title-${lead.id}`} onClick={(event) => event.stopPropagation()} className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_24px_80px_rgba(16,24,40,0.24)]"><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Información del lead</p><h2 id={`details-title-${lead.id}`} className="mt-1 text-lg font-black">{lead.fullName}</h2><p className="text-xs font-bold text-[var(--muted)]">{lead.phone}</p></div><button type="button" aria-label="Cerrar información del lead" title="Cerrar" onClick={() => setIsDetailsOpen(false)} className="icon-action"><X size={18} /></button></div><dl className="mt-4 grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Interés</dt><dd className="mt-1 font-bold text-[var(--ink)]">{lead.carModels.length ? lead.carModels.join(", ") : lead.carModel}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Momento de compra</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getTimeframeLabel(lead.timeframe)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Forma de pago</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getPaymentMethodLabel(lead.paymentMethod)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Parte de pago</dt><dd className="mt-1 font-bold text-[var(--ink)]">{lead.tradeInCar ? "Sí" : "No"}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Estado</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getStatusLabel(lead.status)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Prioridad</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getTemperatureLabel(lead.temperature)}</dd></div></dl><div className="mt-3 rounded-xl border border-black/[0.06] bg-white p-3"><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Nota rápida</p><p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-[var(--ink)]">{lead.notes?.trim() || "Sin nota"}</p></div></div></div> : null}
+    {isPurchaseConfirming ? <div role="presentation" onClick={(event) => { event.stopPropagation(); if (!isRecordingPurchase) setIsPurchaseConfirming(false); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby={`purchase-title-${lead.id}`} onClick={(event) => event.stopPropagation()} className="w-full max-w-sm rounded-[22px] border border-black/[0.08] bg-white p-5 shadow-[0_24px_80px_rgba(16,24,40,0.24)]"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#fff8df] text-[#8a5b00]"><CircleDollarSign size={20} /></span><div><h2 id={`purchase-title-${lead.id}`} className="text-lg font-black">Registrar compra</h2><p className="mt-1 text-sm leading-6 text-[var(--muted)]">¿Confirmas que {lead.fullName} decidió comprar?</p></div></div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsPurchaseConfirming(false)} disabled={isRecordingPurchase} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cancelar</button><button type="button" disabled={isRecordingPurchase} onClick={() => void recordPurchaseDecision()} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isRecordingPurchase ? "Registrando…" : "Confirmar"}</button></div></div></div> : null}
     {isDeleteModalOpen ? <div role="presentation" onClick={(event) => { event.stopPropagation(); if (!isDeleting) setIsDeleteModalOpen(false); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby={`delete-title-${lead.id}`} onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-[26px] border border-black/[0.08] bg-white p-5 shadow-[0_24px_80px_rgba(16,24,40,0.24)] sm:p-6"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#fff0ee] text-[#b33a2c]"><Trash2 size={18} /></span><div><h2 id={`delete-title-${lead.id}`} className="text-lg font-black">¿Eliminar a {lead.fullName}?</h2><p className="mt-1 text-sm leading-6 text-[var(--muted)]">El contacto se ocultará del resumen, dejará de generar recordatorios y no se eliminarán físicamente sus datos. Podrás conservarlo para auditoría.</p></div></div>{sendError ? <p className="mt-4 flex items-start gap-2 rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{sendError}</p> : null}<div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsDeleteModalOpen(false)} disabled={isDeleting} className="button-secondary">Cancelar</button><button type="button" onClick={() => void deleteContact()} disabled={isDeleting} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#b33a2c] px-4 text-sm font-black text-white disabled:opacity-60"><Trash2 size={16} />{isDeleting ? "Eliminando" : "Eliminar contacto"}</button></div></div></div> : null}
   </article>;
 }
