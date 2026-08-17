@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Ingresar" };
 
 const errors: Record<string, string> = {
   auth: "No pudimos validar ese email y contraseña.",
-  config: "Supabase Auth no está configurado en el servidor.",
+  config: "No pudimos preparar el inicio de sesión. Intenta de nuevo y avísame si continúa.",
   missing: "Ingresa email y contraseña para continuar.",
 };
 

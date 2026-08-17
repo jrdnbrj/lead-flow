@@ -43,9 +43,8 @@ export async function createLeadAction(input: CreateLeadInput): Promise<ActionRe
   try {
     const result = await createLead(parsed.data);
     return { success: true, data: result.lead, warning: result.warning };
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : "No pudimos guardar el lead en Supabase. Intenta nuevamente.";
-    return { success: false, error: detail };
+  } catch {
+    return { success: false, error: "No pudimos guardar el lead. Revisa tu conexión e inténtalo de nuevo." };
   }
 }
 
@@ -69,7 +68,7 @@ export async function sendLeadWhatsappAction(input: SendLeadInput): Promise<Acti
   if (auth) return auth;
   try {
     const storedLead = await getLeadById(parsed.data.leadId);
-    if (hasSupabaseConfig() && !storedLead) return { success: false, error: "No encontramos este lead en Supabase; actualiza el dashboard e inténtalo nuevamente." };
+    if (hasSupabaseConfig() && !storedLead) return { success: false, error: "No encontramos este lead. Actualiza el dashboard e inténtalo de nuevo." };
     const target = storedLead ?? { id: parsed.data.leadId, fullName: parsed.data.fullName, phone: parsed.data.phone, carModels: parsed.data.carModels };
     const result = await executeFirstContact(target, createEvolutionFirstContactProvider(), crypto.randomUUID());
     if (!result) return { success: false, error: "No pudimos preparar el primer contacto. Puedes reintentarlo." };
@@ -80,8 +79,8 @@ export async function sendLeadWhatsappAction(input: SendLeadInput): Promise<Acti
       data: { leadId: parsed.data.leadId, whatsappStatus: messageItem?.result === "ACCEPTED" ? "SENT" : messageItem?.result === "FAILED" ? "FAILED" : "PENDING", persisted: true, providerMessageId: messageItem?.providerMessageId ?? null, mediaSent: photosItem?.result === "ACCEPTED" },
       warning: result.replayed ? "El mensaje ya estaba enviado; no se duplicó." : undefined,
     };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "No fue posible preparar el primer contacto." };
+  } catch {
+    return { success: false, error: "No fue posible preparar el primer contacto. Intenta de nuevo y avísame si continúa." };
   }
 }
 
@@ -137,12 +136,12 @@ export async function updateFollowUpActionAction(input: UpdateFollowUpActionInpu
   if (auth) return auth;
 
   const scheduledFor = parsed.data.status === "POSTPONED"
-    ? parsed.data.shortcut ? resolveScheduleShortcut(parsed.data.shortcut) : getStartOfSellerDayAfter(parsed.data.postponeDays ?? 1)
+    ? parsed.data.scheduledFor ?? (parsed.data.shortcut ? resolveScheduleShortcut(parsed.data.shortcut) : getStartOfSellerDayAfter(parsed.data.postponeDays ?? 1))
     : undefined;
   const action = await updateFollowUpAction(parsed.data.actionId, parsed.data.status, scheduledFor, parsed.data.note, parsed.data.expectedActionVersion, parsed.data.idempotencyKey);
   return action
     ? { success: true, data: { action } }
-    : { success: false, error: "No pudimos actualizar ese recordatorio en Supabase." };
+    : { success: false, error: "No pudimos actualizar ese recordatorio. Intenta de nuevo." };
 }
 
 export async function clearLeadActionAction(leadId: string): Promise<ActionResponse<{ leadId: string }>> {
@@ -203,5 +202,5 @@ export async function deleteLeadAction(leadId: string): Promise<ActionResponse<{
   const persisted = await softDeleteLead(leadId);
   return persisted
     ? { success: true, data: { leadId } }
-    : { success: false, error: "No pudimos eliminar el contacto en Supabase. Revisa la conexión e inténtalo nuevamente." };
+    : { success: false, error: "No pudimos eliminar el contacto. Revisa tu conexión e inténtalo de nuevo." };
 }

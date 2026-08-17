@@ -29,5 +29,5 @@ export async function saveSellerProfileOverrideAction(input: SellerProfile): Pro
     return { success: true, data: await getEffectiveSellerProfile() };
   }
 
-  return { success: false, error: "No se puede guardar todavía. Configura SUPABASE_SERVICE_ROLE_KEY en el servidor y reinicia LeadFlow para que este perfil se comparta entre todos tus dispositivos." };
+  return { success: false, error: "No pudimos guardar estos datos para todos tus dispositivos. Intenta de nuevo y avísame si continúa." };
 }

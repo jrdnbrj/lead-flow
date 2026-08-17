@@ -31,11 +31,12 @@ export const updateFollowUpActionSchema = z.object({
   status: z.enum(["DONE", "POSTPONED", "IGNORED", "CANCELED"]),
   postponeDays: z.number().int().min(1).max(365).optional(),
   shortcut: z.enum(["POSTPONE_PLUS_ONE_HOUR", "POSTPONE_LATER", "POSTPONE_TOMORROW", "POSTPONE_IN_THREE_DAYS"]).optional(),
+  scheduledFor: z.string().datetime().optional(),
   note: z.string().trim().max(240).optional(),
   expectedActionVersion: z.number().int().positive().optional(),
   idempotencyKey: z.string().trim().min(16).max(200).optional(),
 }).superRefine((value, context) => {
-  if (value.status === "POSTPONED" && !value.postponeDays && !value.shortcut) {
+  if (value.status === "POSTPONED" && !value.postponeDays && !value.shortcut && !value.scheduledFor) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["postponeDays"], message: "Indica cuándo reprogramar la acción." });
   }
 });

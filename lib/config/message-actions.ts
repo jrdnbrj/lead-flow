@@ -18,5 +18,5 @@ export async function saveWhatsappMessageTemplateAction(template: string): Promi
     return { success: true, data: { template: cleanTemplate } };
   }
 
-  return { success: false, error: "No se puede guardar todavía. Configura SUPABASE_SERVICE_ROLE_KEY en el servidor y reinicia LeadFlow para compartir esta plantilla entre tus dispositivos." };
+  return { success: false, error: "No pudimos guardar este mensaje. Intenta de nuevo y avísame si continúa." };
 }

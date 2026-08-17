@@ -130,6 +130,7 @@ export interface UpdateFollowUpActionInput {
   status: "DONE" | "POSTPONED" | "IGNORED" | "CANCELED";
   postponeDays?: number;
   shortcut?: ScheduleShortcut;
+  scheduledFor?: string;
   note?: string;
   expectedActionVersion?: number;
   idempotencyKey?: string;

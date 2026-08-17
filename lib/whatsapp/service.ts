@@ -47,7 +47,7 @@ function collectErrorText(value: unknown, parts: string[] = []): string[] {
 export function getEvolutionErrorMessage(statusCode: number, payload: unknown, fallback = "WhatsApp no pudo procesar la solicitud. Intenta nuevamente."): string {
   const text = collectErrorText(payload).join(" ").toLowerCase();
   if (statusCode === 428 || text.includes("connection closed") || text.includes("connection is closed")) {
-    return "La instancia aparece conectada, pero la sesión real de WhatsApp está cerrada. Desvincúlala y vuelve a escanear un QR nuevo.";
+    return "WhatsApp necesita volver a vincularse. Desconecta la cuenta y escanea un código QR nuevo.";
   }
   const response = asRecord(asRecord(payload)?.response);
   const messages = response?.message;
@@ -56,10 +56,10 @@ export function getEvolutionErrorMessage(statusCode: number, payload: unknown, f
     return "No encontramos una cuenta de WhatsApp activa para ese número. Revisa el código de país y confirma que el celular tenga WhatsApp.";
   }
   if (text.includes("not found") && text.includes("instance")) {
-    return "La instancia de WhatsApp no existe en Evolution. Crea o vuelve a vincular la instancia configurada.";
+    return "No encontramos la conexión de WhatsApp. Intenta vincularla de nuevo y avísame si continúa.";
   }
   if (text.includes("already connected") || text.includes("already open")) {
-    return "WhatsApp ya está vinculado en esta instancia. Actualiza el estado antes de generar otro QR.";
+    return "WhatsApp ya está vinculado. Actualiza el estado antes de generar otro QR.";
   }
   return fallback;
 }
@@ -74,7 +74,7 @@ export function normalizeEvolutionConnectionState(value: unknown): EvolutionConn
 
 export async function getEvolutionConnectionStatus(): Promise<EvolutionConnectionResult> {
   const config = getEvolutionConfig();
-  if (!config) return { state: null, ready: false, error: "Evolution API no está configurada en el servidor." };
+  if (!config) return { state: null, ready: false, error: "La conexión de WhatsApp no está disponible. Intenta de nuevo y avísame si continúa." };
 
   const baseUrl = config.apiUrl.replace(/\/$/, "");
   try {
@@ -84,14 +84,14 @@ export async function getEvolutionConnectionStatus(): Promise<EvolutionConnectio
     const instance = asRecord(stateRecord?.instance);
     const stateValue = instance?.state ?? stateRecord?.state;
     const state = normalizeEvolutionConnectionState(stateValue);
-    if (!stateResponse.ok || state !== "open") return { state, ready: false, error: getEvolutionErrorMessage(stateResponse.status, statePayload, "Evolution todavía no reporta una sesión abierta.") };
+    if (!stateResponse.ok || state !== "open") return { state, ready: false, error: getEvolutionErrorMessage(stateResponse.status, statePayload, "Todavía no pudimos confirmar la conexión de WhatsApp. Intenta actualizarla.") };
 
     // Do not probe with a synthetic phone number here. Evolution can reject
     // that number independently of the session state, which would turn a
     // valid linked session into a false "disconnected" result.
     return { state: "open", ready: true, error: null };
   } catch {
-    return { state: null, ready: false, error: "No se pudo consultar Evolution API. Verifica que el servicio esté levantado." };
+    return { state: null, ready: false, error: "No pudimos consultar la conexión de WhatsApp. Revisa tu conexión e inténtalo de nuevo." };
   }
 }
 
@@ -174,7 +174,7 @@ export async function ensureEvolutionWebhook(): Promise<boolean> {
 export async function sendWhatsappText(input: { phone: string; text: string }): Promise<EvolutionSendResult> {
   const config = getEvolutionConfig();
   if (!config) {
-    throw new Error("Evolution API no está configurada. Revisa EVOLUTION_API_URL, EVOLUTION_API_KEY y EVOLUTION_API_INSTANCE_NAME.");
+    throw new Error("La conexión de WhatsApp no está disponible. Intenta de nuevo y avísame si continúa.");
   }
 
   const normalizedPhone = normalizeWhatsappNumber(input.phone);
@@ -203,7 +203,7 @@ export async function sendWhatsappText(input: { phone: string; text: string }): 
 
 export async function sendWhatsappMedia(input: { phone: string; mediaUrl: string; caption?: string; fileName?: string }): Promise<EvolutionSendResult> {
   const config = getEvolutionConfig();
-  if (!config) throw new Error("Evolution API no está configurada. Revisa EVOLUTION_API_URL, EVOLUTION_API_KEY y EVOLUTION_API_INSTANCE_NAME.");
+  if (!config) throw new Error("La conexión de WhatsApp no está disponible. Intenta de nuevo y avísame si continúa.");
 
   const normalizedPhone = normalizeWhatsappNumber(input.phone);
   const phoneError = getWhatsappPhoneError(input.phone);

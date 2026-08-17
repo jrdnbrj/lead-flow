@@ -37,7 +37,7 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
   const instanceName = process.env.EVOLUTION_API_INSTANCE_NAME;
 
   if (!apiUrl || !apiKey || !instanceName) {
-    return { qr: null, error: "Completa la configuración de Evolution API en las variables de entorno.", state: null };
+    return { qr: null, error: "La conexión de WhatsApp no está disponible. Intenta de nuevo y avísame si continúa.", state: null };
   }
 
   try {
@@ -54,7 +54,7 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
       });
       if (!restartResponse.ok) {
         const payload = await restartResponse.json().catch(() => null);
-        return { qr: null, error: getEvolutionErrorMessage(restartResponse.status, payload, "Evolution API no pudo reiniciar la sesión. Verifica que la instancia exista y esté desconectada."), state: currentConnection.state };
+        return { qr: null, error: getEvolutionErrorMessage(restartResponse.status, payload, "No pudimos reiniciar la conexión de WhatsApp. Intenta de nuevo."), state: currentConnection.state };
       }
     }
 
@@ -71,12 +71,12 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
     const payload = await response.json() as ConnectionPayload;
     const statePayload = await stateResponse.json().catch(() => null) as ConnectionStatePayload | null;
     const state = getState(statePayload);
-    if (!response.ok) return { qr: null, error: getEvolutionErrorMessage(response.status, payload, "Evolution API no pudo preparar la conexión de WhatsApp."), state };
+    if (!response.ok) return { qr: null, error: getEvolutionErrorMessage(response.status, payload, "No pudimos preparar la conexión de WhatsApp. Intenta de nuevo."), state };
     const verified = await getEvolutionConnectionStatus();
     if (verified.ready) return { qr: null, error: null, state: "open" };
     return { qr: typeof payload.base64 === "string" ? payload.base64 : null, error: verified.error, state: verified.state || state };
   } catch {
-    return { qr: null, error: "No se pudo conectar con Evolution API. Verifica que el servicio esté levantado.", state: null };
+    return { qr: null, error: "No pudimos conectar WhatsApp. Revisa tu conexión e inténtalo de nuevo.", state: null };
   }
 }
 

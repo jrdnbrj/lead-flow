@@ -190,12 +190,12 @@ function refreshAllLeads() {
   }
 
   return (
-    <div className="space-y-3">
-      <section className="flex flex-wrap items-center justify-between gap-1.5 border-b border-black/[0.06] pb-1">
+    <div className="space-y-2.5">
+      <section className="flex flex-wrap items-center justify-between gap-0.5 border-b border-black/[0.06] pb-0">
         <p className="eyebrow">Panel de ventas · {formatToday()}</p>
-        <div className="flex flex-wrap gap-1.5">
-          <button type="button" onClick={refreshAllLeads} disabled={isRefreshing} className="button-secondary min-h-9 px-3 py-1.5 text-xs" aria-label="Actualizar todos los contactos" title="Volver a consultar todos los contactos en Supabase"><RefreshCw size={15} className={isRefreshing ? "animate-spin" : ""} />{isRefreshing ? "Actualizando" : "Actualizar"}</button>
-          <button type="button" onClick={exportToXlsx} className="inline-flex min-h-9 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-black text-[var(--muted)] hover:bg-black/[0.04]"><Download size={15} />Exportar</button>
+        <div className="flex flex-wrap gap-1">
+          <button type="button" onClick={refreshAllLeads} disabled={isRefreshing} className="button-secondary dashboard-header-action" aria-label="Actualizar todos los contactos" title="Volver a consultar todos los contactos"><RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />{isRefreshing ? "Actualizando" : "Actualizar"}</button>
+          <button type="button" onClick={exportToXlsx} className="dashboard-header-action text-[var(--muted)] hover:bg-black/[0.04]"><Download size={14} />Exportar</button>
         </div>
       </section>
 
@@ -207,24 +207,24 @@ function refreshAllLeads() {
       <PushNotifications />
 
       <PendingNotifications leads={leads} />
-      <section className="rounded-2xl border border-black/[0.06] bg-white p-2 shadow-[0_10px_30px_rgba(16,24,40,0.04)] sm:p-2.5">
-        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-sm font-black"><SlidersHorizontal size={16} />Contactos <span className="text-xs font-semibold text-[var(--muted)]">{filteredLeads.length} visibles</span></div>
-          <label className="flex h-9 w-full items-center gap-2 rounded-xl bg-[#f6f3ed] px-3 text-[var(--muted)] sm:max-w-xs"><Search size={16} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Buscar nombre, celular o modelo" className="w-full bg-transparent text-sm text-[var(--ink)] outline-none placeholder:text-[#9a9b9b]" /></label>
+      <section className="rounded-xl border border-black/[0.06] bg-white p-1 shadow-[0_10px_30px_rgba(16,24,40,0.04)] sm:p-1.5">
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-black"><SlidersHorizontal size={14} />Contactos <span className="text-[11px] font-semibold text-[var(--muted)]">{filteredLeads.length} visibles</span></div>
+          <label className="flex h-7 w-full items-center gap-1.5 rounded-lg bg-[#f6f3ed] px-2.5 text-[var(--muted)] sm:max-w-xs"><Search size={14} /><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Buscar nombre, celular o modelo" className="w-full bg-transparent text-xs text-[var(--ink)] outline-none placeholder:text-[#9a9b9b]" /></label>
         </div>
-        <details className="group mt-1">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-xs font-black text-[var(--muted)] [&::-webkit-details-marker]:hidden">Más filtros <ChevronDown size={14} className="transition group-open:rotate-180" /></summary>
-          <div className="space-y-2 pt-1">
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <details className="group mt-0">
+          <summary className="flex cursor-pointer list-none items-center gap-1 py-0 text-[11px] font-black text-[var(--muted)] [&::-webkit-details-marker]:hidden">Más filtros <ChevronDown size={13} className="transition group-open:rotate-180" /></summary>
+          <div className="space-y-1 pt-0">
+        <div className="flex gap-1 overflow-x-auto pb-0">
           {(["ALL", "HIGH", "MEDIUM", "LOW"] as const).map((value) => {
             const label = value === "ALL" ? "Todas las prioridades" : value === "HIGH" ? "🔥 Alta" : value === "MEDIUM" ? "Media" : "Baja";
             return <button type="button" key={value} onClick={() => { setTemperature(value); setPage(1); }} className={`filter-pill dashboard-filter-pill ${temperature === value ? "filter-pill-active" : ""}`}>{label}</button>;
           })}
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-1 overflow-x-auto pb-0">
           {statusFilters.map((filter) => <button type="button" key={filter.value} onClick={() => { setStatus(filter.value); setPage(1); }} className={`filter-pill dashboard-filter-pill ${status === filter.value ? "filter-pill-active-muted" : ""}`}>{filter.label}</button>)}
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-1 overflow-x-auto pb-0">
           {([{ value: "ALL", label: "Parte de pago: todos" }, { value: "YES", label: "Con vehículo" }, { value: "NO", label: "Sin vehículo" }] as const).map((filter) => <button type="button" key={filter.value} onClick={() => { setTradeIn(filter.value); setPage(1); }} className={`filter-pill dashboard-filter-pill ${tradeIn === filter.value ? "filter-pill-active-muted" : ""}`}>{filter.label}</button>)}
         </div>
           </div>
@@ -338,7 +338,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
     if (response.success && response.data) {
       setWhatsappStatus(response.data.whatsappStatus);
       if (response.data.whatsappStatus === "SENT") setConversationState("WAITING_CUSTOMER");
-      setSendInfo(response.warning || "Mensaje enviado automáticamente por WhatsApp. Los estados se actualizarán desde Evolution.");
+      setSendInfo(response.warning || "Mensaje enviado automáticamente por WhatsApp. Los estados se actualizarán aquí.");
     } else {
       setSendError(response.message || response.error || "No fue posible enviar el mensaje.");
     }

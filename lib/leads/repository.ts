@@ -247,7 +247,7 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
   };
 
   const supabase = await createSupabaseServerClient();
-  if (!supabase) throw new Error("Supabase no está configurado. Completa NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY para guardar el contacto en la nube.");
+  if (!supabase) throw new Error("No pudimos preparar el guardado del contacto. Intenta de nuevo y avísame si continúa.");
 
   const { data: userData, error: authError } = await supabase.auth.getUser();
   if (authError && authError.name !== "AuthSessionMissingError") {
@@ -277,10 +277,10 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || "Supabase no confirmó la persistencia del contacto.");
+    throw new Error("No pudimos guardar el contacto. Revisa tu conexión e inténtalo de nuevo.");
   }
 
-  return { lead: toDomainLead(data as unknown as LeadRow), warning: "Lead guardado en Supabase. Envíalo desde el dashboard cuando estés listo." };
+  return { lead: toDomainLead(data as unknown as LeadRow), warning: "Lead guardado. Envíalo desde el dashboard cuando estés listo." };
 }
 
 export async function getLeadById(id: string): Promise<Lead | null> {
@@ -584,7 +584,7 @@ export async function markLeadAfterOutboundMessage(id: string, status: WhatsappS
 
   const now = new Date().toISOString();
   const update = status === "FAILED"
-    ? { whatsapp_status: status, whatsapp_last_error: errorMessage ?? "Evolution API error" }
+    ? { whatsapp_status: status, whatsapp_last_error: errorMessage ?? "No pudimos actualizar el estado del mensaje." }
     : {
         whatsapp_status: status,
         whatsapp_last_error: null,

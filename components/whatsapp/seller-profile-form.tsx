@@ -20,7 +20,7 @@ export function SellerProfileForm({ initialProfile, persistentSettingsAvailable 
     const response = await saveSellerProfileOverrideAction(profile);
     if (response.success && response.data) {
       setProfile(response.data);
-      setMessage("Datos guardados permanentemente en Supabase.");
+      setMessage("Datos guardados correctamente.");
     } else {
       setError(response.message || response.error || "No pudimos guardar los datos del vendedor.");
     }
@@ -32,8 +32,8 @@ export function SellerProfileForm({ initialProfile, persistentSettingsAvailable 
       <div>
         <p className="eyebrow">Perfil del vendedor</p>
         <h2 className="mt-2 text-xl font-black">Datos que verá el cliente</h2>
-        <p className="mt-1 max-w-xl text-sm leading-6 text-[var(--muted)]">Se usan en el QR y en los mensajes nuevos. Si dejas un campo vacío, se usará el valor correspondiente del .env.</p>
-        <p className="mt-2 max-w-xl text-xs leading-5 text-[var(--muted)]">{persistentSettingsAvailable ? "La configuración está conectada a Supabase y se conservará para todos los dispositivos que usen este proyecto." : "La configuración global todavía está bloqueada: falta SUPABASE_SERVICE_ROLE_KEY en el servidor. No se guardará una copia temporal en este navegador."} El QR se actualiza al volver a abrir o recargar <Link href="/qr" className="font-black text-[var(--ink)] underline underline-offset-2">/qr</Link>.</p>
+        <p className="mt-1 max-w-xl text-sm leading-6 text-[var(--muted)]">Se usan en el QR y en los mensajes nuevos. Si dejas un campo vacío, usaremos el dato que ya esté configurado.</p>
+        <p className="mt-2 max-w-xl text-xs leading-5 text-[var(--muted)]">{persistentSettingsAvailable ? "Estos datos se conservarán para que aparezcan en tus dispositivos." : "No pudimos guardar estos datos para todos tus dispositivos. Intenta de nuevo y avísame si continúa."} El QR se actualiza al volver a abrir o recargar <Link href="/qr" className="font-black text-[var(--ink)] underline underline-offset-2">/qr</Link>.</p>
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         {([ ["name", "Nombre del vendedor"], ["phone", "Celular del vendedor"], ["email", "Correo"], ["company", "Empresa"] ] as const).map(([field, label]) => <label key={field} className="text-xs font-black text-[var(--ink)]">{label}<input value={profile[field]} onChange={(event) => setProfile((current) => ({ ...current, [field]: event.target.value }))} className="mt-1.5 h-11 w-full rounded-xl border border-black/10 bg-[#faf9f6] px-3 text-sm font-semibold outline-none focus:border-[var(--ink)]" /></label>)}

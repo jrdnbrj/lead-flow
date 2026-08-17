@@ -46,7 +46,7 @@ export function MessageTemplateEditor({ initialTemplate }: { initialTemplate: st
     const response = await saveWhatsappMessageTemplateAction(template);
     if (response.success && response.data) {
       setTemplate(response.data.template);
-      setMessage("Mensaje automático guardado permanentemente en Supabase.");
+      setMessage("Mensaje automático guardado correctamente.");
     } else {
       setError(response.message || response.error || "No pudimos guardar el mensaje.");
     }

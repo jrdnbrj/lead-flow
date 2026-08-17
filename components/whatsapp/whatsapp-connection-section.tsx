@@ -22,7 +22,7 @@ type WhatsappConnection = {
 function stateCopy(state: EvolutionConnectionState | null): { title: string; description: string; className: string } {
   if (state === "open") return { title: "WhatsApp conectado", description: "La cuenta está vinculada y lista para enviar mensajes desde el resumen de contactos.", className: "border-emerald-200 bg-emerald-50 text-emerald-900" };
   if (state === "connecting") return { title: "Esperando vinculación", description: "Escanea el QR con WhatsApp en tu celular. El estado cambiará automáticamente cuando termine.", className: "border-amber-200 bg-amber-50 text-amber-900" };
-  if (state === "close") return { title: "WhatsApp desconectado", description: "La instancia está disponible, pero todavía no hay un celular vinculado. Genera un QR nuevo.", className: "border-amber-200 bg-amber-50 text-amber-900" };
+  if (state === "close") return { title: "WhatsApp desconectado", description: "Todavía no hay un celular vinculado. Genera un código QR nuevo.", className: "border-amber-200 bg-amber-50 text-amber-900" };
   return { title: "Estado no disponible", description: "No pudimos confirmar el estado de la cuenta. Actualiza la página para volver a consultarlo.", className: "border-black/10 bg-[#faf9f6] text-[var(--ink)]" };
 }
 
