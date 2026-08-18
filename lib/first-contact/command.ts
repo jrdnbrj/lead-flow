@@ -5,6 +5,7 @@ import { renderWhatsappMessageTemplate } from "@/lib/config/message-template-sha
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { claimFirstContactEffect, beginFirstContactEffect, getCarModelContactAssets, recordFirstContactEffectResult, requestFirstContact, retryFirstContactEffect } from "@/lib/leads/repository";
 import type { Lead } from "@/lib/domain/lead";
+import { orderFirstContactItems, shouldContinueFirstContact } from "@/lib/first-contact/order";
 import type { FirstContactOperationResult, FirstContactProvider } from "@/lib/first-contact/types";
 
 function digest(value: string): string { return createHash("sha256").update(value).digest("hex"); }
@@ -38,7 +39,8 @@ export async function executeFirstContact(lead: FirstContactLead, provider: Firs
   const initial = await requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });
   if (!initial) return null;
   let providerAttempted = false;
-  for (const item of initial.items) {
+  const orderedItems = orderFirstContactItems(initial.items);
+  for (const item of orderedItems) {
     if (item.availability !== "AVAILABLE" || !item.effectId || item.result === "ACCEPTED") continue;
     const claimTokenDigest = digest(`${idempotencyKey}:${item.id}:${crypto.randomUUID()}`);
     const claim = await claimFirstContactEffect(item.effectId, claimTokenDigest);
@@ -50,8 +52,9 @@ export async function executeFirstContact(lead: FirstContactLead, provider: Firs
       ? await provider.sendMessage({ phone: lead.phone, text: request.text })
       : item.resourceKind === "PHOTOS"
         ? await provider.sendPhoto({ phone: lead.phone, imageUrl: request.imageUrl ?? "", caption: `Información de ${lead.carModels[0] ?? "tu vehículo"}`, fileName: request.imageFileName ?? `leadflow-${(lead.carModels[0] ?? "vehiculo").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg` })
-        : await provider.sendDocument({ phone: lead.phone, documentUrl: request.technicalSheetUrl ?? "", caption: `Ficha técnica de ${lead.carModels[0] ?? "tu vehículo"}`, fileName: request.technicalSheetFileName ?? `Ficha técnica - ${(lead.carModels[0] ?? "vehiculo")}.pdf` });
+      : await provider.sendDocument({ phone: lead.phone, documentUrl: request.technicalSheetUrl ?? "", caption: `Ficha técnica de ${lead.carModels[0] ?? "tu vehículo"}`, fileName: request.technicalSheetFileName ?? `Ficha técnica - ${(lead.carModels[0] ?? "vehiculo")}.pdf` });
     await recordFirstContactEffectResult(item.effectId, claim.attemptNo, claimTokenDigest, { ...outcome, messageBody: item.resourceKind === "MESSAGE" ? request.text : null });
+    if (!shouldContinueFirstContact(item.resourceKind, outcome.result)) break;
   }
   const final = await requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });
   return final ? { ...final, replayed: initial.replayed && !providerAttempted } : null;

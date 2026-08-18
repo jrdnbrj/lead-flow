@@ -24,10 +24,9 @@ export function QrCard({ seller, leadName }: { seller: SellerProfile; leadName?:
 
   function saveContact() {
     setBusyAction("save");
-    setFeedback("Abriendo contacto…");
+    setFeedback(null);
     try {
       downloadVCard(vCardContact);
-      setFeedback("Contacto listo para guardar.");
     } catch {
       setFeedback("No se pudo preparar el contacto.");
     } finally {

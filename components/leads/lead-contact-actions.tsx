@@ -33,10 +33,9 @@ export function LeadContactActions({ contact, compact = false, showWhatsApp = tr
 
   function saveContact() {
     setBusy("save");
-    setFeedback("Abriendo contacto…");
+    setFeedback(null);
     try {
       downloadVCard(contact);
-      setFeedback("Contacto listo para guardar.");
     } catch {
       setFeedback("No se pudo preparar el contacto.");
     }
