@@ -2,13 +2,8 @@ name: leadflow-production
 
 services:
   leadflow:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required}
-        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is required}
-        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:?NEXT_PUBLIC_VAPID_PUBLIC_KEY is required}
+    image: ${LEADFLOW_IMAGE_REPOSITORY:-ghcr.io/jrdnbrj/lead-flow}:${LEADFLOW_IMAGE_TAG:?LEADFLOW_IMAGE_TAG is required}
+    pull_policy: always
     environment:
       NODE_ENV: production
       PORT: 3000

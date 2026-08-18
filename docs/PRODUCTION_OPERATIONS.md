@@ -25,6 +25,7 @@ Production artifacts:
 - `scripts/deploy-production.sh`
 - `scripts/rollback-production.sh`
 - `scripts/migration-release-preflight.sh`
+- `.github/workflows/production-deploy.yml`
 
 The development `docker-compose.yml` remains separate and still exposes its
 local development ports.
@@ -44,6 +45,7 @@ then create root-owned, mode-0600 files outside Git:
 /etc/leadflow/leadflow.env
 /etc/leadflow/evolution.env
 /etc/leadflow/caddy.env
+/etc/leadflow/ghcr.env
 ```
 
 Use the corresponding `deploy/env/*.env.example` files as templates. The
@@ -69,12 +71,27 @@ DEPLOY_COMMIT=<known-main-commit> ./scripts/deploy-production.sh
 ./scripts/rollback-production.sh <known-good-commit>
 ```
 
-The deploy script fetches `origin/main`, requires a clean server worktree,
-checks out the requested commit detached, builds LeadFlow, starts the four
-services, waits for container health, then checks `/api/health` and
-`/api/ready`. It is idempotent and does not prune images automatically, so the
-previous image remains available for rollback. A failed health gate returns a
-failure; it does not silently roll back or destroy the previous version.
+The production workflow builds LeadFlow outside the VPS and publishes an
+immutable image tagged with the exact Git commit SHA to GHCR. The deploy script
+fetches `origin/main`, requires a clean server worktree, checks out the
+requested commit detached, pulls that exact image, starts the four services,
+waits for container health, then checks `/api/health` and `/api/ready`. It never
+runs `npm ci`, `next build`, or `docker compose build` on the VPS. It is
+idempotent and does not prune images automatically, so the previous image
+remains available for rollback. A failed health gate returns a failure; it does
+not silently roll back or destroy the previous version.
+
+For a private GHCR package, create `/etc/leadflow/ghcr.env` outside Git with
+mode `0640`, readable by `deploy`, containing only:
+
+```text
+GHCR_USERNAME=<read-only package account>
+GHCR_READ_TOKEN=<read-only package token>
+```
+
+The token is used only for `docker pull`; it is never passed to LeadFlow,
+Evolution, Compose interpolation, or the browser. The image repository is
+`ghcr.io/jrdnbrj/lead-flow` and the deployment tag is an immutable commit SHA.
 
 Application rollback does not roll back Supabase or Evolution database
 migrations. Database changes are forward-only and require their own release.
@@ -173,6 +190,8 @@ renews HTTPS for `leadflow.jrdnbrj.com` after DNS resolves.
 | `SUPABASE_ACCESS_TOKEN` | GitHub migration environment/local operator | Supabase CLI only | Never put it on the VPS application container |
 | `SUPABASE_DB_PASSWORD` | GitHub migration environment/local operator | Supabase CLI only | Never put it on the VPS application container |
 | `VPS_SSH_PRIVATE_KEY` | GitHub production environment | Deploy workflow only | Dedicated deploy user key; rotate independently |
+| `GHCR_USERNAME` | VPS `/etc/leadflow/ghcr.env` | Docker pull on VPS | Use a package-read identity; rotate independently |
+| `GHCR_READ_TOKEN` | VPS `/etc/leadflow/ghcr.env` | Docker pull on VPS | Revoke and replace without changing app secrets |
 
 Public seller values and `CADDY_HOSTNAME`/`ACME_EMAIL` are configuration, not
 secrets. No `.env` or device-specific file belongs in Git or a Docker image.
@@ -184,9 +203,11 @@ blocking contracts, build, and diff check. The two known legacy contract checks
 that do not match the accepted current E2/E6 UX are intentionally tracked
 separately until updated; they are not silently reported as passing.
 
-`.github/workflows/production-deploy.yml` deploys a successful `main` CI commit
-through SSH using a dedicated non-root user and pinned known hosts. Configure
-the `production` GitHub Environment before enabling it.
+`.github/workflows/production-deploy.yml` receives a successful `main` CI
+commit, builds the production image on GitHub-hosted infrastructure, publishes
+the immutable SHA tag to GHCR, then deploys that same SHA through SSH using a
+dedicated non-root user and pinned known hosts. Configure the `production`
+GitHub Environment before enabling it.
 
 `.github/workflows/supabase-migrations.yml` is manual only. The
 `production-migrations` Environment should require explicit reviewers. It
@@ -205,6 +226,11 @@ VPS_SSH_KNOWN_HOSTS
 SUPABASE_PROJECT_REF
 SUPABASE_ACCESS_TOKEN
 SUPABASE_DB_PASSWORD
+
+# production environment secrets used only while building the public browser bundle
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+NEXT_PUBLIC_VAPID_PUBLIC_KEY
 ```
 
 ## Monitoring and final acceptance

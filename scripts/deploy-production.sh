@@ -17,8 +17,10 @@ env_dir="${DEPLOY_ENV_DIR:-/etc/leadflow}"
 leadflow_env_file="${LEADFLOW_ENV_FILE:-$env_dir/leadflow.env}"
 evolution_env_file="${EVOLUTION_ENV_FILE:-$env_dir/evolution.env}"
 caddy_env_file="${CADDY_ENV_FILE:-$env_dir/caddy.env}"
+ghcr_env_file="${GHCR_ENV_FILE:-$env_dir/ghcr.env}"
 compose_file="${COMPOSE_FILE:-$repo_root/docker-compose.production.yml}"
 project_name="${COMPOSE_PROJECT_NAME:-leadflow-production}"
+image_repository="${LEADFLOW_IMAGE_REPOSITORY:-ghcr.io/jrdnbrj/lead-flow}"
 
 [[ -f "$compose_file" ]] || fail "production compose file is missing"
 for env_file in "$leadflow_env_file" "$evolution_env_file" "$caddy_env_file"; do
@@ -63,8 +65,23 @@ for variable in "${required_vars[@]}"; do
 done
 [[ "$LEADFLOW_ENVIRONMENT" == "production" ]] || fail "LEADFLOW_ENVIRONMENT must be production"
 
+export LEADFLOW_IMAGE_REPOSITORY="$image_repository"
+export LEADFLOW_IMAGE_TAG="$target_commit"
+
+if [[ -r "$ghcr_env_file" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ghcr_env_file"
+  set +a
+  if [[ -n "${GHCR_USERNAME:-}" && -n "${GHCR_READ_TOKEN:-}" ]]; then
+    printf '%s\n' "$GHCR_READ_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin >/dev/null \
+      || fail "could not authenticate to GHCR"
+  fi
+fi
+
 compose=(docker compose --project-name "$project_name" -f "$compose_file")
-"${compose[@]}" build --pull leadflow
+docker pull "$image_repository:$target_commit" >/dev/null \
+  || fail "could not pull LeadFlow image $image_repository:$target_commit"
 "${compose[@]}" up -d --no-build
 
 wait_for_health() {
