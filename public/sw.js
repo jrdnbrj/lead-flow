@@ -54,6 +54,11 @@ self.addEventListener("notificationclick", (event) => {
     url.searchParams.set("deliveryId", data.deliveryId || "");
     url.searchParams.set("actionVersion", String(data.actionVersion || ""));
     url.searchParams.set("command", action);
+
+    // Notification actions execute the canonical command in the background.
+    // Only clicking the notification body should open LeadFlow.
+    event.waitUntil(fetch(url.href, { credentials: "include", redirect: "manual", cache: "no-store" }).catch(() => undefined));
+    return;
   }
   event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
     const open = windows.find((client) => "focus" in client);
