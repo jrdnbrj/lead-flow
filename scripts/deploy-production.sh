@@ -21,6 +21,7 @@ ghcr_env_file="${GHCR_ENV_FILE:-$env_dir/ghcr.env}"
 compose_file="${COMPOSE_FILE:-$repo_root/docker-compose.production.yml}"
 project_name="${COMPOSE_PROJECT_NAME:-leadflow-production}"
 image_repository="${LEADFLOW_IMAGE_REPOSITORY:-ghcr.io/jrdnbrj/lead-flow}"
+temporary_docker_config=""
 
 [[ -f "$compose_file" ]] || fail "production compose file is missing"
 for env_file in "$leadflow_env_file" "$evolution_env_file" "$caddy_env_file"; do
@@ -73,10 +74,15 @@ if [[ -r "$ghcr_env_file" ]]; then
   # shellcheck disable=SC1090
   source "$ghcr_env_file"
   set +a
-  if [[ -n "${GHCR_USERNAME:-}" && -n "${GHCR_READ_TOKEN:-}" ]]; then
-    printf '%s\n' "$GHCR_READ_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin >/dev/null \
-      || fail "could not authenticate to GHCR"
-  fi
+fi
+
+if [[ -n "${GHCR_USERNAME:-}" && -n "${GHCR_READ_TOKEN:-}" ]]; then
+  temporary_docker_config="$(mktemp -d)"
+  chmod 700 "$temporary_docker_config"
+  trap 'rm -rf "$temporary_docker_config"' EXIT
+  export DOCKER_CONFIG="$temporary_docker_config"
+  printf '%s\n' "$GHCR_READ_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin >/dev/null \
+    || fail "could not authenticate to GHCR"
 fi
 
 compose=(docker compose --project-name "$project_name" -f "$compose_file")

@@ -84,12 +84,14 @@ jobs:
 
       - name: Deploy selected commit
         shell: bash
+        env:
+          GHCR_READ_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          ssh -i "$KEY_FILE" \
+          printf '%s\n' "$GHCR_READ_TOKEN" | ssh -i "$KEY_FILE" \
             -p "$VPS_SSH_PORT" \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$KNOWN_HOSTS_FILE" \
             "$VPS_USER@$VPS_HOST" \
-            "cd '$VPS_APP_DIR' && DEPLOY_COMMIT='$DEPLOY_COMMIT' ./scripts/deploy-production.sh"
+            "cd '$VPS_APP_DIR' && GHCR_USERNAME='github-actions[bot]' GHCR_READ_TOKEN=\$(cat) DEPLOY_COMMIT='$DEPLOY_COMMIT' ./scripts/deploy-production.sh"
