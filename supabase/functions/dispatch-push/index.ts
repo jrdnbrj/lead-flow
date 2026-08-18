@@ -44,6 +44,11 @@ function describeProviderError(error: unknown): { statusCode?: number; name: str
   return { statusCode, name, message };
 }
 
+function providerStatus(response: unknown): string {
+  const statusCode = (response as { statusCode?: unknown })?.statusCode;
+  return typeof statusCode === "number" ? String(statusCode) : "ACCEPTED";
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST" || !dispatchSecret || request.headers.get("authorization") !== `Bearer ${dispatchSecret}`) return unauthorized();
   const materialized = await fetch(`${supabaseUrl}/rest/v1/rpc/materialize_push_deliveries_v1`, { method: "POST", headers, body: JSON.stringify({ p_now: new Date().toISOString() }) });
@@ -54,16 +59,41 @@ Deno.serve(async (request) => {
   const results = [];
   for (const delivery of deliveries) {
     const subscriptionResponse = await query(`push_subscriptions?id=eq.${delivery.subscription_id}&status=eq.ACTIVE&select=endpoint,p256dh,auth`);
-    const [subscription] = await subscriptionResponse.json();
-    if (!subscription) continue;
+    const [storedSubscription] = await subscriptionResponse.json();
+    if (!storedSubscription) continue;
+    const subscription = {
+      endpoint: storedSubscription.endpoint,
+      keys: {
+        p256dh: storedSubscription.p256dh,
+        auth: storedSubscription.auth,
+      },
+    };
     await query(`push_deliveries?id=eq.${delivery.id}&status=eq.SCHEDULED`, { method: "PATCH", body: JSON.stringify({ status: "CLAIMED", claimed_at: new Date().toISOString(), updated_at: new Date().toISOString() }) });
     const actionLabels: Record<string, string> = { CALL: "Llamar", WHATSAPP: "Escribir por WhatsApp", QUOTE: "Cotizar", OTHER: "Dar seguimiento", RESPONSE: "Responder" };
     const actionLabel = actionLabels[delivery.action_type] || "Dar seguimiento";
     const payload = JSON.stringify({ title: delivery.lead_name || "Seguimiento pendiente", body: `${actionLabel} · ${formatPushSchedule(delivery.scheduled_for)}`, tag: `leadflow-${delivery.id}`, deliveryId: delivery.id, actionVersion: delivery.action_version, openUrl: "/dashboard" });
     try {
-      await webpush.sendNotification(subscription, payload);
-      await query(`push_deliveries?id=eq.${delivery.id}`, { method: "PATCH", body: JSON.stringify({ status: "ACCEPTED", sent_at: new Date().toISOString(), updated_at: new Date().toISOString() }) });
-      results.push({ id: delivery.id, status: "ACCEPTED" });
+      const response = await webpush.sendNotification(subscription, payload, { TTL: 3600, urgency: "high" });
+      const acceptedAt = new Date().toISOString();
+      const acceptedProviderStatus = providerStatus(response);
+      console.info("push_provider_accepted", JSON.stringify({
+        deliveryId: delivery.id,
+        actionId: delivery.action_id,
+        actionVersion: delivery.action_version,
+        subscriptionId: delivery.subscription_id,
+        subscriptionGeneration: delivery.subscription_generation,
+        endpointHost: new URL(subscription.endpoint).host,
+        payloadBytes: new TextEncoder().encode(payload).byteLength,
+        ttl: 3600,
+        urgency: "high",
+        topic: null,
+        contentEncoding: "aes128gcm",
+        providerStatus: acceptedProviderStatus,
+        sentAt: acceptedAt,
+        effectId: delivery.effect_id,
+      }));
+      await query(`push_deliveries?id=eq.${delivery.id}`, { method: "PATCH", body: JSON.stringify({ status: "ACCEPTED", provider_status: acceptedProviderStatus, sent_at: acceptedAt, updated_at: acceptedAt }) });
+      results.push({ id: delivery.id, status: "ACCEPTED", providerStatus: acceptedProviderStatus });
     } catch (error) {
       const detail = describeProviderError(error);
       const statusCode = detail.statusCode;

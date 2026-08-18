@@ -40,6 +40,11 @@ button, a { touch-action: manipulation; }
 .filter-pill-active { border-color: var(--ink); background: var(--ink); color: var(--lime); }
 .filter-pill-active-muted { border-color: #cdd2da; background: #eef0f3; color: var(--ink); }
 .icon-action { display: grid; min-height: 42px; min-width: 42px; place-items: center; border-radius: 14px; border: 1px solid rgba(16,24,40,.1); background: white; color: var(--ink); transition: all .2s; }
+.diagnostics-grid { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(0, 1.5fr); gap: .45rem .8rem; margin: 0; font-size: .82rem; }
+.diagnostics-grid dt { color: var(--muted); font-weight: 800; }
+.diagnostics-grid dd { margin: 0; overflow-wrap: anywhere; }
+.diagnostics-table { display: grid; gap: .4rem; overflow-x: auto; }
+.diagnostics-row { display: grid; grid-template-columns: minmax(140px, .8fr) minmax(130px, .8fr) minmax(140px, .8fr) minmax(100px, .6fr); gap: .5rem; padding: .55rem .65rem; border-radius: 10px; background: rgba(16,24,40,.04); font-size: .75rem; min-width: 620px; }
 .icon-action:hover { border-color: var(--ink); background: var(--ink); color: white; }
 .icon-action-phone { border-color: #bed7f5; background: #e9f2ff; color: #1d5c9c; }
 .icon-action-phone:hover { border-color: #1d5c9c; background: #1d5c9c; color: white; }
