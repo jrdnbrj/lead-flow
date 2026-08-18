@@ -3,7 +3,7 @@
 -- it never discovers an identity from email, metadata, ordering, or environment.
 do $$
 declare
-  approved_advisor_user_id constant uuid := 'd463c836-6eeb-422a-aef8-44e725b984c8';
+  approved_advisor_user_id constant uuid := '1331ad98-0430-4025-88d6-9c1f68083f68';
   installation_count integer;
   existing_singleton boolean;
   existing_advisor_user_id uuid;
@@ -119,7 +119,7 @@ alter table public.leadflow_settings
 
 do $$
 declare
-  approved_advisor_user_id constant uuid := 'd463c836-6eeb-422a-aef8-44e725b984c8';
+  approved_advisor_user_id constant uuid := '1331ad98-0430-4025-88d6-9c1f68083f68';
 begin
   if exists (select 1 from public.leadflow_settings where user_id is not null and user_id <> approved_advisor_user_id) then
     raise exception 'E4-S2 cannot replace an existing leadflow_settings owner';

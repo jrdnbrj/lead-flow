@@ -663,10 +663,10 @@ export async function clearLeadAction(id: string): Promise<boolean> {
 }
 
 export async function softDeleteLead(id: string): Promise<boolean> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   if (!supabase) return false;
 
-  const { data, error } = await invokeRpc(supabase, "soft_delete_lead", { p_lead_id: id });
+  const { data, error } = await (supabase.rpc as unknown as (name: string, parameters: Record<string, unknown>) => Promise<RpcResult>)("soft_delete_lead", { p_lead_id: id });
   return !error && (data as unknown) === true;
 }
 
