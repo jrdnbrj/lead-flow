@@ -85,7 +85,14 @@ if [[ -n "${GHCR_USERNAME:-}" && -n "${GHCR_READ_TOKEN:-}" ]]; then
     || fail "could not authenticate to GHCR"
 fi
 
-compose=(docker compose --project-name "$project_name" -f "$compose_file")
+compose=(
+  env
+  "LEADFLOW_IMAGE_REPOSITORY=$image_repository"
+  "LEADFLOW_IMAGE_TAG=$target_commit"
+  docker compose
+  --project-name "$project_name"
+  -f "$compose_file"
+)
 docker pull "$image_repository:$target_commit" >/dev/null \
   || fail "could not pull LeadFlow image $image_repository:$target_commit"
 "${compose[@]}" up -d --no-build
