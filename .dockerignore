@@ -9,9 +9,12 @@ coverage
 !.env.example
 Dockerfile*
 docker-compose*.yml
-supabase/.temp
-supabase/.branches
+deploy/env/*.env
 *.log
 *.xlsx
-README.md
+.docker/
+_bmad-output/
 docs
+supabase/.temp/
+supabase/.branches/
+README.md

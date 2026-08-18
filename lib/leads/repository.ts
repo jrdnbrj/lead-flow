@@ -298,13 +298,54 @@ export async function getLeadById(id: string): Promise<Lead | null> {
   return lead ?? null;
 }
 
-export async function getCarModelImageUrl(modelName: string): Promise<string | null> {
+function getPublicVehicleAssetUrl(storagePath: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
+  return `${baseUrl}/storage/v1/object/public/vehiculos/${storagePath}`;
+}
+
+export type CarModelContactAssets = {
+  imageUrl: string | null;
+  imageFileName: string | null;
+  technicalSheetUrl: string | null;
+  technicalSheetFileName: string | null;
+};
+
+const legacyCarModelIds: Record<string, string> = {
+  "CS15 - Modelo 2027": "cs15-2027",
+  CS75: "cs75",
+  "CS55 R-EV - Modelo 2027": "cs55-rev-2027",
+  "HUNTER TURBO": "hunter-turbo",
+  M60: "m60",
+  "Honor S": "honor-s",
+  Startruck: "startruck",
+};
+
+export async function getCarModelContactAssets(modelName: string): Promise<CarModelContactAssets> {
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return null;
-  const { data: model } = await supabase.from("car_models").select("id").eq("name", modelName).eq("active", true).maybeSingle();
-  if (!model) return null;
-  const { data: image } = await supabase.from("car_model_images").select("image_url").eq("car_model_id", model.id).order("sort_order", { ascending: true }).limit(1).maybeSingle();
-  return image?.image_url ?? null;
+  if (!supabase) return { imageUrl: null, imageFileName: null, technicalSheetUrl: null, technicalSheetFileName: null };
+  const { data: modelByName } = await supabase.from("car_models").select("id").eq("name", modelName).eq("active", true).maybeSingle();
+  const { data: modelByLegacyId } = !modelByName && legacyCarModelIds[modelName]
+    ? await supabase.from("car_models").select("id").eq("id", legacyCarModelIds[modelName]).eq("active", true).maybeSingle()
+    : { data: null };
+  const model = modelByName ?? modelByLegacyId;
+  if (!model) return { imageUrl: null, imageFileName: null, technicalSheetUrl: null, technicalSheetFileName: null };
+  const { data: assets } = await supabase.from("car_model_assets").select("asset_kind,storage_path,file_name").eq("car_model_id", model.id).eq("active", true).order("sort_order", { ascending: true });
+  const image = assets?.find((asset) => asset.asset_kind === "PHOTO");
+  const sheet = assets?.find((asset) => asset.asset_kind === "TECHNICAL_SHEET");
+  if (image || sheet) {
+    return {
+      imageUrl: image ? getPublicVehicleAssetUrl(image.storage_path) : null,
+      imageFileName: image?.file_name ?? null,
+      technicalSheetUrl: sheet ? getPublicVehicleAssetUrl(sheet.storage_path) : null,
+      technicalSheetFileName: sheet?.file_name ?? null,
+    };
+  }
+  const { data: legacyImage } = await supabase.from("car_model_images").select("image_url").eq("car_model_id", model.id).order("sort_order", { ascending: true }).limit(1).maybeSingle();
+  return { imageUrl: legacyImage?.image_url ?? null, imageFileName: null, technicalSheetUrl: null, technicalSheetFileName: null };
+}
+
+export async function getCarModelImageUrl(modelName: string): Promise<string | null> {
+  return (await getCarModelContactAssets(modelName)).imageUrl;
 }
 
 export async function findLeadByPhone(phone: string, excludeLeadId?: string): Promise<ExistingLeadSummary | null> {

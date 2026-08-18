@@ -16,14 +16,18 @@ export const paymentMethods = [
 
 export const carModels = [
   "V3",
-  "CS15 - Modelo 2027",
-  "CS75",
-  "CS55 R-EV - Modelo 2027",
+  "CS55 Plus R-EV",
+  "Deepal S07 Max",
+  "Deepal S05 E",
+  "Deepal S05 Max Híbrido",
+  "Deepal G318 R-EV",
+  "CS75 Plus",
+  "X7 Plus",
   "HUNTER E",
-  "HUNTER TURBO",
-  "M60",
-  "Honor S",
-  "Startruck",
+  "HUNTER Turbo Diésel",
+  "M60 Pasajeros",
+  "Honor S Cargo",
+  "Star Truck",
   "Otro modelo",
 ] as const;
 

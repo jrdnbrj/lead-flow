@@ -42,4 +42,5 @@ export type ProviderOutcome = {
 export type FirstContactProvider = {
   sendMessage(input: { phone: string; text: string }): Promise<ProviderOutcome>;
   sendPhoto(input: { phone: string; imageUrl: string; caption: string; fileName: string }): Promise<ProviderOutcome>;
+  sendDocument(input: { phone: string; documentUrl: string; caption: string; fileName: string }): Promise<ProviderOutcome>;
 };

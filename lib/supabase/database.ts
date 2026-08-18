@@ -79,6 +79,50 @@ export type Database = {
         }
         Relationships: []
       }
+      car_model_assets: {
+        Row: {
+          active: boolean
+          asset_kind: string
+          car_model_id: string
+          created_at: string
+          file_name: string
+          id: string
+          mime_type: string
+          sort_order: number
+          storage_path: string
+        }
+        Insert: {
+          active?: boolean
+          asset_kind: string
+          car_model_id: string
+          created_at?: string
+          file_name: string
+          id?: string
+          mime_type: string
+          sort_order?: number
+          storage_path: string
+        }
+        Update: {
+          active?: boolean
+          asset_kind?: string
+          car_model_id?: string
+          created_at?: string
+          file_name?: string
+          id?: string
+          mime_type?: string
+          sort_order?: number
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "car_model_assets_car_model_id_fkey"
+            columns: ["car_model_id"]
+            isOneToOne: false
+            referencedRelation: "car_models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_effect_attempt_observations: {
         Row: {
           attempt_no: number

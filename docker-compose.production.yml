@@ -1,0 +1,143 @@
+name: leadflow-production
+
+services:
+  leadflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is required}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:?NEXT_PUBLIC_VAPID_PUBLIC_KEY is required}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      LEADFLOW_ENVIRONMENT: production
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is required}
+      NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:?NEXT_PUBLIC_VAPID_PUBLIC_KEY is required}
+      NEXT_PUBLIC_SELLER_NAME: ${NEXT_PUBLIC_SELLER_NAME:?NEXT_PUBLIC_SELLER_NAME is required}
+      NEXT_PUBLIC_SELLER_PHONE: ${NEXT_PUBLIC_SELLER_PHONE:?NEXT_PUBLIC_SELLER_PHONE is required}
+      NEXT_PUBLIC_SELLER_EMAIL: ${NEXT_PUBLIC_SELLER_EMAIL:?NEXT_PUBLIC_SELLER_EMAIL is required}
+      NEXT_PUBLIC_SELLER_COMPANY: ${NEXT_PUBLIC_SELLER_COMPANY:?NEXT_PUBLIC_SELLER_COMPANY is required}
+      NEXT_PUBLIC_WHATSAPP_MESSAGE_TEMPLATE: ${NEXT_PUBLIC_WHATSAPP_MESSAGE_TEMPLATE:?NEXT_PUBLIC_WHATSAPP_MESSAGE_TEMPLATE is required}
+      SUPABASE_URL: ${SUPABASE_URL:?SUPABASE_URL is required}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?SUPABASE_SERVICE_ROLE_KEY is required}
+      EVOLUTION_API_URL: http://evolution-api:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:?EVOLUTION_API_KEY is required}
+      EVOLUTION_API_INSTANCE_NAME: ${EVOLUTION_API_INSTANCE_NAME:?EVOLUTION_API_INSTANCE_NAME is required}
+      EVOLUTION_WEBHOOK_URL: ${EVOLUTION_WEBHOOK_URL:?EVOLUTION_WEBHOOK_URL is required}
+      EVOLUTION_WEBHOOK_TOKEN: ${EVOLUTION_WEBHOOK_TOKEN:?EVOLUTION_WEBHOOK_TOKEN is required}
+    networks:
+      - edge
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  evolution-api:
+    image: ${EVOLUTION_IMAGE:-evoapicloud/evolution-api:v2.3.7}
+    depends_on:
+      evolution-redis:
+        condition: service_healthy
+    environment:
+      SERVER_NAME: evolution
+      SERVER_TYPE: http
+      SERVER_PORT: 8080
+      SERVER_URL: http://evolution-api:8080
+      TELEMETRY_ENABLED: "false"
+      CORS_ORIGIN: https://leadflow.jrdnbrj.com
+      CORS_METHODS: GET,POST,PUT,DELETE
+      CORS_CREDENTIALS: "false"
+      DEL_INSTANCE: "false"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: "${EVOLUTION_DATABASE_URL:?EVOLUTION_DATABASE_URL is required}&connection_limit=5&pool_timeout=20"
+      DATABASE_CONNECTION_CLIENT_NAME: leadflow
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "true"
+      DATABASE_SAVE_DATA_CHATS: "true"
+      DATABASE_SAVE_DATA_LABELS: "true"
+      DATABASE_SAVE_DATA_HISTORIC: "true"
+      DATABASE_SAVE_IS_ON_WHATSAPP: "true"
+      DATABASE_SAVE_IS_ON_WHATSAPP_DAYS: 7
+      DATABASE_DELETE_MESSAGE: "true"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://evolution-redis:6379/6
+      CACHE_REDIS_TTL: 604800
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_REDIS_SAVE_INSTANCES: "false"
+      CACHE_LOCAL_ENABLED: "false"
+      CONFIG_SESSION_PHONE_CLIENT: LeadFlow
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      QRCODE_LIMIT: 30
+      QRCODE_COLOR: "#175197"
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:?EVOLUTION_API_KEY is required}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "false"
+    volumes:
+      - evolution_instances:/evolution/instances
+    networks:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider --header=apikey:$${AUTHENTICATION_API_KEY} http://127.0.0.1:8080/instance/fetchInstances"]
+      interval: 30s
+      timeout: 8s
+      start_period: 45s
+      retries: 5
+
+  evolution-redis:
+    image: ${REDIS_IMAGE:-redis:7-alpine}
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - evolution_redis:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2-alpine}
+    depends_on:
+      leadflow:
+        condition: service_healthy
+    environment:
+      CADDY_HOSTNAME: ${CADDY_HOSTNAME:?CADDY_HOSTNAME is required}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+networks:
+  edge:
+  backend:
+
+volumes:
+  evolution_instances:
+  evolution_redis:
+  caddy_data:
+  caddy_config:

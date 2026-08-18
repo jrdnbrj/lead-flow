@@ -219,3 +219,22 @@ export async function sendWhatsappMedia(input: { phone: string; mediaUrl: string
   if (!response.ok) throw new Error(getEvolutionErrorMessage(response.status, rawPayload, "El mensaje se envió, pero no pudimos adjuntar la imagen del vehículo."));
   return { providerMessageId: extractEvolutionMessageId(rawPayload), status: normalizeEvolutionStatus(asRecord(rawPayload)?.status), payload: asRecord(rawPayload) };
 }
+
+export async function sendWhatsappDocument(input: { phone: string; documentUrl: string; caption?: string; fileName: string }): Promise<EvolutionSendResult> {
+  const config = getEvolutionConfig();
+  if (!config) throw new Error("La conexión de WhatsApp no está disponible. Intenta de nuevo y avísame si continúa.");
+
+  const normalizedPhone = normalizeWhatsappNumber(input.phone);
+  const phoneError = getWhatsappPhoneError(input.phone);
+  if (!normalizedPhone || phoneError) throw new Error(phoneError || "El número de WhatsApp no es válido.");
+
+  const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}/message/sendMedia/${encodeURIComponent(config.instanceName)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: config.apiKey },
+    body: JSON.stringify({ number: normalizedPhone, mediatype: "document", mimetype: "application/pdf", media: input.documentUrl, caption: input.caption || "", fileName: input.fileName, delay: 0 }),
+    cache: "no-store",
+  });
+  const rawPayload: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(getEvolutionErrorMessage(response.status, rawPayload, "El mensaje se envió, pero no pudimos adjuntar la ficha técnica."));
+  return { providerMessageId: extractEvolutionMessageId(rawPayload), status: normalizeEvolutionStatus(asRecord(rawPayload)?.status), payload: asRecord(rawPayload) };
+}

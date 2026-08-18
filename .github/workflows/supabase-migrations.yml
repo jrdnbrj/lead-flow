@@ -1,0 +1,58 @@
+name: LeadFlow Supabase migrations
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      LEADFLOW_ENVIRONMENT: production
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Link target and run read-only preflight
+        run: |
+          set -euo pipefail
+          SUPABASE_TELEMETRY_DISABLED=1 ./node_modules/.bin/supabase link \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --password "$SUPABASE_DB_PASSWORD"
+          scripts/migration-release-preflight.sh
+
+  apply:
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment: production-migrations
+    timeout-minutes: 20
+    env:
+      LEADFLOW_ENVIRONMENT: production
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Link target and apply forward-only migrations
+        run: |
+          set -euo pipefail
+          SUPABASE_TELEMETRY_DISABLED=1 ./node_modules/.bin/supabase link \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --password "$SUPABASE_DB_PASSWORD"
+          scripts/assert-supabase-target.sh
+          SUPABASE_TELEMETRY_DISABLED=1 ./node_modules/.bin/supabase db push --linked --yes
+          SUPABASE_TELEMETRY_DISABLED=1 ./node_modules/.bin/supabase migration list --linked

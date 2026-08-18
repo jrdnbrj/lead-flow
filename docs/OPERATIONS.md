@@ -32,6 +32,11 @@ Use `.env` as the single local configuration file. `.env.local` may remain for
 the existing Next.js developer workflow, but new configuration belongs in
 `.env`; both are gitignored.
 
+The VPS deployment path is documented separately in
+[`docs/PRODUCTION_OPERATIONS.md`](./PRODUCTION_OPERATIONS.md). It uses explicit
+per-service environment files and `docker-compose.production.yml`; the root
+development Compose remains local-only.
+
 ## Auth bootstrap and database releases
 
 Migration 010 is historical and requires its approved Auth identity to exist

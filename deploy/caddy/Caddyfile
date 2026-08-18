@@ -1,0 +1,18 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$CADDY_HOSTNAME} {
+	encode zstd gzip
+
+	request_body {
+		max_size 4MB
+	}
+
+	log {
+		output stdout
+		format json
+	}
+
+	reverse_proxy leadflow:3000
+}
