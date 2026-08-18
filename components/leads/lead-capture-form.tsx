@@ -65,7 +65,7 @@ export function LeadCaptureForm() {
         <a className="button-secondary min-h-11" href="/dashboard"><ExternalLink size={16} />Ir al dashboard</a>
       </div>
       <LeadContactActions contact={{ name: values.fullName || "Cliente", phone: values.phone || "" }} />
-      <FollowUpActions leadId={savedLeadId} actions={savedActions} onActionsChange={setSavedActions} onConversationWaiting={() => undefined} onError={setSubmitError} onInfo={setWarning} />
+      <FollowUpActions leadId={savedLeadId} actions={savedActions} onActionsChange={setSavedActions} onError={setSubmitError} onInfo={setWarning} />
       <FirstContactSummary lead={{ id: savedLeadId, fullName: values.fullName || "Cliente", phone: values.phone || "", carModels: values.carModels || [] }} />
       {submitError ? <p className="rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]" role="alert">{submitError}</p> : null}
       {warning ? <p className="text-xs text-[var(--muted)]">{warning}</p> : null}

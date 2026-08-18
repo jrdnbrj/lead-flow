@@ -57,6 +57,38 @@ export function formatNextActionDate(nextActionAt: string | null, reference = ne
     .replace(".", "");
 }
 
+export function formatScheduledDateTime(nextActionAt: string | null, reference = new Date()): string | null {
+  if (!nextActionAt) return null;
+  const target = new Date(nextActionAt);
+  const today = getSellerDateParts(reference);
+  const targetParts = getSellerDateParts(target);
+  const targetDate = new Date(Date.UTC(targetParts.year, targetParts.month - 1, targetParts.day));
+  const todayDate = new Date(Date.UTC(today.year, today.month - 1, today.day));
+  const dayDifference = Math.round((targetDate.getTime() - todayDate.getTime()) / 86_400_000);
+  const time = new Intl.DateTimeFormat("es-EC", {
+    timeZone: SELLER_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(target);
+
+  if (dayDifference === 0) return `Hoy · ${time}`;
+  if (dayDifference === 1) return `Mañana · ${time}`;
+  return `${new Intl.DateTimeFormat("es-EC", { timeZone: SELLER_TIME_ZONE, weekday: "short", day: "numeric", month: "short" }).format(target).replace(".", "")} · ${time}`;
+}
+
+export function formatElapsedSince(when: string | null, reference = new Date()): string | null {
+  if (!when) return null;
+  const elapsedMs = Math.max(0, reference.getTime() - new Date(when).getTime());
+  const elapsedMinutes = Math.floor(elapsedMs / 60_000);
+  if (elapsedMinutes < 1) return "hace menos de 1 min";
+  if (elapsedMinutes < 60) return `hace ${elapsedMinutes} min`;
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) return `hace ${elapsedHours} h`;
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  return `hace ${elapsedDays} ${elapsedDays === 1 ? "día" : "días"}`;
+}
+
 export function getNextActionDefaultLabel(actionType: NextActionType): string {
   return { CALL: "Llamar", WHATSAPP: "Escribir", QUOTE: "Cotizar", OTHER: "Seguimiento", RESPONSE: "Responder al cliente" }[actionType];
 }

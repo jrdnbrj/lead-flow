@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   applicationName: "LeadFlow",
   keywords: ["ventas", "leads", "automotriz", "CRM", "prospectos"],
   manifest: "/manifest.json",
-  icons: { icon: "/favicon.ico" },
+  icons: { icon: "/leadflow-mark.svg" },
 };
 
 export default function RootLayout({

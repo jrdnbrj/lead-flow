@@ -15,8 +15,8 @@ self.addEventListener("push", (event) => {
     tag: data.tag,
     data: { openUrl: data.openUrl || "/dashboard", deliveryId: data.deliveryId, actionVersion: data.actionVersion },
     actions,
-    icon: "/favicon.ico",
-    badge: "/favicon.ico",
+    icon: "/leadflow-mark.svg",
+    badge: "/leadflow-mark.svg",
   }));
 });
 

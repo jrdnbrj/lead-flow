@@ -199,7 +199,7 @@ export function getConversationStateLabel(state: ConversationState): string {
   return {
     NEW: "Nuevo",
     ACTIVE: "Conversación activa",
-    WAITING_CUSTOMER: "Esperando cliente",
+    WAITING_CUSTOMER: "Esperando respuesta",
     CLOSED: "Cerrado",
   }[state];
 }

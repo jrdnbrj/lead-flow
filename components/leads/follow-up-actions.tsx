@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { FollowUpAction, ScheduleShortcut } from "@/lib/domain/lead";
 import { getFollowUpActionStatusLabel, getNextActionLabel } from "@/lib/domain/lead";
 import { clearLeadActionAction, scheduleLeadActionAction, updateFollowUpActionAction } from "@/lib/leads/actions";
-import { formatNextActionDate, isLeadReminderDue } from "@/lib/leads/follow-up";
+import { formatElapsedSince, formatScheduledDateTime, isLeadReminderDue } from "@/lib/leads/follow-up";
 
 type TransitionStatus = "DONE" | "POSTPONED" | "IGNORED" | "CANCELED";
 type SchedulePreset = ScheduleShortcut | "CUSTOM";
@@ -44,14 +44,12 @@ export function FollowUpActions({
   leadId,
   actions,
   onActionsChange,
-  onConversationWaiting,
   onError,
   onInfo,
 }: {
   leadId: string;
   actions: FollowUpAction[];
   onActionsChange: (actions: FollowUpAction[]) => void;
-  onConversationWaiting?: () => void;
   onError?: (message: string | null) => void;
   onInfo?: (message: string | null) => void;
 }) {
@@ -78,12 +76,11 @@ export function FollowUpActions({
     const response = await scheduleLeadActionAction({ leadId, actionType, shortcut: schedulePreset === "CUSTOM" ? undefined : schedulePreset, scheduledFor, note });
     if (response.success && response.data) {
       onActionsChange([...actions, response.data.action]);
-      onConversationWaiting?.();
       setActionType("");
       setSchedulePreset("");
       setCustomDateTime("");
       setNote("");
-      onInfo?.(`Recordatorio agregado: ${formatNextActionDate(response.data.nextActionAt) ?? "fecha programada"}.`);
+      onInfo?.(`Recordatorio agregado para ${formatScheduledDateTime(response.data.nextActionAt) ?? "la fecha programada"}.`);
     } else {
       onError?.(response.error || "No pudimos programar el recordatorio.");
     }
@@ -131,7 +128,7 @@ export function FollowUpActions({
     {actions.length ? <div className="mt-2 space-y-1.5">{actions.map((action) => {
       const due = isOpenAction(action) && isLeadReminderDue(action.scheduledFor);
       return <div key={action.id} className={`rounded-lg border px-2 py-1.5 ${due ? "border-[#f3b257] bg-[#fff8ed]" : "border-black/[0.06] bg-white"}`}>
-        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${actionStatusClasses(action.status)}`}>{getFollowUpActionStatusLabel(action.status)}</span><span className={`text-xs font-black ${due ? "text-[#b94910]" : "text-[var(--ink)]"}`}>{due ? "Para hoy · " : ""}{getNextActionLabel(action.actionType)}</span><span className="text-[10px] text-[var(--muted)]">{formatNextActionDate(action.scheduledFor)}</span></div>{action.note ? <p className="mt-0.5 line-clamp-1 text-[10px] text-[var(--muted)]">{action.note}</p> : null}</div>{isOpenAction(action) ? <div className="flex flex-wrap gap-1"><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "DONE")} className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#e4f8e9] px-2 text-[10px] font-black text-[#18733a] disabled:opacity-50"><Check size={12} />Hecha</button><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "POSTPONED")} className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#edf3ff] px-2 text-[10px] font-black text-[#3c5f9b] disabled:opacity-50"><RotateCcw size={12} />+1 día</button><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "IGNORED")} className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#f1f1f1] px-2 text-[10px] font-black text-[#777c86] disabled:opacity-50"><Ban size={12} />Ignorar</button><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "CANCELED")} className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#f1f1f1] px-2 text-[10px] font-black text-[#777c86] disabled:opacity-50"><X size={12} />Cancelar</button></div> : null}</div>
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${actionStatusClasses(action.status)}`}>{getFollowUpActionStatusLabel(action.status)}</span><span className={`text-xs font-black ${due ? "text-[#b94910]" : "text-[var(--ink)]"}`}>{due ? "Vencida · " : ""}{getNextActionLabel(action.actionType)}</span><span className="text-[10px] text-[var(--muted)]">{due ? formatElapsedSince(action.scheduledFor) : formatScheduledDateTime(action.scheduledFor)}</span></div>{action.note ? <p className="mt-0.5 line-clamp-1 text-[10px] text-[var(--muted)]">{action.note}</p> : null}</div>{isOpenAction(action) ? <div className="flex flex-wrap gap-1"><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "DONE")} className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#e4f8e9] px-2 text-[10px] font-black text-[#18733a] disabled:opacity-50"><Check size={12} />Hecha</button><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "POSTPONED")} className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#edf3ff] px-2 text-[10px] font-black text-[#3c5f9b] disabled:opacity-50"><RotateCcw size={12} />+1 día</button><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "IGNORED")} className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#f1f1f1] px-2 py-1 text-[10px] font-black text-[#777c86] disabled:opacity-50"><Ban size={12} />Ignorar</button><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "CANCELED")} className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#f1f1f1] px-2 py-1 text-[10px] font-black text-[#777c86] disabled:opacity-50"><X size={12} />Cancelar</button></div> : null}</div>
       </div>;
     })}</div> : <p className="mt-1 text-[11px] font-semibold text-[var(--muted)]">Sin próxima acción.</p>}
     <div className="mt-2 border-t border-black/[0.06] pt-2">
