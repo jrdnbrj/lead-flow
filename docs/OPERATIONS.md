@@ -32,6 +32,32 @@ Use `.env` as the single local configuration file. `.env.local` may remain for
 the existing Next.js developer workflow, but new configuration belongs in
 `.env`; both are gitignored.
 
+## Auth bootstrap and database releases
+
+Migration 010 is historical and requires its approved Auth identity to exist
+before that migration runs on a new database. Run
+`scripts/assert-auth-bootstrap.sh` after the target guard and before a first
+install. The script only verifies the target, migration history and Auth row;
+it never creates or deletes users. The current production database already
+passed migration 010 and must not be re-run.
+
+Application releases and database releases are separate:
+
+```text
+Application: main -> CI checks -> application deploy
+Database: new migration -> target guard -> dry-run/history check
+          -> explicit approval -> forward migration -> verification
+          -> application deploy
+```
+
+Never run an automatic blind `supabase db push` on every main push.
+
+`dispatch-push` uses a server-only `PUSH_DISPATCH_SECRET` for the single
+platform scheduler boundary. The secret is stored in the platform secret
+manager/Vault and is never sent to the browser. The current remote scheduler
+is the single active job `leadflow-dispatch-push-every-minute` with cadence
+`* * * * *`; it invokes the function through Vault-backed authorization.
+
 ## Target guard
 
 Run `scripts/assert-supabase-target.sh` before any remote mutation. It verifies

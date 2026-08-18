@@ -5,12 +5,16 @@ const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY")!;
 const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY")!;
 const vapidSubject = Deno.env.get("VAPID_SUBJECT")!;
+const dispatchSecret = Deno.env.get("PUSH_DISPATCH_SECRET");
 webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
 const headers = { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}`, "content-type": "application/json" };
 const query = async (path: string, init?: RequestInit) => fetch(`${supabaseUrl}/rest/v1/${path}`, { ...init, headers: { ...headers, ...(init?.headers || {}) } });
 
-Deno.serve(async () => {
+const unauthorized = () => new Response(JSON.stringify({ error: "UNAUTHORIZED" }), { status: 401, headers: { "content-type": "application/json" } });
+
+Deno.serve(async (request) => {
+  if (request.method !== "POST" || !dispatchSecret || request.headers.get("authorization") !== `Bearer ${dispatchSecret}`) return unauthorized();
   const materialized = await fetch(`${supabaseUrl}/rest/v1/rpc/materialize_push_deliveries_v1`, { method: "POST", headers, body: JSON.stringify({ p_now: new Date().toISOString() }) });
   if (!materialized.ok) return new Response(JSON.stringify({ error: "MATERIALIZE_FAILED" }), { status: 502 });
   const due = await query("push_deliveries?status=eq.SCHEDULED&scheduled_for=lte." + encodeURIComponent(new Date().toISOString()) + "&select=*");
