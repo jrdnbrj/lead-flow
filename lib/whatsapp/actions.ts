@@ -40,19 +40,32 @@ export async function unlinkWhatsappInstanceAction(): Promise<ActionResponse<{ d
     // A session removed from WhatsApp can remain in Evolution as a zombie:
     // logout fails because Baileys is already closed. Delete and recreate that
     // instance so the next visit can produce a fresh QR.
-    if (response.status === 428 || response.status === 500) {
-      const deleteResponse = await fetch(`${baseUrl}/instance/delete/${encodeURIComponent(instanceName)}`, {
-        method: "DELETE",
-        headers: { apikey: apiKey },
-        cache: "no-store",
-      });
-      if (deleteResponse.ok || deleteResponse.status === 404) {
+    const logoutText = JSON.stringify(logoutPayload).toLowerCase();
+    const staleSession = response.status === 428 || response.status === 500 || (response.status === 400 && (logoutText.includes("not connected") || logoutText.includes("connection closed") || logoutText.includes("already closed")));
+    if (staleSession) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const deleteResponse = await fetch(`${baseUrl}/instance/delete/${encodeURIComponent(instanceName)}`, {
+          method: "DELETE",
+          headers: { apikey: apiKey },
+          cache: "no-store",
+        });
+        if (deleteResponse.ok || deleteResponse.status === 404) {
+          const ensured = await ensureEvolutionInstance();
+          if (ensured.ok) return { success: true, data: { disconnected: true } };
+          return { success: false, error: ensured.error || "La conexión se reinició, pero no pudimos dejarla lista. Intenta de nuevo." };
+        }
+        if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 750));
+      }
+
+      // Evolution 2.3.x can report an error after the instance was already
+      // removed. Verify the authoritative state before showing a failure.
+      const afterDelete = await getEvolutionConnectionStatus();
+      if (afterDelete.missingInstance) {
         const ensured = await ensureEvolutionInstance();
         if (ensured.ok) return { success: true, data: { disconnected: true } };
-        return { success: false, error: ensured.error || "La conexión se reinició, pero no pudimos dejarla lista. Intenta de nuevo." };
       }
-      const deletePayload = await deleteResponse.json().catch(() => null);
-      return { success: false, error: getEvolutionErrorMessage(deleteResponse.status, deletePayload, "No pudimos limpiar la conexión cerrada. Intenta de nuevo.") };
+
+      return { success: false, error: "No pudimos limpiar la conexión cerrada. Intenta de nuevo." };
     }
     return { success: false, error: logoutError };
   } catch {
