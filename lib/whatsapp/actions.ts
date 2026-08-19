@@ -3,12 +3,18 @@
 import type { ActionResponse } from "@/lib/domain/lead";
 import { authRequiredResult } from "@/lib/auth/auth-required";
 import { requireAdvisor } from "@/lib/auth/advisor";
-import { ensureEvolutionInstance, getEvolutionConnectionStatus, getEvolutionErrorMessage } from "@/lib/whatsapp/service";
+import { ensureEvolutionInstance, getEvolutionConnectionQr, getEvolutionConnectionStatus, getEvolutionErrorMessage } from "@/lib/whatsapp/service";
 
 export async function getWhatsappConnectionStatusAction() {
   const authorization = await requireAdvisor();
   if (authorization.status !== "AUTHORIZED") return { state: null, ready: false, error: "Tu sesión ya no está activa. Inicia sesión nuevamente." };
   return getEvolutionConnectionStatus();
+}
+
+export async function getWhatsappConnectionQrAction() {
+  const authorization = await requireAdvisor();
+  if (authorization.status !== "AUTHORIZED") return { qr: null, state: null, error: "Tu sesión ya no está activa. Inicia sesión nuevamente." };
+  return getEvolutionConnectionQr();
 }
 
 export async function unlinkWhatsappInstanceAction(): Promise<ActionResponse<{ disconnected: true }>> {

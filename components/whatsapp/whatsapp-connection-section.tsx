@@ -7,11 +7,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { RefreshQrButton } from "@/components/whatsapp/refresh-qr-button";
 import { UnlinkWhatsappButton } from "@/components/whatsapp/unlink-button";
-import { getWhatsappConnectionStatusAction } from "@/lib/whatsapp/actions";
+import { getWhatsappConnectionQrAction, getWhatsappConnectionStatusAction } from "@/lib/whatsapp/actions";
 import type { EvolutionConnectionState } from "@/lib/whatsapp/service";
 
 const POLL_INTERVAL_MS = 2500;
-const MAX_POLL_ATTEMPTS = 12;
+const MAX_POLL_ATTEMPTS = 120;
+const QR_REFRESH_INTERVAL_MS = 20000;
 
 type WhatsappConnection = {
   qr: string | null;
@@ -32,9 +33,11 @@ export function WhatsappConnectionSection({ connection }: { connection: Whatsapp
   const [polling, setPolling] = useState(connection.state !== "open");
   const inFlightRef = useRef(false);
   const stoppedRef = useRef(connection.state === "open");
+  const lastQrRefreshRef = useRef(0);
 
   useEffect(() => {
     if (connection.state === "open") return;
+    if (connection.qr && !lastQrRefreshRef.current) lastQrRefreshRef.current = Date.now();
     let disposed = false;
     let timer: number | undefined;
     let attempts = 0;
@@ -59,7 +62,16 @@ export function WhatsappConnectionSection({ connection }: { connection: Whatsapp
           router.refresh();
           return;
         }
+
+        let refreshedQr: string | undefined;
+        if (!lastQrRefreshRef.current || Date.now() - lastQrRefreshRef.current >= QR_REFRESH_INTERVAL_MS) {
+          lastQrRefreshRef.current = Date.now();
+          const qrResult = await getWhatsappConnectionQrAction();
+          if (disposed) return;
+          if (qrResult.qr) refreshedQr = qrResult.qr;
+        }
         setCurrent((previous) => ({ ...previous, state: result.state, error: result.error ?? previous.error }));
+        if (refreshedQr) setCurrent((previous) => ({ ...previous, qr: refreshedQr }));
       } catch {
         if (!disposed) setCurrent((previous) => ({ ...previous, error: "No pudimos consultar el estado. Puedes reintentar sin recargar toda la pantalla." }));
       } finally {
@@ -78,7 +90,7 @@ export function WhatsappConnectionSection({ connection }: { connection: Whatsapp
       disposed = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [connection.state, router]);
+  }, [connection.qr, connection.state, router]);
 
   const status = stateCopy(current.state);
   const isConnected = current.state === "open";

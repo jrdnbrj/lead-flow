@@ -6,7 +6,7 @@ import { WhatsappConnectionSection } from "@/components/whatsapp/whatsapp-connec
 import { requireAdvisorOrRedirect } from "@/lib/auth/advisor";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-template";
-import { ensureEvolutionInstance, getEvolutionConnectionStatus, getEvolutionErrorMessage, normalizeEvolutionConnectionState } from "@/lib/whatsapp/service";
+import { ensureEvolutionInstance, extractEvolutionQr, getEvolutionConnectionStatus, getEvolutionErrorMessage, normalizeEvolutionConnectionState } from "@/lib/whatsapp/service";
 import type { EvolutionConnectionState } from "@/lib/whatsapp/service";
 
 export const metadata: Metadata = { title: "Conectar WhatsApp" };
@@ -100,7 +100,8 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
     if (!response.ok) return { qr: null, error: getEvolutionErrorMessage(response.status, payload, "No pudimos preparar la conexión de WhatsApp. Intenta de nuevo."), state };
     const verified = await getEvolutionConnectionStatus();
     if (verified.ready) return { qr: null, error: null, state: "open" };
-    return { qr: typeof payload.base64 === "string" ? payload.base64 : null, error: verified.error, state: verified.state || state };
+    const qr = extractEvolutionQr(payload);
+    return { qr, error: qr ? null : verified.error, state: qr ? "connecting" : verified.state || state };
   } catch {
     return { qr: null, error: "No pudimos conectar WhatsApp. Revisa tu conexión e inténtalo de nuevo.", state: null };
   }

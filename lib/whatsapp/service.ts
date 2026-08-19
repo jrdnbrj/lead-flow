@@ -22,6 +22,12 @@ export type EvolutionConnectionResult = {
   missingInstance?: boolean;
 };
 
+export type EvolutionQrResult = {
+  qr: string | null;
+  state: EvolutionConnectionState | null;
+  error: string | null;
+};
+
 function getEvolutionConfig(): EvolutionConfig | null {
   const apiUrl = process.env.EVOLUTION_API_URL;
   const apiKey = process.env.EVOLUTION_API_KEY;
@@ -101,6 +107,40 @@ export async function getEvolutionConnectionStatus(): Promise<EvolutionConnectio
     return { state: "open", ready: true, error: null };
   } catch {
     return { state: null, ready: false, error: "No pudimos consultar la conexión de WhatsApp. Revisa tu conexión e inténtalo de nuevo." };
+  }
+}
+
+export function extractEvolutionQr(payload: unknown): string | null {
+  const record = asRecord(payload);
+  const nestedQr = asRecord(record?.qrcode);
+  const candidates = [record?.base64, nestedQr?.base64, record?.code, nestedQr?.code];
+  const qr = candidates.find((value) => typeof value === "string" && value.startsWith("data:image/"));
+  return typeof qr === "string" ? qr : null;
+}
+
+export async function getEvolutionConnectionQr(): Promise<EvolutionQrResult> {
+  const config = getEvolutionConfig();
+  if (!config) return { qr: null, state: null, error: "La conexión de WhatsApp no está disponible. Intenta de nuevo y avísame si continúa." };
+
+  try {
+    const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}/instance/connect/${encodeURIComponent(config.instanceName)}`, {
+      headers: { apikey: config.apiKey },
+      signal: AbortSignal.timeout(5000),
+      cache: "no-store",
+    });
+    const payload = await response.json().catch(() => null);
+    const current = await getEvolutionConnectionStatus();
+    if (current.ready) return { qr: null, state: "open", error: null };
+    if (!response.ok) return { qr: null, state: current.state, error: getEvolutionErrorMessage(response.status, payload, "No pudimos actualizar el código QR. Intenta nuevamente.") };
+
+    const qr = extractEvolutionQr(payload);
+    return {
+      qr,
+      state: qr ? "connecting" : current.state,
+      error: qr ? null : "Evolution no entregó un código QR vigente. Intenta generar otro QR.",
+    };
+  } catch {
+    return { qr: null, state: null, error: "No pudimos actualizar el código QR. Intenta nuevamente." };
   }
 }
 
