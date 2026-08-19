@@ -8,25 +8,16 @@ export function isWebShareAvailable(): boolean {
 
 export async function shareVCard(contact: VCardContact): Promise<ContactActionResult> {
   if (!isWebShareAvailable()) throw new Error("Este dispositivo no permite compartir desde el navegador.");
-  const vCard = buildVCard(contact);
-  const file = typeof File === "undefined" ? null : new File([vCard], vCardFilename(contact.name), { type: "text/vcard;charset=utf-8" });
-  let fileShareAvailable = false;
-  try {
-    fileShareAvailable = Boolean(file && navigator.canShare?.({ files: [file] }));
-  } catch {
-    fileShareAvailable = false;
-  }
-  if (fileShareAvailable && file) {
-    try {
-      await navigator.share({ files: [file], title: `Contacto de ${contact.name}` });
-      return "shared";
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") throw error;
-      // Algunos navegadores anuncian soporte de archivos pero rechazan el vCard
-      // al abrir la hoja nativa. El texto es un fallback permitido y explícito.
-    }
-  }
-  await navigator.share({ title: `Contacto de ${contact.name}`, text: vCard });
+  const lines = [
+    contact.name.trim(),
+    contact.phone.trim() ? `Teléfono: ${contact.phone.trim()}` : null,
+    contact.organization?.trim() ? `Empresa: ${contact.organization.trim()}` : null,
+    contact.email?.trim() ? `Correo: ${contact.email.trim()}` : null,
+  ].filter((line): line is string => Boolean(line));
+  // Use one native share call with readable contact data. Some Android/PWA
+  // versions report vCard file sharing as supported but reject it after the
+  // share sheet opens, and a second share call loses the user gesture.
+  await navigator.share({ title: `Contacto de ${contact.name}`, text: lines.join("\n") });
   return "shared";
 }
 

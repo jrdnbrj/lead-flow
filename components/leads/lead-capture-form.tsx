@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, Check, ExternalLink, LoaderCircle, MessageCircle, QrCode, RefreshCw, UserRound } from "lucide-react";
+import { ArrowRight, Check, LoaderCircle, MessageCircle, RefreshCw, UserRound } from "lucide-react";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
@@ -52,7 +52,7 @@ export function LeadCaptureForm() {
       return;
     }
 
-    setWarning(response.warning || null);
+    setWarning(null);
     setSavedLeadId(response.data.id);
     setSavedActions([]);
     setDuplicateLead(null);
@@ -84,11 +84,7 @@ export function LeadCaptureForm() {
 
   if (savedLeadId) {
     return <section className="space-y-2 rounded-2xl border border-black/[0.06] bg-white p-3 shadow-[0_12px_36px_rgba(16,24,40,0.05)] sm:p-4">
-      <div className="rounded-xl bg-[#eef6d7] px-3 py-3"><p className="eyebrow">Lead guardado</p><h2 className="mt-1 text-xl font-black">Sin próxima acción</h2><p className="mt-1 text-xs font-semibold text-[var(--muted)]">El contacto quedó listo. Elige el siguiente paso.</p></div>
-      <div className="grid gap-1.5 sm:grid-cols-2">
-        <a className="button-primary min-h-11" href={`/qr?leadId=${encodeURIComponent(savedLeadId)}&name=${encodeURIComponent(values.fullName || "")}`}><QrCode size={16} />Mi contacto / QR del asesor</a>
-        <a className="button-secondary min-h-11" href="/dashboard"><ExternalLink size={16} />Ir al dashboard</a>
-      </div>
+      <div className="rounded-xl bg-[#eef6d7] px-3 py-2.5"><p className="eyebrow">Lead guardado</p></div>
       <LeadContactActions contact={{ name: values.fullName || "Cliente", phone: values.phone || "" }} />
       <FollowUpActions leadId={savedLeadId} actions={savedActions} onActionsChange={setSavedActions} onError={setSubmitError} onInfo={setWarning} />
       <FirstContactSummary lead={{ id: savedLeadId, fullName: values.fullName || "Cliente", phone: values.phone || "", carModels: values.carModels || [] }} />

@@ -159,10 +159,15 @@ async function attachLatestMessages(supabase: LeadflowDbClient, leads: Lead[]): 
     .in("lead_id", leads.map((lead) => lead.id))
     .order("created_at", { ascending: false });
   if (!data) return leads;
+  const previewFor = (body: string | null, direction: MessageDirection): string => {
+    const trimmed = body?.trim();
+    if (trimmed) return trimmed.slice(0, 240);
+    return direction === "OUTBOUND" ? "Mensaje enviado" : "Mensaje sin texto";
+  };
   const latestByLead = new Map<string, { direction: MessageDirection; preview: string | null }>();
   const latestInboundByLead = new Map<string, { id: string; createdAt: string; preview: string | null; classification: Lead["inboundClassification"] }>();
   data.forEach((row) => {
-    if (!latestByLead.has(row.lead_id)) latestByLead.set(row.lead_id, { direction: row.direction as MessageDirection, preview: row.body?.slice(0, 240) ?? null });
+    if (!latestByLead.has(row.lead_id)) latestByLead.set(row.lead_id, { direction: row.direction as MessageDirection, preview: previewFor(row.body, row.direction as MessageDirection) });
     if (row.direction === "INBOUND" && !latestInboundByLead.has(row.lead_id)) latestInboundByLead.set(row.lead_id, { id: row.id, createdAt: row.created_at, preview: row.body?.slice(0, 500) ?? null, classification: row.inbound_classification as Lead["inboundClassification"] });
   });
   return leads.map((lead) => {

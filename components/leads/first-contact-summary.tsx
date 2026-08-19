@@ -43,9 +43,9 @@ export function FirstContactSummary({ lead, initialOperation }: { lead: Pick<Lea
     }
   }
 
-  return <section className="mt-2 rounded-xl border border-[#dce5ef] bg-[#f8fbff] p-2.5" aria-label="Resumen del primer contacto">
+  return <section className="mt-2 rounded-xl border border-[#dce5ef] bg-[#f8fbff] p-2" aria-label="Resumen del primer contacto">
     <div className="flex items-center justify-between gap-3"><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Primer contacto</p>{!operation ? <button type="button" disabled={isSending} onClick={() => void start()} className="button-primary min-h-9 px-3 py-1.5 text-[11px]">{isSending ? <LoaderCircle size={14} className="animate-spin" /> : <Send size={14} />}<span>{isSending ? "Preparando…" : "Iniciar"}</span></button> : null}</div>
-    {operation ? <div className="mt-2 grid grid-cols-3 gap-1">{orderFirstContactItems(operation.items).map((item) => <ResourceResult key={item.id} item={item} retrying={retrying === item.id} onRetry={() => void retry(item)} />)}</div> : <p className="mt-1 text-[11px] text-[var(--muted)]">Mensaje, fotos y ficha técnica se muestran por separado.</p>}
+    {operation ? <div className="mt-1.5 grid grid-cols-3 gap-1">{orderFirstContactItems(operation.items).map((item) => <ResourceResult key={item.id} item={item} retrying={retrying === item.id} onRetry={() => void retry(item)} />)}</div> : null}
     {error ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-red-600" role="alert"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{error}</p> : null}
   </section>;
 }

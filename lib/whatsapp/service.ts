@@ -166,6 +166,7 @@ export async function ensureEvolutionWebhook(): Promise<boolean> {
         events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "SEND_MESSAGE", "CONNECTION_UPDATE"],
       },
     }),
+    signal: AbortSignal.timeout(5000),
     cache: "no-store",
   });
   return response.ok;
