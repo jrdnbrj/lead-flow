@@ -218,23 +218,31 @@ export async function ensureEvolutionWebhook(): Promise<boolean> {
 
   if (!config || !webhookUrl || !webhookToken) return false;
 
-  const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}/webhook/set/${encodeURIComponent(config.instanceName)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", apikey: config.apiKey },
-    body: JSON.stringify({
-      webhook: {
-        enabled: true,
-        url: webhookUrl,
-        webhookByEvents: false,
-        webhookBase64: false,
-        headers: { "x-evolution-webhook-token": webhookToken },
-        events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "SEND_MESSAGE", "CONNECTION_UPDATE"],
-      },
-    }),
-    signal: AbortSignal.timeout(5000),
-    cache: "no-store",
-  });
-  return response.ok;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}/webhook/set/${encodeURIComponent(config.instanceName)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: config.apiKey },
+        body: JSON.stringify({
+          webhook: {
+            enabled: true,
+            url: webhookUrl,
+            webhookByEvents: false,
+            webhookBase64: false,
+            headers: { "x-evolution-webhook-token": webhookToken },
+            events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "SEND_MESSAGE", "CONNECTION_UPDATE"],
+          },
+        }),
+        signal: AbortSignal.timeout(5000),
+        cache: "no-store",
+      });
+      if (response.ok) return true;
+    } catch {
+      // Evolution may still be initializing a newly-created instance.
+    }
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 750));
+  }
+  return false;
 }
 
 export async function sendWhatsappText(input: { phone: string; text: string }): Promise<EvolutionSendResult> {
