@@ -5,7 +5,7 @@ import { MessageTemplateEditor } from "@/components/whatsapp/message-template-ed
 import { WhatsappConnectionSection } from "@/components/whatsapp/whatsapp-connection-section";
 import { requireAdvisorOrRedirect } from "@/lib/auth/advisor";
 import { getWhatsappPageSettings } from "@/lib/config/whatsapp-page";
-import { ensureEvolutionInstance, extractEvolutionQr, getEvolutionConnectionStatus, getEvolutionErrorMessage, normalizeEvolutionConnectionState, resetEvolutionInstanceForPairing, waitForEvolutionPairingState } from "@/lib/whatsapp/service";
+import { ensureEvolutionInstance, ensureEvolutionWebhook, extractEvolutionQr, getEvolutionConnectionStatus, getEvolutionErrorMessage, normalizeEvolutionConnectionState, resetEvolutionInstanceForPairing, waitForEvolutionPairingState } from "@/lib/whatsapp/service";
 import type { EvolutionConnectionState } from "@/lib/whatsapp/service";
 
 export const metadata: Metadata = { title: "Conectar WhatsApp" };
@@ -111,14 +111,20 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
     }
     if (response.status === 409) {
       const verified = await getEvolutionConnectionStatus();
-      if (verified.ready) return { qr: null, error: null, state: "open" };
+      if (verified.ready) {
+        const webhookReady = await ensureEvolutionWebhook();
+        return { qr: null, error: webhookReady ? null : "WhatsApp está vinculado, pero no pudimos dejar lista la recepción de mensajes. Intenta actualizar de nuevo.", state: "open" };
+      }
     }
     const payload = await response.json() as ConnectionPayload;
     const statePayload = await stateResponse.json().catch(() => null) as ConnectionStatePayload | null;
     const state = getState(statePayload);
     if (!response.ok) return { qr: null, error: getEvolutionErrorMessage(response.status, payload, "No pudimos preparar la conexión de WhatsApp. Intenta de nuevo."), state };
     const verified = await getEvolutionConnectionStatus();
-    if (verified.ready) return { qr: null, error: null, state: "open" };
+    if (verified.ready) {
+      const webhookReady = await ensureEvolutionWebhook();
+      return { qr: null, error: webhookReady ? null : "WhatsApp está vinculado, pero no pudimos dejar lista la recepción de mensajes. Intenta actualizar de nuevo.", state: "open" };
+    }
     const qr = extractEvolutionQr(payload);
     return { qr, error: qr ? null : verified.error, state: qr ? "connecting" : verified.state || state };
   } catch {

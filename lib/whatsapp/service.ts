@@ -204,7 +204,12 @@ export async function recreateEvolutionInstanceAfterCleanup(): Promise<{ ok: boo
   // requiring a short-lived 404 window that the provider may skip.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const pairing = await waitForEvolutionPairingState();
-    if (pairing.hasQr) return { ok: true, error: null };
+    if (pairing.hasQr) {
+      const webhookReady = await ensureEvolutionWebhook();
+      return webhookReady
+        ? { ok: true, error: null }
+        : { ok: false, error: "La conexión se preparó, pero no pudimos dejar lista la recepción de mensajes. Intenta de nuevo." };
+    }
 
     const ensured = await ensureEvolutionInstance();
     if (ensured.ok) return ensured;
@@ -222,7 +227,12 @@ export async function resetEvolutionInstanceForPairing(): Promise<{ ok: boolean;
     const current = await getEvolutionConnectionStatus();
     if (current.state === "connecting") {
       const qr = await getEvolutionConnectionQr();
-      if (qr.qr) return { ok: true, error: null };
+      if (qr.qr) {
+        const webhookReady = await ensureEvolutionWebhook();
+        return webhookReady
+          ? { ok: true, error: null }
+          : { ok: false, error: "La conexión se preparó, pero no pudimos dejar lista la recepción de mensajes. Intenta de nuevo." };
+      }
     }
 
     const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}/instance/delete/${encodeURIComponent(config.instanceName)}`, {

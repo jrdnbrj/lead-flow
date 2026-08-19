@@ -30,6 +30,7 @@ button, a { touch-action: manipulation; }
 .field-input:focus { border-color: var(--ink); background: white; box-shadow: 0 0 0 4px rgba(201,243,106,.35); }
 .button-primary, .button-secondary, .action-button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: .55rem; border-radius: 14px; padding: .75rem 1rem; font-size: .82rem; font-weight: 900; transition: transform .2s, filter .2s, background .2s; }
 .button-primary { background: var(--lime); color: var(--ink); box-shadow: 0 8px 18px rgba(171,205,70,.22); }
+.button-primary.first-contact-retry { min-height: 28px; gap: .2rem; border-radius: 7px; padding: .125rem .25rem; font-size: .5rem; }
 .button-secondary { border: 1px solid rgba(16,24,40,.1); background: white; color: var(--ink); }
 .button-primary:hover, .button-secondary:hover, .action-button:hover { transform: translateY(-1px); }
 .action-button { min-height: 48px; }
