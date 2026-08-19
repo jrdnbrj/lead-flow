@@ -237,7 +237,18 @@ export async function recreateEvolutionInstanceAfterCleanup(): Promise<Evolution
     }
 
     const ensured = await ensureEvolutionInstance();
-    if (ensured.ok) return ensured;
+    if (ensured.ok) {
+      if (ensured.qr) return ensured;
+
+      // Evolution can acknowledge the new instance before its pairing QR is
+      // available. Keep the server action open long enough to return the
+      // provider QR instead of rendering an empty connecting state.
+      const pairingAfterCreate = await waitForEvolutionPairingState();
+      if (pairingAfterCreate.hasQr) {
+        return { ok: true, error: null, qr: pairingAfterCreate.qr };
+      }
+      return ensured;
+    }
     if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, EVOLUTION_INSTANCE_SETTLE_DELAY_MS));
   }
 
