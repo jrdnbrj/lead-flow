@@ -142,6 +142,11 @@ export function extractEvolutionQr(payload: unknown): string | null {
   return typeof qr === "string" ? qr : null;
 }
 
+function isMissingEvolutionInstance(payload: unknown): boolean {
+  const text = collectErrorText(payload).join(" ").toLowerCase();
+  return text.includes("instance does not exist") || text.includes("instance not found");
+}
+
 export async function getEvolutionConnectionQr(): Promise<EvolutionQrResult> {
   const config = getEvolutionConfig();
   if (!config) return { qr: null, state: null, error: "La conexión de WhatsApp no está disponible. Intenta de nuevo y avísame si continúa." };
@@ -158,6 +163,10 @@ export async function getEvolutionConnectionQr(): Promise<EvolutionQrResult> {
     // the connect endpoint already contains the new QR. Trust the QR payload
     // before the lagging state endpoint so the UI never hides a valid code.
     if (qr) return { qr, state: "connecting", error: null };
+
+    if (isMissingEvolutionInstance(payload)) {
+      return { qr: null, state: "close", error: "No encontramos la conexión de WhatsApp. Genera un código QR nuevo." };
+    }
 
     const current = await getEvolutionConnectionStatus();
     if (current.ready) return { qr: null, state: "open", error: null };
@@ -210,6 +219,7 @@ export async function waitForEvolutionPairingState(): Promise<EvolutionPairingSt
 
     const qr = await getEvolutionConnectionQr();
     if (qr.qr) return { ready: true, state: "connecting", hasQr: true, qr: qr.qr };
+    if (qr.state === "close") return { ready: true, state: "close", hasQr: false };
 
     await new Promise((resolve) => setTimeout(resolve, EVOLUTION_RETRY_DELAY_MS));
   }

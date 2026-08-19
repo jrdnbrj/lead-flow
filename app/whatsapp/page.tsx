@@ -126,10 +126,11 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
     const payload = await response.json() as ConnectionPayload;
     const statePayload = await stateResponse.json().catch(() => null) as ConnectionStatePayload | null;
     const state = getState(statePayload);
+    const effectiveState = state === "unknown" ? currentConnection.state : state;
     if (!response.ok) return { qr: null, error: getEvolutionErrorMessage(response.status, payload, "No pudimos preparar la conexión de WhatsApp. Intenta de nuevo."), state };
-    if (payload.error === true && state === "connecting") {
+    if (payload.error === true && effectiveState === "connecting") {
       const reset = await resetEvolutionInstanceForPairing();
-      if (!reset.ok) return { qr: null, error: reset.error, state };
+      if (!reset.ok) return { qr: null, error: reset.error, state: effectiveState };
       const resetQr = reset.qr ?? createdQr;
       if (resetQr) return { qr: resetQr, error: null, state: "connecting" };
     }
@@ -139,7 +140,7 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
       return { qr: null, error: webhookReady ? null : "WhatsApp está vinculado, pero no pudimos dejar lista la recepción de mensajes. Intenta actualizar de nuevo.", state: "open" };
     }
     const qr = extractEvolutionQr(payload) ?? createdQr;
-    return { qr, error: qr ? null : verified.error, state: qr ? "connecting" : verified.state || state };
+    return { qr, error: qr ? null : verified.error, state: qr ? "connecting" : verified.state || effectiveState };
   } catch {
     return { qr: null, error: "No pudimos conectar WhatsApp. Revisa tu conexión e inténtalo de nuevo.", state: null };
   }
