@@ -120,8 +120,29 @@ for service in evolution-redis evolution-api leadflow caddy; do
   wait_for_health "$service"
 done
 
-"${compose[@]}" exec -T leadflow wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/health
-"${compose[@]}" exec -T leadflow wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/ready
+wait_for_endpoint() {
+  local endpoint="$1"
+  local deadline=$((SECONDS + ${DEPLOY_HEALTH_TIMEOUT_SECONDS:-240}))
+
+  printf 'Waiting for LeadFlow endpoint: %s\n' "$endpoint"
+  while (( SECONDS < deadline )); do
+    if "${compose[@]}" exec -T leadflow wget \
+      --no-verbose \
+      --tries=1 \
+      --spider \
+      "$endpoint" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 3
+  done
+
+  printf '%s\n' "LeadFlow endpoint did not become ready: $endpoint" >&2
+  "${compose[@]}" logs --tail=80 leadflow >&2 || true
+  return 1
+}
+
+wait_for_endpoint http://127.0.0.1:3000/api/health
+wait_for_endpoint http://127.0.0.1:3000/api/ready
 
 printf 'Production deploy: PASS (%s)\n' "$target_commit"
 printf '%s\n' 'Rollback images are retained; no image prune was performed.'
