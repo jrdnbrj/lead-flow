@@ -28,6 +28,14 @@ export type EvolutionQrResult = {
   error: string | null;
 };
 
+type EvolutionEnsureResult = {
+  ok: boolean;
+  error: string | null;
+  qr?: string | null;
+};
+
+const EVOLUTION_REQUEST_TIMEOUT_MS = 3000;
+
 function getEvolutionConfig(): EvolutionConfig | null {
   const apiUrl = process.env.EVOLUTION_API_URL;
   const apiKey = process.env.EVOLUTION_API_KEY;
@@ -92,6 +100,20 @@ export async function getEvolutionConnectionStatus(): Promise<EvolutionConnectio
     const stateValue = instance?.state ?? stateRecord?.state;
     const state = normalizeEvolutionConnectionState(stateValue);
     const missingInstance = stateResponse.status === 404;
+    if (state === "unknown") {
+      const instancesResponse = await fetch(`${baseUrl}/instance/fetchInstances`, { headers: { apikey: config.apiKey }, signal: AbortSignal.timeout(EVOLUTION_REQUEST_TIMEOUT_MS), cache: "no-store" });
+      const instancesPayload = await instancesResponse.json().catch(() => null);
+      const instances = Array.isArray(instancesPayload) ? instancesPayload.map(asRecord).filter((item): item is Record<string, unknown> => Boolean(item)) : [];
+      const matchingInstance = instances.find((item) => item.name === config.instanceName || item.instanceName === config.instanceName || asRecord(item.instance)?.instanceName === config.instanceName);
+      const fallbackState = matchingInstance?.connectionStatus ?? matchingInstance?.state ?? asRecord(matchingInstance?.instance)?.state;
+      if (fallbackState !== undefined) {
+        const normalizedFallbackState = normalizeEvolutionConnectionState(fallbackState);
+        return normalizedFallbackState === "open"
+          ? { state: "open", ready: true, error: null }
+          : { state: normalizedFallbackState, ready: false, error: null, missingInstance: false };
+      }
+      if (!matchingInstance && instancesResponse.ok) return { state: "close", ready: false, error: "No encontramos la conexión de WhatsApp. Genera un código QR nuevo.", missingInstance: true };
+    }
     if (!stateResponse.ok || state !== "open") {
       return {
         state: missingInstance ? "close" : state,
@@ -149,7 +171,7 @@ export async function getEvolutionConnectionQr(): Promise<EvolutionQrResult> {
   }
 }
 
-let ensureEvolutionInstancePromise: Promise<{ ok: boolean; error: string | null }> | null = null;
+let ensureEvolutionInstancePromise: Promise<EvolutionEnsureResult> | null = null;
 
 const EVOLUTION_RETRY_DELAY_MS = 750;
 const EVOLUTION_INSTANCE_SETTLE_DELAY_MS = 2500;
@@ -250,7 +272,7 @@ export async function resetEvolutionInstanceForPairing(): Promise<{ ok: boolean;
   }
 }
 
-export function ensureEvolutionInstance(): Promise<{ ok: boolean; error: string | null }> {
+export function ensureEvolutionInstance(): Promise<EvolutionEnsureResult> {
   if (ensureEvolutionInstancePromise) return ensureEvolutionInstancePromise;
 
   const pending = createEvolutionInstance();
@@ -261,7 +283,7 @@ export function ensureEvolutionInstance(): Promise<{ ok: boolean; error: string 
   return guarded;
 }
 
-async function createEvolutionInstance(): Promise<{ ok: boolean; error: string | null }> {
+async function createEvolutionInstance(): Promise<EvolutionEnsureResult> {
   const config = getEvolutionConfig();
   if (!config) return { ok: false, error: "La conexión de WhatsApp no está disponible. Intenta de nuevo y avísame si continúa." };
 
@@ -284,6 +306,7 @@ async function createEvolutionInstance(): Promise<{ ok: boolean; error: string |
       cache: "no-store",
     });
     const payload = await response.json().catch(() => null);
+    const qr = extractEvolutionQr(payload);
     const text = collectErrorText(payload).join(" ").toLowerCase();
     if (!response.ok) {
       if (response.status !== 409 || (!text.includes("already exists") && !text.includes("already connected"))) {
@@ -298,7 +321,7 @@ async function createEvolutionInstance(): Promise<{ ok: boolean; error: string |
     if (!(await ensureEvolutionWebhook())) {
       return { ok: false, error: "La conexión se creó, pero no pudimos dejarla lista para recibir mensajes. Intenta de nuevo." };
     }
-    return { ok: true, error: null };
+    return { ok: true, error: null, qr };
   } catch {
     return { ok: false, error: "No pudimos preparar la conexión de WhatsApp. Revisa tu conexión e inténtalo de nuevo." };
   }

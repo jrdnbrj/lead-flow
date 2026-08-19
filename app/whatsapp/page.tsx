@@ -43,12 +43,14 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
     const stateUrl = `${baseUrl}/instance/connectionState/${encodeURIComponent(instanceName)}`;
     let currentConnection = await getEvolutionConnectionStatus();
     let instanceWasCreated = false;
+    let createdQr: string | null = null;
     if (currentConnection.missingInstance) {
       // A missing instance is a recoverable first-visit state. Create it on
       // the server and continue to the provider QR so a normal page reload
       // can recover production without requiring a second hidden action.
       const ensured = await ensureEvolutionInstance();
       if (!ensured.ok) return { qr: null, error: ensured.error, state: currentConnection.state };
+      createdQr = ensured.qr ?? null;
       instanceWasCreated = true;
       currentConnection = await getEvolutionConnectionStatus();
     }
@@ -80,6 +82,7 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
         if (restartResponse.status === 404) {
           const ensured = await ensureEvolutionInstance();
           if (!ensured.ok) return { qr: null, error: ensured.error, state: currentConnection.state };
+          createdQr = ensured.qr ?? createdQr;
         } else if (restartResponse.status === 428 || restartResponse.status === 500) {
           const reset = await resetEvolutionInstanceForPairing();
           if (!reset.ok) return { qr: null, error: reset.error, state: currentConnection.state };
@@ -125,7 +128,7 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
       const webhookReady = await ensureEvolutionWebhook();
       return { qr: null, error: webhookReady ? null : "WhatsApp está vinculado, pero no pudimos dejar lista la recepción de mensajes. Intenta actualizar de nuevo.", state: "open" };
     }
-    const qr = extractEvolutionQr(payload);
+    const qr = extractEvolutionQr(payload) ?? createdQr;
     return { qr, error: qr ? null : verified.error, state: qr ? "connecting" : verified.state || state };
   } catch {
     return { qr: null, error: "No pudimos conectar WhatsApp. Revisa tu conexión e inténtalo de nuevo.", state: null };
