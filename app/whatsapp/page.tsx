@@ -43,10 +43,10 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
     const stateUrl = `${baseUrl}/instance/connectionState/${encodeURIComponent(instanceName)}`;
     let currentConnection = await getEvolutionConnectionStatus();
     let instanceWasCreated = false;
-    if (currentConnection.missingInstance && !forceRefresh) {
-      return { qr: null, error: "No hay una conexión de WhatsApp activa. Genera un código QR nuevo para vincularla.", state: currentConnection.state };
-    }
     if (currentConnection.missingInstance) {
+      // A missing instance is a recoverable first-visit state. Create it on
+      // the server and continue to the provider QR so a normal page reload
+      // can recover production without requiring a second hidden action.
       const ensured = await ensureEvolutionInstance();
       if (!ensured.ok) return { qr: null, error: ensured.error, state: currentConnection.state };
       instanceWasCreated = true;
