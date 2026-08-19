@@ -70,8 +70,11 @@ export function WhatsappConnectionSection({ connection }: { connection: Whatsapp
           if (disposed) return;
           if (qrResult.qr) refreshedQr = qrResult.qr;
         }
-        setCurrent((previous) => ({ ...previous, state: result.state, error: result.error ?? previous.error }));
-        if (refreshedQr) setCurrent((previous) => ({ ...previous, qr: refreshedQr }));
+        setCurrent((previous) => {
+          const qr = refreshedQr ?? previous.qr;
+          const hasCurrentQr = result.state === "connecting" && Boolean(qr);
+          return { ...previous, qr, state: result.state, error: hasCurrentQr ? null : result.error ?? previous.error };
+        });
       } catch {
         if (!disposed) setCurrent((previous) => ({ ...previous, error: "No pudimos consultar el estado. Puedes reintentar sin recargar toda la pantalla." }));
       } finally {
