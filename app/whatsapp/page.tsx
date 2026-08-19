@@ -6,7 +6,7 @@ import { WhatsappConnectionSection } from "@/components/whatsapp/whatsapp-connec
 import { requireAdvisorOrRedirect } from "@/lib/auth/advisor";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-template";
-import { getEvolutionConnectionStatus, getEvolutionErrorMessage, normalizeEvolutionConnectionState } from "@/lib/whatsapp/service";
+import { ensureEvolutionInstance, getEvolutionConnectionStatus, getEvolutionErrorMessage, normalizeEvolutionConnectionState } from "@/lib/whatsapp/service";
 import type { EvolutionConnectionState } from "@/lib/whatsapp/service";
 
 export const metadata: Metadata = { title: "Conectar WhatsApp" };
@@ -42,8 +42,18 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
   try {
     const baseUrl = apiUrl.replace(/\/$/, "");
     const stateUrl = `${baseUrl}/instance/connectionState/${encodeURIComponent(instanceName)}`;
-    const currentConnection = await getEvolutionConnectionStatus();
-    if (forceRefresh) {
+    let currentConnection = await getEvolutionConnectionStatus();
+    let instanceWasCreated = false;
+    if (currentConnection.missingInstance && !forceRefresh) {
+      return { qr: null, error: "No hay una conexión de WhatsApp activa. Genera un código QR nuevo para vincularla.", state: currentConnection.state };
+    }
+    if (currentConnection.missingInstance) {
+      const ensured = await ensureEvolutionInstance();
+      if (!ensured.ok) return { qr: null, error: ensured.error, state: currentConnection.state };
+      instanceWasCreated = true;
+      currentConnection = await getEvolutionConnectionStatus();
+    }
+    if (forceRefresh && !instanceWasCreated) {
       if (currentConnection.ready) return { qr: null, error: null, state: "open" };
 
       const restartResponse = await fetch(`${baseUrl}/instance/restart/${encodeURIComponent(instanceName)}`, {
@@ -52,12 +62,17 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
         cache: "no-store",
       });
       if (!restartResponse.ok) {
-        const payload = await restartResponse.json().catch(() => null);
-        return { qr: null, error: getEvolutionErrorMessage(restartResponse.status, payload, "No pudimos reiniciar la conexión de WhatsApp. Intenta de nuevo."), state: currentConnection.state };
+        if (restartResponse.status === 404) {
+          const ensured = await ensureEvolutionInstance();
+          if (!ensured.ok) return { qr: null, error: ensured.error, state: currentConnection.state };
+        } else {
+          const payload = await restartResponse.json().catch(() => null);
+          return { qr: null, error: getEvolutionErrorMessage(restartResponse.status, payload, "No pudimos reiniciar la conexión de WhatsApp. Intenta de nuevo."), state: currentConnection.state };
+        }
       }
     }
 
-    const [response, stateResponse] = await Promise.all([
+    let [response, stateResponse] = await Promise.all([
       fetch(`${baseUrl}/instance/connect/${encodeURIComponent(instanceName)}`, {
         headers: { apikey: apiKey },
         cache: "no-store",
@@ -67,6 +82,18 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
         cache: "no-store",
       }),
     ]);
+    if (response.status === 404 && forceRefresh) {
+      const ensured = await ensureEvolutionInstance();
+      if (!ensured.ok) return { qr: null, error: ensured.error, state: currentConnection.state };
+      [response, stateResponse] = await Promise.all([
+        fetch(`${baseUrl}/instance/connect/${encodeURIComponent(instanceName)}`, { headers: { apikey: apiKey }, cache: "no-store" }),
+        fetch(stateUrl, { headers: { apikey: apiKey }, cache: "no-store" }),
+      ]);
+    }
+    if (response.status === 409) {
+      const verified = await getEvolutionConnectionStatus();
+      if (verified.ready) return { qr: null, error: null, state: "open" };
+    }
     const payload = await response.json() as ConnectionPayload;
     const statePayload = await stateResponse.json().catch(() => null) as ConnectionStatePayload | null;
     const state = getState(statePayload);

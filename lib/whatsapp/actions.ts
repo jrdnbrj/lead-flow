@@ -3,7 +3,7 @@
 import type { ActionResponse } from "@/lib/domain/lead";
 import { authRequiredResult } from "@/lib/auth/auth-required";
 import { requireAdvisor } from "@/lib/auth/advisor";
-import { getEvolutionConnectionStatus, getEvolutionErrorMessage } from "@/lib/whatsapp/service";
+import { ensureEvolutionInstance, getEvolutionConnectionStatus, getEvolutionErrorMessage } from "@/lib/whatsapp/service";
 
 export async function getWhatsappConnectionStatusAction() {
   const authorization = await requireAdvisor();
@@ -40,26 +40,10 @@ export async function unlinkWhatsappInstanceAction(): Promise<ActionResponse<{ d
         headers: { apikey: apiKey },
         cache: "no-store",
       });
-      if (deleteResponse.ok) {
-        const createResponse = await fetch(`${baseUrl}/instance/create`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: apiKey },
-          body: JSON.stringify({
-            instanceName,
-            integration: "WHATSAPP-BAILEYS",
-            qrcode: true,
-            rejectCall: false,
-            groupsIgnore: true,
-            alwaysOnline: false,
-            readMessages: false,
-            readStatus: false,
-            syncFullHistory: false,
-          }),
-          cache: "no-store",
-        });
-        if (createResponse.ok) return { success: true, data: { disconnected: true } };
-        const createPayload = await createResponse.json().catch(() => null);
-        return { success: false, error: getEvolutionErrorMessage(createResponse.status, createPayload, "La conexión se reinició, pero no pudimos dejarla lista. Intenta de nuevo.") };
+      if (deleteResponse.ok || deleteResponse.status === 404) {
+        const ensured = await ensureEvolutionInstance();
+        if (ensured.ok) return { success: true, data: { disconnected: true } };
+        return { success: false, error: ensured.error || "La conexión se reinició, pero no pudimos dejarla lista. Intenta de nuevo." };
       }
       const deletePayload = await deleteResponse.json().catch(() => null);
       return { success: false, error: getEvolutionErrorMessage(deleteResponse.status, deletePayload, "No pudimos limpiar la conexión cerrada. Intenta de nuevo.") };

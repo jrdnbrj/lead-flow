@@ -19,6 +19,7 @@ export type EvolutionConnectionResult = {
   state: EvolutionConnectionState | null;
   ready: boolean;
   error: string | null;
+  missingInstance?: boolean;
 };
 
 function getEvolutionConfig(): EvolutionConfig | null {
@@ -55,7 +56,7 @@ export function getEvolutionErrorMessage(statusCode: number, payload: unknown, f
   if (firstMessage?.exists === false || text.includes("exists false") || text.includes("number does not exist")) {
     return "No encontramos una cuenta de WhatsApp activa para ese número. Revisa el código de país y confirma que el celular tenga WhatsApp.";
   }
-  if (text.includes("not found") && text.includes("instance")) {
+  if ((text.includes("not found") || text.includes("does not exist")) && text.includes("instance")) {
     return "No encontramos la conexión de WhatsApp. Intenta vincularla de nuevo y avísame si continúa.";
   }
   if (text.includes("already connected") || text.includes("already open")) {
@@ -84,7 +85,15 @@ export async function getEvolutionConnectionStatus(): Promise<EvolutionConnectio
     const instance = asRecord(stateRecord?.instance);
     const stateValue = instance?.state ?? stateRecord?.state;
     const state = normalizeEvolutionConnectionState(stateValue);
-    if (!stateResponse.ok || state !== "open") return { state, ready: false, error: getEvolutionErrorMessage(stateResponse.status, statePayload, "Todavía no pudimos confirmar la conexión de WhatsApp. Intenta actualizarla.") };
+    const missingInstance = stateResponse.status === 404;
+    if (!stateResponse.ok || state !== "open") {
+      return {
+        state: missingInstance ? "close" : state,
+        ready: false,
+        error: getEvolutionErrorMessage(stateResponse.status, statePayload, "Todavía no pudimos confirmar la conexión de WhatsApp. Intenta actualizarla."),
+        missingInstance,
+      };
+    }
 
     // Do not probe with a synthetic phone number here. Evolution can reject
     // that number independently of the session state, which would turn a
@@ -92,6 +101,62 @@ export async function getEvolutionConnectionStatus(): Promise<EvolutionConnectio
     return { state: "open", ready: true, error: null };
   } catch {
     return { state: null, ready: false, error: "No pudimos consultar la conexión de WhatsApp. Revisa tu conexión e inténtalo de nuevo." };
+  }
+}
+
+let ensureEvolutionInstancePromise: Promise<{ ok: boolean; error: string | null }> | null = null;
+
+export function ensureEvolutionInstance(): Promise<{ ok: boolean; error: string | null }> {
+  if (ensureEvolutionInstancePromise) return ensureEvolutionInstancePromise;
+
+  const pending = createEvolutionInstance();
+  const guarded = pending.finally(() => {
+    if (ensureEvolutionInstancePromise === guarded) ensureEvolutionInstancePromise = null;
+  });
+  ensureEvolutionInstancePromise = guarded;
+  return guarded;
+}
+
+async function createEvolutionInstance(): Promise<{ ok: boolean; error: string | null }> {
+  const config = getEvolutionConfig();
+  if (!config) return { ok: false, error: "La conexión de WhatsApp no está disponible. Intenta de nuevo y avísame si continúa." };
+
+  try {
+    const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}/instance/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: config.apiKey },
+      body: JSON.stringify({
+        instanceName: config.instanceName,
+        integration: "WHATSAPP-BAILEYS",
+        qrcode: true,
+        rejectCall: false,
+        groupsIgnore: true,
+        alwaysOnline: false,
+        readMessages: false,
+        readStatus: false,
+        syncFullHistory: false,
+      }),
+      signal: AbortSignal.timeout(5000),
+      cache: "no-store",
+    });
+    const payload = await response.json().catch(() => null);
+    const text = collectErrorText(payload).join(" ").toLowerCase();
+    if (!response.ok) {
+      if (response.status !== 409 || (!text.includes("already exists") && !text.includes("already connected"))) {
+        return { ok: false, error: getEvolutionErrorMessage(response.status, payload, "No pudimos preparar la conexión de WhatsApp. Intenta de nuevo.") };
+      }
+      const current = await getEvolutionConnectionStatus();
+      if (current.missingInstance || current.state === null) {
+        return { ok: false, error: "La conexión de WhatsApp está cambiando. Intenta generar el QR nuevamente." };
+      }
+    }
+
+    if (!(await ensureEvolutionWebhook())) {
+      return { ok: false, error: "La conexión se creó, pero no pudimos dejarla lista para recibir mensajes. Intenta de nuevo." };
+    }
+    return { ok: true, error: null };
+  } catch {
+    return { ok: false, error: "No pudimos preparar la conexión de WhatsApp. Revisa tu conexión e inténtalo de nuevo." };
   }
 }
 
