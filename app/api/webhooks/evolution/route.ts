@@ -6,7 +6,7 @@ import { formatPhoneForWhatsapp } from "@/lib/domain/lead";
 import { classifyInboundMessage } from "@/lib/leads/inbound-classifier";
 import { InboundMessageLedger } from "@/lib/leads/inbound-dedup";
 import { normalizeInboundPayload } from "@/lib/leads/inbound-dto";
-import { findLeadByPhoneForProvider, findLeadMessageByProviderIdForProvider, markLeadConversationActiveForProvider, markLeadCustomerReplyForProvider, persistInboundMessageForProvider, resolveInboundLeadMatchForProvider, updateLeadMessageForProvider, updateLeadWhatsappStatusForProvider, upsertInboundResponseActionForProvider, createLeadMessageForProvider } from "@/lib/leads/repository";
+import { createLeadMessageForProvider, findLeadByPhoneForProvider, findLeadMessageByProviderIdForProvider, markLeadAfterOutboundMessageForProvider, markLeadConversationActiveForProvider, markLeadCustomerReplyForProvider, persistInboundMessageForProvider, resolveInboundLeadMatchForProvider, updateLeadMessageForProvider, upsertInboundResponseActionForProvider } from "@/lib/leads/repository";
 import { extractEvolutionMessageId, normalizeEvolutionStatus } from "@/lib/whatsapp/service";
 
 export const runtime = "nodejs";
@@ -41,8 +41,10 @@ function getRemoteJid(item: JsonRecord): string | null {
   const key = asRecord(item.key);
   const data = asRecord(item.data);
   const dataKey = asRecord(data?.key);
-  const remoteJid = asString(key?.remoteJid) ?? asString(dataKey?.remoteJid) ?? asString(item.remoteJid);
-  const remoteJidAlt = asString(key?.remoteJidAlt) ?? asString(dataKey?.remoteJidAlt) ?? asString(item.remoteJidAlt);
+  const messageKey = asRecord(asRecord(item.message)?.key);
+  const dataMessageKey = asRecord(asRecord(data?.message)?.key);
+  const remoteJid = asString(key?.remoteJid) ?? asString(dataKey?.remoteJid) ?? asString(messageKey?.remoteJid) ?? asString(dataMessageKey?.remoteJid) ?? asString(item.remoteJid) ?? asString(item.recipientJid);
+  const remoteJidAlt = asString(key?.remoteJidAlt) ?? asString(dataKey?.remoteJidAlt) ?? asString(messageKey?.remoteJidAlt) ?? asString(dataMessageKey?.remoteJidAlt) ?? asString(item.remoteJidAlt);
   return remoteJid?.endsWith("@lid") ? remoteJidAlt ?? remoteJid : remoteJid ?? remoteJidAlt;
 }
 
@@ -95,7 +97,10 @@ function getMessageTimestamp(item: JsonRecord): string {
 function isFromMe(item: JsonRecord): boolean {
   const key = asRecord(item.key);
   const dataKey = asRecord(asRecord(item.data)?.key);
-  return key?.fromMe === true || dataKey?.fromMe === true || item.fromMe === true;
+  const messageKey = asRecord(asRecord(item.message)?.key);
+  const dataMessageKey = asRecord(asRecord(asRecord(item.data)?.message)?.key);
+  const values = [key?.fromMe, dataKey?.fromMe, messageKey?.fromMe, dataMessageKey?.fromMe, item.fromMe];
+  return values.some((value) => value === true || value === "true");
 }
 
 function getStatusValue(item: JsonRecord): unknown {
@@ -176,7 +181,7 @@ async function processOutboundEvent(item: JsonRecord): Promise<boolean> {
   if (existing) {
     if (!shouldApplyStatus(existing.status, incomingStatus)) return false;
     await updateLeadMessageForProvider(existing.id, { status: incomingStatus, rawPayload: item, ...statusTimestamps(incomingStatus, timestamp) });
-    if (existing.direction === "OUTBOUND") await updateLeadWhatsappStatusForProvider(existing.leadId, incomingStatus);
+    if (existing.direction === "OUTBOUND") await markLeadAfterOutboundMessageForProvider(existing.leadId, incomingStatus, timestamp);
     return true;
   }
 
@@ -184,8 +189,14 @@ async function processOutboundEvent(item: JsonRecord): Promise<boolean> {
   if (!phone) return false;
   const lead = await findLeadByPhoneForProvider(phone);
   if (!lead) return false;
-  await createLeadMessageForProvider({ leadId: lead.id, evolutionInstance: EVOLUTION_INSTANCE, providerMessageId, direction: "OUTBOUND", status: incomingStatus, body: extractMessageBody(item), phone, createdAt: timestamp, rawPayload: item, ...statusTimestamps(incomingStatus, timestamp) });
-  await updateLeadWhatsappStatusForProvider(lead.id, incomingStatus);
+  const createdId = await createLeadMessageForProvider({ leadId: lead.id, evolutionInstance: EVOLUTION_INSTANCE, providerMessageId, direction: "OUTBOUND", status: incomingStatus, body: extractMessageBody(item), phone, createdAt: timestamp, rawPayload: item, ...statusTimestamps(incomingStatus, timestamp) });
+  if (!createdId) {
+    // Evolution can replay the same event while the provider insert is still
+    // being committed. Treat the already-persisted message as handled and
+    // keep the webhook idempotent.
+    return Boolean(await findLeadMessageByProviderIdForProvider(providerMessageId, EVOLUTION_INSTANCE));
+  }
+  await markLeadAfterOutboundMessageForProvider(lead.id, incomingStatus, timestamp);
   return true;
 }
 

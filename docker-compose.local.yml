@@ -1,0 +1,39 @@
+# Local-only Evolution stack. This overlay deliberately avoids the remote
+# Evolution database and session volume used by production.
+services:
+  leadflow:
+    depends_on:
+      evolution-api:
+        condition: service_started
+
+  evolution-api:
+    depends_on:
+      evolution-postgres:
+        condition: service_healthy
+      evolution-redis:
+        condition: service_healthy
+    environment:
+      DATABASE_CONNECTION_URI: postgresql://evolution:evolution-local@evolution-postgres:5432/evolution?schema=public&connection_limit=5&pool_timeout=20
+    volumes:
+      - evolution_instances_local:/evolution/instances
+
+  evolution-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution-local
+    volumes:
+      - evolution_postgres_local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  evolution_instances_local:
+    name: leadflow-local-evolution-instances
+  evolution_postgres_local:
+    name: leadflow-local-evolution-postgres

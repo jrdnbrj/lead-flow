@@ -624,6 +624,24 @@ export async function updateLeadWhatsappStatusForProvider(id: string, status: Wh
   return owned ? updateLeadWhatsappStatusWithClient(context.supabase, id, status, errorMessage) : false;
 }
 
+export async function markLeadAfterOutboundMessageForProvider(id: string, status: WhatsappStatus, createdAt: string): Promise<boolean> {
+  const context = await getProviderContext();
+  if (!context || !(await isProviderOwnedLead(context, id))) return false;
+  if (status === "FAILED") return updateLeadWhatsappStatusWithClient(context.supabase, id, status, "WhatsApp no confirmó el envío.");
+
+  const { error } = await context.supabase.from("leads").update({
+    whatsapp_status: status,
+    whatsapp_last_error: null,
+    whatsapp_sent_at: createdAt,
+    conversation_state: "WAITING_CUSTOMER",
+    last_activity_at: createdAt,
+    last_agent_message_at: createdAt,
+  }).eq("id", id).is("deleted_at", null);
+  if (error) return false;
+  await context.supabase.from("leads").update({ status: "CONTACTADO" }).eq("id", id).eq("status", "NUEVO").is("deleted_at", null);
+  return true;
+}
+
 export async function markLeadAfterOutboundMessage(id: string, status: WhatsappStatus, errorMessage?: string): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;

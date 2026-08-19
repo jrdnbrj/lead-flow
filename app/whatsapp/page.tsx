@@ -4,9 +4,8 @@ import { SellerProfileForm } from "@/components/whatsapp/seller-profile-form";
 import { MessageTemplateEditor } from "@/components/whatsapp/message-template-editor";
 import { WhatsappConnectionSection } from "@/components/whatsapp/whatsapp-connection-section";
 import { requireAdvisorOrRedirect } from "@/lib/auth/advisor";
-import { getEffectiveSellerProfile } from "@/lib/config/seller";
-import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-template";
-import { ensureEvolutionInstance, extractEvolutionQr, getEvolutionConnectionStatus, getEvolutionErrorMessage, normalizeEvolutionConnectionState } from "@/lib/whatsapp/service";
+import { getWhatsappPageSettings } from "@/lib/config/whatsapp-page";
+import { ensureEvolutionInstance, extractEvolutionQr, getEvolutionConnectionStatus, getEvolutionErrorMessage, normalizeEvolutionConnectionState, resetEvolutionInstanceForPairing, waitForEvolutionPairingState } from "@/lib/whatsapp/service";
 import type { EvolutionConnectionState } from "@/lib/whatsapp/service";
 
 export const metadata: Metadata = { title: "Conectar WhatsApp" };
@@ -53,18 +52,38 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
       instanceWasCreated = true;
       currentConnection = await getEvolutionConnectionStatus();
     }
+    if (forceRefresh && currentConnection.state === "close") {
+      const reset = await resetEvolutionInstanceForPairing();
+      if (!reset.ok) return { qr: null, error: reset.error, state: currentConnection.state };
+      instanceWasCreated = true;
+      currentConnection = await getEvolutionConnectionStatus();
+    }
+    if (forceRefresh && currentConnection.state === "connecting") {
+      // Evolution may already be preparing the QR after logout. Do not
+      // restart/delete that session; request the current QR below.
+      instanceWasCreated = true;
+    }
     if (forceRefresh && !instanceWasCreated) {
-      if (currentConnection.ready) return { qr: null, error: null, state: "open" };
+      if (currentConnection.ready) {
+        const pairing = await waitForEvolutionPairingState();
+        if (!pairing.ready) return { qr: null, error: "WhatsApp todavía está cerrando la conexión. Intenta actualizar en unos segundos.", state: "open" };
+        currentConnection = await getEvolutionConnectionStatus();
+        if (pairing.hasQr || currentConnection.state === "connecting") instanceWasCreated = true;
+      }
 
-      const restartResponse = await fetch(`${baseUrl}/instance/restart/${encodeURIComponent(instanceName)}`, {
+      const restartResponse = instanceWasCreated ? null : await fetch(`${baseUrl}/instance/restart/${encodeURIComponent(instanceName)}`, {
         method: "POST",
         headers: { apikey: apiKey },
         cache: "no-store",
       });
-      if (!restartResponse.ok) {
+      if (restartResponse && !restartResponse.ok) {
         if (restartResponse.status === 404) {
           const ensured = await ensureEvolutionInstance();
           if (!ensured.ok) return { qr: null, error: ensured.error, state: currentConnection.state };
+        } else if (restartResponse.status === 428 || restartResponse.status === 500) {
+          const reset = await resetEvolutionInstanceForPairing();
+          if (!reset.ok) return { qr: null, error: reset.error, state: currentConnection.state };
+          instanceWasCreated = true;
         } else {
           const payload = await restartResponse.json().catch(() => null);
           return { qr: null, error: getEvolutionErrorMessage(restartResponse.status, payload, "No pudimos reiniciar la conexión de WhatsApp. Intenta de nuevo."), state: currentConnection.state };
@@ -82,9 +101,9 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
         cache: "no-store",
       }),
     ]);
-    if (response.status === 404 && forceRefresh) {
-      const ensured = await ensureEvolutionInstance();
-      if (!ensured.ok) return { qr: null, error: ensured.error, state: currentConnection.state };
+    if (forceRefresh && (response.status === 404 || response.status === 428 || response.status === 500)) {
+      const reset = await resetEvolutionInstanceForPairing();
+      if (!reset.ok) return { qr: null, error: reset.error, state: currentConnection.state };
       [response, stateResponse] = await Promise.all([
         fetch(`${baseUrl}/instance/connect/${encodeURIComponent(instanceName)}`, { headers: { apikey: apiKey }, cache: "no-store" }),
         fetch(stateUrl, { headers: { apikey: apiKey }, cache: "no-store" }),
@@ -115,12 +134,9 @@ export default async function WhatsappPage({ searchParams }: { searchParams: Pro
   let sellerProfile = null;
   let messageTemplate = null;
   if (isConnected) {
-    const [profile, template] = await Promise.all([
-      getEffectiveSellerProfile(),
-      getEffectiveWhatsappMessageTemplate(),
-    ]);
-    sellerProfile = profile;
-    messageTemplate = template;
+    const settings = await getWhatsappPageSettings();
+    sellerProfile = settings.sellerProfile;
+    messageTemplate = settings.messageTemplate;
   }
 
   return (

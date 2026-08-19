@@ -9,7 +9,7 @@ import { orderFirstContactItems } from "@/lib/first-contact/order";
 import { firstContactResourceLabel, type FirstContactOperationResult, type FirstContactResource, type FirstContactResult } from "@/lib/first-contact/types";
 
 const resultLabel: Record<FirstContactResult, string> = { ACCEPTED: "Aceptado", FAILED: "Falló", UNKNOWN: "Resultado incierto", NOT_AVAILABLE: "No disponible" };
-const resultClass: Record<FirstContactResult, string> = { ACCEPTED: "bg-[#eef6d7] text-[#4b6905]", FAILED: "bg-[#fff0ee] text-[#b33a2c]", UNKNOWN: "bg-[#fff8df] text-[#8a5b00]", NOT_AVAILABLE: "bg-[#f1f2f4] text-[var(--muted)]" };
+const resultClass: Record<FirstContactResult | "PENDING", string> = { ACCEPTED: "bg-[#eef6d7] text-[#4b6905]", FAILED: "bg-[#fff0ee] text-[#b33a2c]", UNKNOWN: "bg-[#fff8df] text-[#8a5b00]", NOT_AVAILABLE: "bg-[#f1f2f4] text-[var(--muted)]", PENDING: "bg-[#f1f2f4] text-[var(--muted)]" };
 
 export function FirstContactSummary({ lead, initialOperation }: { lead: Pick<Lead, "id" | "fullName" | "phone" | "carModels">; initialOperation?: FirstContactOperationResult | null }) {
   const [operation, setOperation] = useState(initialOperation ?? null);
@@ -31,7 +31,7 @@ export function FirstContactSummary({ lead, initialOperation }: { lead: Pick<Lea
   }
 
   async function retry(item: FirstContactOperationResult["items"][number]) {
-    if (!item.effectId || item.result !== "FAILED" || retrying) return;
+    if (!item.effectId || item.availability !== "AVAILABLE" || (item.result !== null && item.result !== "FAILED") || retrying) return;
     setRetrying(item.id); setError(null);
     try {
       const response = await retryFirstContactResourceAction({ leadId: lead.id, effectId: item.effectId, idempotencyKey: crypto.randomUUID() });
@@ -52,6 +52,7 @@ export function FirstContactSummary({ lead, initialOperation }: { lead: Pick<Lea
 
 function ResourceResult({ item, retrying, onRetry }: { item: FirstContactOperationResult["items"][number]; retrying: boolean; onRetry: () => void }) {
   const resource = item.resourceKind as FirstContactResource;
-  const result = item.result ?? (item.availability === "NOT_AVAILABLE" ? "NOT_AVAILABLE" : "UNKNOWN") as FirstContactResult;
-  return <div className={`flex min-w-0 flex-col items-center justify-center rounded-lg border border-black/[0.06] bg-white p-2 text-center ${result === "FAILED" ? "min-h-[72px]" : "min-h-[52px]"}`}><div className="flex min-w-0 flex-col items-center gap-1"><p className="text-[9px] font-black leading-3">{firstContactResourceLabel(resource)}</p><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black leading-3 ${resultClass[result]}`}>{resultLabel[result]}</span></div>{result === "FAILED" ? <button type="button" aria-label="Reintentar recurso" title="Reintentar" disabled={retrying} onClick={onRetry} className="mt-1 inline-flex min-h-8 w-full items-center justify-center gap-1 rounded-md border border-[#cbd8e8] bg-[#f8fbff] px-2 text-[10px] font-black text-[var(--ink)] transition hover:border-[#9fb5cf] hover:bg-[#eef5ff] disabled:cursor-wait disabled:opacity-60">{retrying ? <LoaderCircle size={13} className="animate-spin" /> : <RefreshCw size={13} />}<span>{retrying ? "Reintentando…" : "Reintentar"}</span></button> : null}</div>;
+  const result = item.result ?? (item.availability === "NOT_AVAILABLE" ? "NOT_AVAILABLE" : "PENDING") as FirstContactResult | "PENDING";
+  const retryable = item.availability === "AVAILABLE" && (item.result === null || item.result === "FAILED");
+  return <div className={`flex min-w-0 flex-col items-center justify-center rounded-lg border border-black/[0.06] bg-white p-2 text-center ${retryable ? "min-h-[72px]" : "min-h-[52px]"}`}><div className="flex min-w-0 flex-col items-center gap-1"><p className="text-[9px] font-black leading-3">{firstContactResourceLabel(resource)}</p><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black leading-3 ${resultClass[result]}`}>{result === "PENDING" ? "No enviado" : resultLabel[result]}</span></div>{retryable ? <button type="button" aria-label="Reintentar recurso" title="Reintentar" disabled={retrying} aria-busy={retrying} onClick={onRetry} className="button-primary mt-1 inline-flex min-h-9 w-full items-center justify-center gap-1 rounded-md px-2 py-1 text-[10px] disabled:cursor-wait disabled:opacity-60">{retrying ? <LoaderCircle size={13} className="animate-spin" /> : <RefreshCw size={13} />}<span>{retrying ? "Reintentando…" : "Reintentar"}</span></button> : null}</div>;
 }

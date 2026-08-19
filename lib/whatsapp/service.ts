@@ -129,11 +129,16 @@ export async function getEvolutionConnectionQr(): Promise<EvolutionQrResult> {
       cache: "no-store",
     });
     const payload = await response.json().catch(() => null);
+    const qr = extractEvolutionQr(payload);
+    // During logout Evolution can briefly report the old `open` state while
+    // the connect endpoint already contains the new QR. Trust the QR payload
+    // before the lagging state endpoint so the UI never hides a valid code.
+    if (qr) return { qr, state: "connecting", error: null };
+
     const current = await getEvolutionConnectionStatus();
     if (current.ready) return { qr: null, state: "open", error: null };
     if (!response.ok) return { qr: null, state: current.state, error: getEvolutionErrorMessage(response.status, payload, "No pudimos actualizar el código QR. Intenta nuevamente.") };
 
-    const qr = extractEvolutionQr(payload);
     return {
       qr,
       state: qr ? "connecting" : current.state,
@@ -145,6 +150,95 @@ export async function getEvolutionConnectionQr(): Promise<EvolutionQrResult> {
 }
 
 let ensureEvolutionInstancePromise: Promise<{ ok: boolean; error: string | null }> | null = null;
+
+const EVOLUTION_RETRY_DELAY_MS = 750;
+const EVOLUTION_INSTANCE_SETTLE_DELAY_MS = 2500;
+const EVOLUTION_CLOSE_WAIT_ATTEMPTS = 40;
+const EVOLUTION_PAIRING_WAIT_ATTEMPTS = 80;
+
+export async function waitForEvolutionConnectionToClose(): Promise<boolean> {
+  for (let attempt = 0; attempt < EVOLUTION_CLOSE_WAIT_ATTEMPTS; attempt += 1) {
+    const status = await getEvolutionConnectionStatus();
+    if (status.missingInstance || status.state === "close") return true;
+    await new Promise((resolve) => setTimeout(resolve, EVOLUTION_RETRY_DELAY_MS));
+  }
+  return false;
+}
+
+export type EvolutionPairingState = {
+  ready: boolean;
+  state: EvolutionConnectionState | null;
+  hasQr: boolean;
+};
+
+/**
+ * Logout can transition directly from open to connecting while Evolution
+ * starts a fresh QR session. Treat that as a successful pairing handoff; it
+ * is not a closed instance that needs to be deleted and recreated.
+ */
+export async function waitForEvolutionPairingState(): Promise<EvolutionPairingState> {
+  for (let attempt = 0; attempt < EVOLUTION_PAIRING_WAIT_ATTEMPTS; attempt += 1) {
+    const status = await getEvolutionConnectionStatus();
+    if (status.missingInstance || status.state === "close") {
+      return { ready: true, state: status.state, hasQr: false };
+    }
+
+    const qr = await getEvolutionConnectionQr();
+    if (qr.qr) return { ready: true, state: "connecting", hasQr: true };
+
+    await new Promise((resolve) => setTimeout(resolve, EVOLUTION_RETRY_DELAY_MS));
+  }
+
+  const finalStatus = await getEvolutionConnectionStatus();
+  return { ready: false, state: finalStatus.state, hasQr: false };
+}
+
+export async function recreateEvolutionInstanceAfterCleanup(): Promise<{ ok: boolean; error: string | null }> {
+  const current = await getEvolutionConnectionStatus();
+  if (current.state === "open" && !(await waitForEvolutionConnectionToClose())) {
+    return { ok: false, error: "WhatsApp todavía está cerrando la conexión anterior. Intenta de nuevo en unos segundos." };
+  }
+
+  // Evolution 2.3.x may recreate the pairing session immediately after the
+  // delete response. Allow that authoritative state to win instead of
+  // requiring a short-lived 404 window that the provider may skip.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const pairing = await waitForEvolutionPairingState();
+    if (pairing.hasQr) return { ok: true, error: null };
+
+    const ensured = await ensureEvolutionInstance();
+    if (ensured.ok) return ensured;
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, EVOLUTION_INSTANCE_SETTLE_DELAY_MS));
+  }
+
+  return { ok: false, error: "No pudimos preparar la nueva conexión de WhatsApp. Intenta de nuevo." };
+}
+
+export async function resetEvolutionInstanceForPairing(): Promise<{ ok: boolean; error: string | null }> {
+  const config = getEvolutionConfig();
+  if (!config) return { ok: false, error: "La conexión de WhatsApp no está disponible. Intenta de nuevo y avísame si continúa." };
+
+  try {
+    const current = await getEvolutionConnectionStatus();
+    if (current.state === "connecting") {
+      const qr = await getEvolutionConnectionQr();
+      if (qr.qr) return { ok: true, error: null };
+    }
+
+    const response = await fetch(`${config.apiUrl.replace(/\/$/, "")}/instance/delete/${encodeURIComponent(config.instanceName)}`, {
+      method: "DELETE",
+      headers: { apikey: config.apiKey },
+      cache: "no-store",
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok && response.status !== 404) {
+      return { ok: false, error: getEvolutionErrorMessage(response.status, payload, "No pudimos preparar un QR nuevo. Intenta de nuevo.") };
+    }
+    return recreateEvolutionInstanceAfterCleanup();
+  } catch {
+    return { ok: false, error: "No pudimos preparar un QR nuevo. Revisa tu conexión e inténtalo de nuevo." };
+  }
+}
 
 export function ensureEvolutionInstance(): Promise<{ ok: boolean; error: string | null }> {
   if (ensureEvolutionInstancePromise) return ensureEvolutionInstancePromise;

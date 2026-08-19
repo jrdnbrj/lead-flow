@@ -3,7 +3,7 @@
 import type { ActionResponse } from "@/lib/domain/lead";
 import { authRequiredResult } from "@/lib/auth/auth-required";
 import { requireAdvisor } from "@/lib/auth/advisor";
-import { ensureEvolutionInstance, getEvolutionConnectionQr, getEvolutionConnectionStatus, getEvolutionErrorMessage } from "@/lib/whatsapp/service";
+import { getEvolutionConnectionQr, getEvolutionConnectionStatus, getEvolutionErrorMessage, recreateEvolutionInstanceAfterCleanup, resetEvolutionInstanceForPairing, waitForEvolutionPairingState } from "@/lib/whatsapp/service";
 
 export async function getWhatsappConnectionStatusAction() {
   const authorization = await requireAdvisor();
@@ -33,7 +33,16 @@ export async function unlinkWhatsappInstanceAction(): Promise<ActionResponse<{ d
       headers: { apikey: apiKey },
       cache: "no-store",
     });
-    if (response.ok) return { success: true, data: { disconnected: true } };
+    if (response.ok) {
+      const pairing = await waitForEvolutionPairingState();
+      if (!pairing.ready) {
+        return { success: false, error: "WhatsApp todavía está cerrando la conexión. Intenta de nuevo en unos segundos." };
+      }
+      if (pairing.hasQr) return { success: true, data: { disconnected: true } };
+      const reset = await resetEvolutionInstanceForPairing();
+      if (!reset.ok) return { success: false, error: reset.error || "No pudimos preparar el QR nuevo. Intenta de nuevo." };
+      return { success: true, data: { disconnected: true } };
+    }
 
     const logoutPayload = await response.json().catch(() => null);
     const logoutError = getEvolutionErrorMessage(response.status, logoutPayload, "No pudimos desconectar WhatsApp. Intenta de nuevo.");
@@ -50,7 +59,7 @@ export async function unlinkWhatsappInstanceAction(): Promise<ActionResponse<{ d
           cache: "no-store",
         });
         if (deleteResponse.ok || deleteResponse.status === 404) {
-          const ensured = await ensureEvolutionInstance();
+          const ensured = await recreateEvolutionInstanceAfterCleanup();
           if (ensured.ok) return { success: true, data: { disconnected: true } };
           return { success: false, error: ensured.error || "La conexión se reinició, pero no pudimos dejarla lista. Intenta de nuevo." };
         }
@@ -61,7 +70,7 @@ export async function unlinkWhatsappInstanceAction(): Promise<ActionResponse<{ d
       // removed. Verify the authoritative state before showing a failure.
       const afterDelete = await getEvolutionConnectionStatus();
       if (afterDelete.missingInstance) {
-        const ensured = await ensureEvolutionInstance();
+        const ensured = await recreateEvolutionInstanceAfterCleanup();
         if (ensured.ok) return { success: true, data: { disconnected: true } };
       }
 

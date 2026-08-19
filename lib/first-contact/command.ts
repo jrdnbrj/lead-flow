@@ -129,7 +129,7 @@ export async function executeFirstContact(lead: FirstContactLead, provider: Firs
   return final ? { ...final, replayed: initial.replayed && !providerAttempted } : null;
 }
 
-export function retryableFirstContactResult(result: string | null): boolean { return result === "FAILED"; }
+export function retryableFirstContactResult(result: string | null): boolean { return result === null || result === "FAILED"; }
 
 export async function retryFirstContact(lead: FirstContactLead, effectId: string, expectedEffectVersion: number | undefined, idempotencyKey: string, provider: FirstContactProvider): Promise<FirstContactOperationResult | null> {
   const request = await buildFirstContactRequest(lead);
