@@ -15,6 +15,7 @@ type ConnectionPayload = {
   base64?: string;
   pairingCode?: string | null;
   count?: number;
+  error?: boolean;
 };
 
 type ConnectionStatePayload = {
@@ -57,6 +58,7 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
     if (forceRefresh && currentConnection.state === "close") {
       const reset = await resetEvolutionInstanceForPairing();
       if (!reset.ok) return { qr: null, error: reset.error, state: currentConnection.state };
+      createdQr = reset.qr ?? createdQr;
       instanceWasCreated = true;
       currentConnection = await getEvolutionConnectionStatus();
     }
@@ -86,6 +88,7 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
         } else if (restartResponse.status === 428 || restartResponse.status === 500) {
           const reset = await resetEvolutionInstanceForPairing();
           if (!reset.ok) return { qr: null, error: reset.error, state: currentConnection.state };
+          createdQr = reset.qr ?? createdQr;
           instanceWasCreated = true;
         } else {
           const payload = await restartResponse.json().catch(() => null);
@@ -107,6 +110,7 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
     if (forceRefresh && (response.status === 404 || response.status === 428 || response.status === 500)) {
       const reset = await resetEvolutionInstanceForPairing();
       if (!reset.ok) return { qr: null, error: reset.error, state: currentConnection.state };
+      createdQr = reset.qr ?? createdQr;
       [response, stateResponse] = await Promise.all([
         fetch(`${baseUrl}/instance/connect/${encodeURIComponent(instanceName)}`, { headers: { apikey: apiKey }, cache: "no-store" }),
         fetch(stateUrl, { headers: { apikey: apiKey }, cache: "no-store" }),
@@ -123,6 +127,12 @@ async function getWhatsappConnection(forceRefresh = false): Promise<WhatsappConn
     const statePayload = await stateResponse.json().catch(() => null) as ConnectionStatePayload | null;
     const state = getState(statePayload);
     if (!response.ok) return { qr: null, error: getEvolutionErrorMessage(response.status, payload, "No pudimos preparar la conexión de WhatsApp. Intenta de nuevo."), state };
+    if (payload.error === true && state === "connecting") {
+      const reset = await resetEvolutionInstanceForPairing();
+      if (!reset.ok) return { qr: null, error: reset.error, state };
+      const resetQr = reset.qr ?? createdQr;
+      if (resetQr) return { qr: resetQr, error: null, state: "connecting" };
+    }
     const verified = await getEvolutionConnectionStatus();
     if (verified.ready) {
       const webhookReady = await ensureEvolutionWebhook();

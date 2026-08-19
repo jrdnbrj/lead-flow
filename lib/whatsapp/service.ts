@@ -34,6 +34,8 @@ type EvolutionEnsureResult = {
   qr?: string | null;
 };
 
+type EvolutionResetResult = EvolutionEnsureResult;
+
 const EVOLUTION_REQUEST_TIMEOUT_MS = 3000;
 
 function getEvolutionConfig(): EvolutionConfig | null {
@@ -191,6 +193,7 @@ export type EvolutionPairingState = {
   ready: boolean;
   state: EvolutionConnectionState | null;
   hasQr: boolean;
+  qr?: string | null;
 };
 
 /**
@@ -206,16 +209,16 @@ export async function waitForEvolutionPairingState(): Promise<EvolutionPairingSt
     }
 
     const qr = await getEvolutionConnectionQr();
-    if (qr.qr) return { ready: true, state: "connecting", hasQr: true };
+    if (qr.qr) return { ready: true, state: "connecting", hasQr: true, qr: qr.qr };
 
     await new Promise((resolve) => setTimeout(resolve, EVOLUTION_RETRY_DELAY_MS));
   }
 
   const finalStatus = await getEvolutionConnectionStatus();
-  return { ready: false, state: finalStatus.state, hasQr: false };
+  return { ready: false, state: finalStatus.state, hasQr: false, qr: null };
 }
 
-export async function recreateEvolutionInstanceAfterCleanup(): Promise<{ ok: boolean; error: string | null }> {
+export async function recreateEvolutionInstanceAfterCleanup(): Promise<EvolutionEnsureResult> {
   const current = await getEvolutionConnectionStatus();
   if (current.state === "open" && !(await waitForEvolutionConnectionToClose())) {
     return { ok: false, error: "WhatsApp todavía está cerrando la conexión anterior. Intenta de nuevo en unos segundos." };
@@ -229,7 +232,7 @@ export async function recreateEvolutionInstanceAfterCleanup(): Promise<{ ok: boo
     if (pairing.hasQr) {
       const webhookReady = await ensureEvolutionWebhook();
       return webhookReady
-        ? { ok: true, error: null }
+        ? { ok: true, error: null, qr: pairing.qr }
         : { ok: false, error: "La conexión se preparó, pero no pudimos dejar lista la recepción de mensajes. Intenta de nuevo." };
     }
 
@@ -241,7 +244,7 @@ export async function recreateEvolutionInstanceAfterCleanup(): Promise<{ ok: boo
   return { ok: false, error: "No pudimos preparar la nueva conexión de WhatsApp. Intenta de nuevo." };
 }
 
-export async function resetEvolutionInstanceForPairing(): Promise<{ ok: boolean; error: string | null }> {
+export async function resetEvolutionInstanceForPairing(): Promise<EvolutionResetResult> {
   const config = getEvolutionConfig();
   if (!config) return { ok: false, error: "La conexión de WhatsApp no está disponible. Intenta de nuevo y avísame si continúa." };
 
@@ -252,7 +255,7 @@ export async function resetEvolutionInstanceForPairing(): Promise<{ ok: boolean;
       if (qr.qr) {
         const webhookReady = await ensureEvolutionWebhook();
         return webhookReady
-          ? { ok: true, error: null }
+          ? { ok: true, error: null, qr: qr.qr }
           : { ok: false, error: "La conexión se preparó, pero no pudimos dejar lista la recepción de mensajes. Intenta de nuevo." };
       }
     }
