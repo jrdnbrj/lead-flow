@@ -241,6 +241,13 @@ export function getTemperatureLabel(temperature: LeadTemperature): string {
   return { HIGH: "Alta", MEDIUM: "Media", LOW: "Baja" }[temperature];
 }
 
+export function capitalizeNameWords(value: string): string {
+  return value.split(/(\s+)/u).map((part) => {
+    if (/^\s+$/u.test(part) || !part) return part;
+    return `${part.slice(0, 1).toLocaleUpperCase("es-EC")}${part.slice(1)}`;
+  }).join("");
+}
+
 export function getStatusLabel(status: LeadStatus): string {
   return {
     NUEVO: "Nuevo",

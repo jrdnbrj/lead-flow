@@ -8,8 +8,10 @@ import { getLeads } from "@/lib/leads/repository";
 export const metadata: Metadata = { title: "Resumen" };
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams?: Promise<{ leadId?: string | string[] }> }) {
   if (isAuthRequiredEnabled()) await requireAdvisorOrRedirect("/dashboard");
   const leads = await getLeads();
-  return <DashboardClient initialLeads={leads} />;
+  const params = await searchParams;
+  const leadId = Array.isArray(params?.leadId) ? params.leadId[0] : params?.leadId;
+  return <DashboardClient initialLeads={leads} initialExpandedLeadId={leadId ?? null} />;
 }

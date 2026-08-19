@@ -708,7 +708,9 @@ export async function softDeleteLead(id: string): Promise<boolean> {
   if (!supabase) return false;
 
   const { data, error } = await (supabase.rpc as unknown as (name: string, parameters: Record<string, unknown>) => Promise<RpcResult>)("soft_delete_lead", { p_lead_id: id });
-  return !error && (data as unknown) === true;
+  if (error || (data as unknown) !== true) return false;
+  const { data: deletedLead, error: verificationError } = await supabase.from("leads").select("id,deleted_at").eq("id", id).maybeSingle();
+  return !verificationError && Boolean(deletedLead?.deleted_at);
 }
 
 export async function markLeadCustomerReply(id: string, preview: string | null, messageAt: string): Promise<boolean> {

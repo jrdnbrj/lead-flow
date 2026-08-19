@@ -38,6 +38,7 @@ button, a { touch-action: manipulation; }
 .dashboard-header-action { display: inline-flex; min-height: 30px; align-items: center; justify-content: center; gap: .3rem; border-radius: 8px; padding: .25rem .5rem; font-size: .68rem; font-weight: 900; }
 .filter-pill:hover { border-color: rgba(16,24,40,.25); color: var(--ink); }
 .filter-pill-active { border-color: var(--ink); background: var(--ink); color: var(--lime); }
+.dashboard-filter-pill.filter-pill-active { border-color: var(--ink); background: var(--ink); color: var(--lime); }
 .filter-pill-active-muted { border-color: #cdd2da; background: #eef0f3; color: var(--ink); }
 .icon-action { display: grid; min-height: 42px; min-width: 42px; place-items: center; border-radius: 14px; border: 1px solid rgba(16,24,40,.1); background: white; color: var(--ink); transition: all .2s; }
 .diagnostics-grid { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(0, 1.5fr); gap: .45rem .8rem; margin: 0; font-size: .82rem; }

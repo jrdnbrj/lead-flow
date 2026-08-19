@@ -6,7 +6,6 @@ import { WhatsappConnectionSection } from "@/components/whatsapp/whatsapp-connec
 import { requireAdvisorOrRedirect } from "@/lib/auth/advisor";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-template";
-import { getPersistentSettings } from "@/lib/config/persistent-settings";
 import { getEvolutionConnectionStatus, getEvolutionErrorMessage, normalizeEvolutionConnectionState } from "@/lib/whatsapp/service";
 import type { EvolutionConnectionState } from "@/lib/whatsapp/service";
 
@@ -87,28 +86,25 @@ export default async function WhatsappPage({ searchParams }: { searchParams: Pro
   const isConnected = connection.state === "open";
   let sellerProfile = null;
   let messageTemplate = null;
-  let persistentSettingsAvailable = false;
   if (isConnected) {
-    const [profile, template, persistentSettings] = await Promise.all([
+    const [profile, template] = await Promise.all([
       getEffectiveSellerProfile(),
       getEffectiveWhatsappMessageTemplate(),
-      getPersistentSettings(),
     ]);
     sellerProfile = profile;
     messageTemplate = template;
-    persistentSettingsAvailable = persistentSettings.available;
   }
 
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-7 sm:mb-10">
-        <p className="eyebrow">WhatsApp · conexión del vendedor</p>
-        <h1 className="mt-3 text-4xl font-black leading-[0.95] tracking-[-0.065em] sm:text-6xl">{isConnected ? "Tu WhatsApp está listo para responder." : "Conecta el número desde el que vas a responder."}</h1>
-        <p className="mt-4 max-w-xl text-base leading-7 text-[var(--muted)]">{isConnected ? "Configura los datos que compartirás con tus clientes y personaliza el primer mensaje. La vinculación queda al final para que primero tengas a mano lo que usarás." : "Escanea este QR con el celular del vendedor. Cuando quede vinculado aparecerán los datos del cliente y el mensaje automático."}</p>
+        <p className="eyebrow">WhatsApp · conexión del asesor</p>
+        <h1 className="mt-3 text-4xl font-black leading-[0.95] tracking-[-0.065em] sm:text-6xl">{isConnected ? "WhatsApp del asesor conectado." : "Conecta el WhatsApp del asesor."}</h1>
+        <p className="mt-4 max-w-xl text-base leading-7 text-[var(--muted)]">{isConnected ? "Administra aquí los datos que compartes y el mensaje inicial." : "Escanea este QR con el celular del asesor."}</p>
       </div>
 
       {isConnected && sellerProfile && messageTemplate ? <>
-        <SellerProfileForm initialProfile={sellerProfile} persistentSettingsAvailable={persistentSettingsAvailable} />
+        <SellerProfileForm initialProfile={sellerProfile} />
         <MessageTemplateEditor initialTemplate={messageTemplate} />
         <div className="mt-8"><p className="eyebrow mb-3">Conexión actual</p><WhatsappConnectionSection connection={connection} /></div>
       </> : <WhatsappConnectionSection connection={connection} />}

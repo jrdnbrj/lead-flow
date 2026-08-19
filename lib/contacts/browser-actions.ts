@@ -10,11 +10,23 @@ export async function shareVCard(contact: VCardContact): Promise<ContactActionRe
   if (!isWebShareAvailable()) throw new Error("Este dispositivo no permite compartir desde el navegador.");
   const vCard = buildVCard(contact);
   const file = typeof File === "undefined" ? null : new File([vCard], vCardFilename(contact.name), { type: "text/vcard;charset=utf-8" });
-  if (file && navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ files: [file], title: `Contacto de ${contact.name}` });
-  } else {
-    await navigator.share({ title: `Contacto de ${contact.name}`, text: vCard });
+  let fileShareAvailable = false;
+  try {
+    fileShareAvailable = Boolean(file && navigator.canShare?.({ files: [file] }));
+  } catch {
+    fileShareAvailable = false;
   }
+  if (fileShareAvailable && file) {
+    try {
+      await navigator.share({ files: [file], title: `Contacto de ${contact.name}` });
+      return "shared";
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      // Algunos navegadores anuncian soporte de archivos pero rechazan el vCard
+      // al abrir la hoja nativa. El texto es un fallback permitido y explícito.
+    }
+  }
+  await navigator.share({ title: `Contacto de ${contact.name}`, text: vCard });
   return "shared";
 }
 

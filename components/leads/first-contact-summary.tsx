@@ -20,17 +20,27 @@ export function FirstContactSummary({ lead, initialOperation }: { lead: Pick<Lea
   async function start() {
     if (isSending || operation) return;
     setIsSending(true); setError(null);
-    const response = await startFirstContactAction({ leadId: lead.id, fullName: lead.fullName, phone: lead.phone, carModels: lead.carModels });
-    if (response.success && response.data) setOperation(response.data); else setError(response.error || "No pudimos iniciar el primer contacto.");
-    setIsSending(false);
+    try {
+      const response = await startFirstContactAction({ leadId: lead.id, fullName: lead.fullName, phone: lead.phone, carModels: lead.carModels });
+      if (response.success && response.data) setOperation(response.data); else setError(response.error || "No pudimos iniciar el primer contacto.");
+    } catch {
+      setError("No pudimos iniciar el primer contacto. Intenta de nuevo.");
+    } finally {
+      setIsSending(false);
+    }
   }
 
   async function retry(item: FirstContactOperationResult["items"][number]) {
     if (!item.effectId || item.result !== "FAILED" || retrying) return;
     setRetrying(item.id); setError(null);
-    const response = await retryFirstContactResourceAction({ leadId: lead.id, effectId: item.effectId, idempotencyKey: crypto.randomUUID() });
-    if (response.success && response.data) setOperation(response.data); else setError(response.error || "No pudimos reintentar el recurso.");
-    setRetrying(null);
+    try {
+      const response = await retryFirstContactResourceAction({ leadId: lead.id, effectId: item.effectId, idempotencyKey: crypto.randomUUID() });
+      if (response.success && response.data) setOperation(response.data); else setError(response.error || "No pudimos reintentar el recurso.");
+    } catch {
+      setError("No pudimos reintentar el recurso. Intenta de nuevo.");
+    } finally {
+      setRetrying(null);
+    }
   }
 
   return <section className="mt-2 rounded-xl border border-[#dce5ef] bg-[#f8fbff] p-2.5" aria-label="Resumen del primer contacto">
@@ -43,5 +53,5 @@ export function FirstContactSummary({ lead, initialOperation }: { lead: Pick<Lea
 function ResourceResult({ item, retrying, onRetry }: { item: FirstContactOperationResult["items"][number]; retrying: boolean; onRetry: () => void }) {
   const resource = item.resourceKind as FirstContactResource;
   const result = item.result ?? (item.availability === "NOT_AVAILABLE" ? "NOT_AVAILABLE" : "UNKNOWN") as FirstContactResult;
-  return <div className="flex min-w-0 min-h-[72px] flex-col rounded-lg border border-black/[0.06] bg-white p-2"><div className="flex items-center justify-between gap-2"><p className="truncate text-[10px] font-black">{firstContactResourceLabel(resource)}</p><span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black ${resultClass[result]}`}>{resultLabel[result]}</span></div>{result === "FAILED" ? <button type="button" aria-label="Reintentar recurso" title="Reintentar" disabled={retrying} onClick={onRetry} className="mt-auto inline-flex min-h-8 w-full items-center justify-center gap-1 rounded-md border border-[#cbd8e8] bg-[#f8fbff] px-2 text-[10px] font-black text-[var(--ink)] transition hover:border-[#9fb5cf] hover:bg-[#eef5ff] disabled:cursor-wait disabled:opacity-60">{retrying ? <LoaderCircle size={13} className="animate-spin" /> : <RefreshCw size={13} />}<span>{retrying ? "Reintentando…" : "Reintentar"}</span></button> : null}</div>;
+  return <div className={`flex min-w-0 flex-col items-center justify-center rounded-lg border border-black/[0.06] bg-white p-2 text-center ${result === "FAILED" ? "min-h-[72px]" : "min-h-[52px]"}`}><div className="flex min-w-0 flex-col items-center gap-1"><p className="text-[9px] font-black leading-3">{firstContactResourceLabel(resource)}</p><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black leading-3 ${resultClass[result]}`}>{resultLabel[result]}</span></div>{result === "FAILED" ? <button type="button" aria-label="Reintentar recurso" title="Reintentar" disabled={retrying} onClick={onRetry} className="mt-1 inline-flex min-h-8 w-full items-center justify-center gap-1 rounded-md border border-[#cbd8e8] bg-[#f8fbff] px-2 text-[10px] font-black text-[var(--ink)] transition hover:border-[#9fb5cf] hover:bg-[#eef5ff] disabled:cursor-wait disabled:opacity-60">{retrying ? <LoaderCircle size={13} className="animate-spin" /> : <RefreshCw size={13} />}<span>{retrying ? "Reintentando…" : "Reintentar"}</span></button> : null}</div>;
 }

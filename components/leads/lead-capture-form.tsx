@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { createLeadAction, findExistingLeadByPhoneAction } from "@/lib/leads/actions";
-import { carModels, getStatusLabel, leadTimeframes, paymentMethods, type ExistingLeadSummary, type FollowUpAction } from "@/lib/domain/lead";
+import { capitalizeNameWords, carModels, getStatusLabel, leadTimeframes, paymentMethods, type ExistingLeadSummary, type FollowUpAction } from "@/lib/domain/lead";
 import { leadSchema, type LeadFormValues } from "@/lib/leads/validation";
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { FirstContactSummary } from "@/components/leads/first-contact-summary";
@@ -30,17 +30,20 @@ export function LeadCaptureForm() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [savedLeadId, setSavedLeadId] = useState<string | null>(null);
-  const [existingLead, setExistingLead] = useState<ExistingLeadSummary | null>(null);
+  const [duplicateLead, setDuplicateLead] = useState<ExistingLeadSummary | null>(null);
+  const [pendingDuplicateInput, setPendingDuplicateInput] = useState<LeadFormValues | null>(null);
   const [savedActions, setSavedActions] = useState<FollowUpAction[]>([]);
+  const [isCreatingOpportunity, setIsCreatingOpportunity] = useState(false);
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadSchema),
     mode: "onChange",
     defaultValues: { fullName: "", phone: "", carModels: [], timeframe: "INMEDIATA", paymentMethod: "CREDITO", tradeInCar: false, notes: "" },
   });
   const { formState, register, setValue } = form;
+  const fullNameField = register("fullName");
   const values = useWatch({ control: form.control });
 
-  async function onSubmit(input: LeadFormValues) {
+  async function saveLead(input: LeadFormValues) {
     setSubmitError(null);
     setWarning(null);
     const response = await createLeadAction(input);
@@ -52,14 +55,36 @@ export function LeadCaptureForm() {
     setWarning(response.warning || null);
     setSavedLeadId(response.data.id);
     setSavedActions([]);
-    const duplicate = await findExistingLeadByPhoneAction(response.data.phone, response.data.id);
-    if (duplicate.success) setExistingLead(duplicate.data ?? null);
+    setDuplicateLead(null);
+    setPendingDuplicateInput(null);
+  }
+
+  async function onSubmit(input: LeadFormValues) {
+    setSubmitError(null);
+    setWarning(null);
+    const duplicate = await findExistingLeadByPhoneAction(input.phone);
+    if (!duplicate.success) {
+      setSubmitError(duplicate.error || "No pudimos revisar el teléfono. Intenta de nuevo.");
+      return;
+    }
+    if (duplicate.data) {
+      setDuplicateLead(duplicate.data);
+      setPendingDuplicateInput(input);
+      return;
+    }
+    await saveLead(input);
+  }
+
+  async function createNewOpportunity() {
+    if (!pendingDuplicateInput || isCreatingOpportunity) return;
+    setIsCreatingOpportunity(true);
+    await saveLead(pendingDuplicateInput);
+    setIsCreatingOpportunity(false);
   }
 
   if (savedLeadId) {
     return <section className="space-y-2 rounded-2xl border border-black/[0.06] bg-white p-3 shadow-[0_12px_36px_rgba(16,24,40,0.05)] sm:p-4">
       <div className="rounded-xl bg-[#eef6d7] px-3 py-3"><p className="eyebrow">Lead guardado</p><h2 className="mt-1 text-xl font-black">Sin próxima acción</h2><p className="mt-1 text-xs font-semibold text-[var(--muted)]">El contacto quedó listo. Elige el siguiente paso.</p></div>
-      {existingLead ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm"><p className="font-black">Este teléfono ya aparece en otro lead</p><p className="mt-1 text-[var(--muted)]">{existingLead.fullName} · {existingLead.carModels.join(", ")} · {getStatusLabel(existingLead.status)}</p><div className="mt-3 flex flex-wrap gap-2"><a className="button-secondary" href={`/dashboard?leadId=${encodeURIComponent(existingLead.id)}`}>Abrir lead existente</a><a className="button-primary" href={`/dashboard?leadId=${encodeURIComponent(savedLeadId)}`}>Crear nueva oportunidad</a></div></div> : null}
       <div className="grid gap-1.5 sm:grid-cols-2">
         <a className="button-primary min-h-11" href={`/qr?leadId=${encodeURIComponent(savedLeadId)}&name=${encodeURIComponent(values.fullName || "")}`}><QrCode size={16} />Mi contacto / QR del asesor</a>
         <a className="button-secondary min-h-11" href="/dashboard"><ExternalLink size={16} />Ir al dashboard</a>
@@ -69,6 +94,21 @@ export function LeadCaptureForm() {
       <FirstContactSummary lead={{ id: savedLeadId, fullName: values.fullName || "Cliente", phone: values.phone || "", carModels: values.carModels || [] }} />
       {submitError ? <p className="rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]" role="alert">{submitError}</p> : null}
       {warning ? <p className="text-xs text-[var(--muted)]">{warning}</p> : null}
+    </section>;
+  }
+
+  if (duplicateLead && pendingDuplicateInput) {
+    return <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-[0_12px_36px_rgba(16,24,40,0.05)] sm:p-5">
+      <p className="eyebrow">Teléfono ya registrado</p>
+      <h2 className="mt-1 text-xl font-black">¿Qué quieres hacer?</h2>
+      <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{duplicateLead.fullName} ya tiene un registro con este número. Todavía no hemos creado otro contacto.</p>
+      <div className="mt-3 rounded-xl bg-white/70 px-3 py-2.5 text-sm"><p className="font-black">{duplicateLead.fullName}</p><p className="mt-0.5 text-[var(--muted)]">{duplicateLead.carModels.join(", ")} · {getStatusLabel(duplicateLead.status)}</p></div>
+      {submitError ? <p className="mt-3 rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]" role="alert">{submitError}</p> : null}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <a className="button-secondary" href={`/dashboard?leadId=${encodeURIComponent(duplicateLead.id)}`}>Abrir lead existente</a>
+        <button type="button" disabled={isCreatingOpportunity} onClick={() => void createNewOpportunity()} className="button-primary">{isCreatingOpportunity ? "Creando…" : "Crear nueva oportunidad"}</button>
+        <button type="button" disabled={isCreatingOpportunity} onClick={() => { setDuplicateLead(null); setPendingDuplicateInput(null); }} className="button-secondary">Volver al formulario</button>
+      </div>
     </section>;
   }
 
@@ -85,7 +125,7 @@ export function LeadCaptureForm() {
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block sm:col-span-2">
             <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-[var(--muted)]">Nombre completo *</span>
-            <input {...register("fullName")} autoComplete="name" placeholder="Ej. Laura Gómez" className="field-input" autoFocus />
+            <input {...fullNameField} onChange={(event) => { event.currentTarget.value = capitalizeNameWords(event.currentTarget.value); void fullNameField.onChange(event); }} autoComplete="name" placeholder="Ej. Laura Gómez" className="field-input" autoFocus />
             <FieldError message={formState.errors.fullName?.message} />
           </label>
           <label className="block sm:col-span-2">

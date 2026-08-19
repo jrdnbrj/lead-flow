@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, CircleAlert, LayoutDashboard, MessageCircle } from "lucide-react";
+import { CheckCircle2, CircleAlert, MessageCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { RefreshQrButton } from "@/components/whatsapp/refresh-qr-button";
@@ -105,9 +105,8 @@ export function WhatsappConnectionSection({ connection }: { connection: Whatsapp
     ) : null}
 
     <div className="mt-7 flex flex-wrap items-center gap-2">
-      <RefreshQrButton label={isConnected ? "Actualizar estado" : "Generar QR nuevo"} />
+      {!isConnected ? <RefreshQrButton label="Generar QR nuevo" /> : null}
       {isConnected ? <UnlinkWhatsappButton /> : null}
-      <a href="/dashboard" className="button-secondary"><LayoutDashboard size={17} />Ir al dashboard</a>
     </div>
   </section>;
 }
