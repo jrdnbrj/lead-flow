@@ -6,7 +6,7 @@ import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { claimFirstContactEffect, beginFirstContactEffect, getCarModelContactAssets, recordFirstContactEffectResult, requestFirstContact, retryFirstContactEffect } from "@/lib/leads/repository";
 import type { Lead } from "@/lib/domain/lead";
 import { orderFirstContactItems } from "@/lib/first-contact/order";
-import type { FirstContactItem, FirstContactOperationResult, FirstContactProvider, ProviderOutcome } from "@/lib/first-contact/types";
+import type { FirstContactItem, FirstContactOperationResult, FirstContactProvider, ProviderOutcome, FirstContactResource } from "@/lib/first-contact/types";
 import { ensureEvolutionWebhook } from "@/lib/whatsapp/service";
 
 function digest(value: string): string { return createHash("sha256").update(value).digest("hex"); }
@@ -66,6 +66,35 @@ async function executeFirstContactItem(input: {
 
   await recordPreparedFirstContactItem({ prepared, request, outcome });
   return { attempted: true, outcome };
+}
+
+export async function retryFirstContactResourceFromRecovery(
+  lead: FirstContactLead,
+  resourceKind: FirstContactResource,
+  provider: FirstContactProvider,
+  idempotencyKey: string,
+): Promise<FirstContactOperationResult | null> {
+  const request = await buildFirstContactRequest(lead);
+  await ensureEvolutionWebhook().catch(() => false);
+
+  const initial = await requestFirstContact({
+    leadId: lead.id,
+    configurationDigest: request.configurationDigest,
+    items: request.items,
+    idempotencyKey,
+  });
+  if (!initial) return null;
+
+  const item = initial.items.find((candidate) => candidate.resourceKind === resourceKind);
+  if (item) await executeFirstContactItem({ item, lead, request, idempotencyKey, provider });
+
+  const final = await requestFirstContact({
+    leadId: lead.id,
+    configurationDigest: request.configurationDigest,
+    items: request.items,
+    idempotencyKey,
+  });
+  return final ? { ...final, replayed: initial.replayed } : null;
 }
 
 async function sendFirstContactItem(item: FirstContactItem, lead: FirstContactLead, request: Awaited<ReturnType<typeof buildFirstContactRequest>>, provider: FirstContactProvider): Promise<ProviderOutcome> {

@@ -3,12 +3,12 @@
 import type { ActionResponse, ConversationState, CreateLeadInput, ExistingLeadSummary, FollowUpAction, Lead, ScheduleLeadActionInput, SendLeadInput, UpdateFollowUpActionInput, WhatsappSendResult } from "@/lib/domain/lead";
 import { authRequiredResult, isAuthRequiredEnabled } from "@/lib/auth/auth-required";
 import { requireAdvisor } from "@/lib/auth/advisor";
-import { executeFirstContact, retryFirstContact } from "@/lib/first-contact/command";
+import { executeFirstContact, retryFirstContact, retryFirstContactResourceFromRecovery } from "@/lib/first-contact/command";
 import { createEvolutionFirstContactProvider } from "@/lib/first-contact/provider";
 import type { FirstContactOperationResult } from "@/lib/first-contact/types";
 import { getResponseReminderAt, getStartOfSellerDayAfter, resolveScheduleShortcut } from "@/lib/leads/follow-up";
 import { clearLeadAction, correctInboundResponseForAdvisor, createLead, deleteCanceledFollowUpAction, findLeadByPhone, getInboundMessageCreatedAtForAdvisor, getLeadById, recordPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState } from "@/lib/leads/repository";
-import { correctInboundResponseSchema, firstContactRetrySchema, leadSchema, purchaseDecisionSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema } from "@/lib/leads/validation";
+import { correctInboundResponseSchema, firstContactRecoveryRetrySchema, firstContactRetrySchema, leadSchema, purchaseDecisionSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema } from "@/lib/leads/validation";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
 
 async function requireAdvisorAction<T>(): Promise<ActionResponse<T> | null> {
@@ -109,6 +109,22 @@ export async function retryFirstContactResourceAction(input: { leadId: string; e
     const lead = await getLeadById(parsed.data.leadId);
     if (!lead) return { success: false, error: "No encontramos este lead para reintentar el recurso." };
     const result = await retryFirstContact(lead, parsed.data.effectId, parsed.data.expectedEffectVersion, parsed.data.idempotencyKey, createEvolutionFirstContactProvider());
+    if (!result) return { success: false, error: "No pudimos reintentar el recurso. Puedes actualizar e intentarlo nuevamente." };
+    return { success: true, data: result, message: "Reintento procesado." };
+  } catch {
+    return { success: false, error: "No pudimos reintentar el recurso sin cambiar parcialmente el estado." };
+  }
+}
+
+export async function retryFirstContactRecoveryResourceAction(input: { leadId: string; resourceKind: "MESSAGE" | "PHOTOS" | "TECHNICAL_SHEET"; idempotencyKey: string }): Promise<ActionResponse<FirstContactOperationResult>> {
+  const parsed = firstContactRecoveryRetrySchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "El reintento no es válido." };
+  const auth = await requireAdvisorAction<FirstContactOperationResult>();
+  if (auth) return auth;
+  try {
+    const lead = await getLeadById(parsed.data.leadId);
+    if (!lead) return { success: false, error: "No encontramos este lead para reintentar el recurso." };
+    const result = await retryFirstContactResourceFromRecovery(lead, parsed.data.resourceKind, createEvolutionFirstContactProvider(), parsed.data.idempotencyKey);
     if (!result) return { success: false, error: "No pudimos reintentar el recurso. Puedes actualizar e intentarlo nuevamente." };
     return { success: true, data: result, message: "Reintento procesado." };
   } catch {

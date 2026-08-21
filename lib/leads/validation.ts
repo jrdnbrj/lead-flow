@@ -14,6 +14,12 @@ export const firstContactRetrySchema = z.object({
   idempotencyKey: z.string().trim().min(16).max(200),
 });
 
+export const firstContactRecoveryRetrySchema = z.object({
+  leadId: z.string().trim().min(1),
+  resourceKind: z.enum(["MESSAGE", "PHOTOS", "TECHNICAL_SHEET"]),
+  idempotencyKey: z.string().trim().min(16).max(200),
+});
+
 export const scheduleLeadActionSchema = z.object({
   leadId: z.string().trim().min(1),
   actionType: z.enum(["CALL", "WHATSAPP", "QUOTE", "OTHER"]),
