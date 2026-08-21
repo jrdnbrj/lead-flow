@@ -44,8 +44,11 @@ function formatRelativeDate(date: string): string {
   return formatted.replace(".", "");
 }
 
-function formatToday(): string {
-  return new Intl.DateTimeFormat("es-EC", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Guayaquil" }).format(new Date());
+function formatToday(nowIso: string): string {
+  const now = new Date(nowIso);
+  const date = new Intl.DateTimeFormat("es-EC", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Guayaquil" }).format(now);
+  const time = new Intl.DateTimeFormat("es-EC", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "America/Guayaquil" }).format(now);
+  return `${date} · ${time}`;
 }
 
 function temperatureClasses(temperature: LeadTemperature): string {
@@ -93,7 +96,7 @@ function getInitialDashboardPage(leads: Lead[], leadId: string | null): number {
   return leadIndex >= 0 ? Math.floor(leadIndex / DASHBOARD_PAGE_SIZE) + 1 : 1;
 }
 
-export function DashboardClient({ initialLeads, initialExpandedLeadId = null }: { initialLeads: Lead[]; initialExpandedLeadId?: string | null }) {
+export function DashboardClient({ initialLeads, initialExpandedLeadId = null, initialNowIso }: { initialLeads: Lead[]; initialExpandedLeadId?: string | null; initialNowIso: string }) {
   const router = useRouter();
   const [temperature, setTemperature] = useState<TemperatureFilter>("ALL");
   const [status, setStatus] = useState<StatusFilter>("ALL");
@@ -209,7 +212,7 @@ function refreshAllLeads() {
   return (
     <div className="space-y-2.5">
       <section className="mb-1 flex flex-wrap items-center justify-between gap-0.5 border-b border-black/[0.06] pb-1.5">
-        <p className="eyebrow">{formatToday()}</p>
+        <p className="eyebrow">{formatToday(initialNowIso)}</p>
         <div className="flex flex-wrap gap-1">
           <button type="button" onClick={refreshAllLeads} disabled={isRefreshing} className="button-secondary dashboard-header-action" aria-label="Actualizar todos los contactos" title="Volver a consultar todos los contactos"><RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />{isRefreshing ? "Actualizando" : "Actualizar"}</button>
           <button type="button" onClick={exportToXlsx} className="dashboard-header-action text-[var(--muted)] hover:bg-black/[0.04]"><Download size={14} />Exportar</button>
@@ -292,6 +295,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
   const [isPurchaseConfirming, setIsPurchaseConfirming] = useState(false);
   const [isRecordingPurchase, setIsRecordingPurchase] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isRecoveryConfirming, setIsRecoveryConfirming] = useState(false);
   const [, startStateSync] = useTransition();
 
   useEffect(() => {
@@ -305,8 +309,11 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
   }, [lead.conversationState, lead.followUpActions, lead.whatsappStatus, lead.inboundManualDecision, lead.purchaseDecisionAt]);
 
   const isReminderDue = followUpActions.some(isDueAction);
-  const firstContactMessageAccepted = lead.firstContact?.items.some((item) => item.resourceKind === "MESSAGE" && item.result === "ACCEPTED") ?? false;
-  const canSend = !firstContactMessageAccepted && (whatsappStatus === "PENDING" || whatsappStatus === "FAILED");
+  const firstContactHasRetryableItem = lead.firstContact?.items.some((item) => item.result === null || item.result === "FAILED" || item.result === "UNKNOWN") ?? false;
+  const hasOutboundEvidence = Boolean(lead.lastAgentMessageAt || lead.lastMessageDirection === "OUTBOUND" || whatsappStatus !== "PENDING");
+  const firstContactNeedsRecovery = !lead.firstContact && hasOutboundEvidence;
+  const canSend = firstContactHasRetryableItem || (!lead.firstContact && (whatsappStatus === "PENDING" || whatsappStatus === "FAILED" || firstContactNeedsRecovery));
+  const sendIsRecovery = firstContactHasRetryableItem || firstContactNeedsRecovery;
   const nextOpenAction = getNextOpenAction({ ...lead, followUpActions });
   const inboundClassification = lead.inboundClassification;
   const visibleConversationState = getVisibleConversationState(lead, conversationState);
@@ -349,6 +356,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
 
   async function sendMessage() {
     if (isSending || !canSend) return;
+    setIsRecoveryConfirming(false);
     setIsSending(true);
     setSendError(null);
     setSendInfo(null);
@@ -356,7 +364,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
     if (response.success && response.data) {
       setWhatsappStatus(response.data.whatsappStatus);
       if (response.data.whatsappStatus === "SENT") setConversationState("WAITING_CUSTOMER");
-      setSendInfo(response.warning || "Mensaje enviado automáticamente por WhatsApp. Los estados se actualizarán aquí.");
+      setSendInfo(response.warning || (sendIsRecovery ? "Intentamos reconstruir el primer contacto. Revisa el estado de cada recurso." : "Mensaje enviado automáticamente por WhatsApp. Los estados se actualizarán aquí."));
       router.refresh();
     } else {
       setSendError(response.message || response.error || "No fue posible enviar el mensaje.");
@@ -410,7 +418,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
           <a aria-label={`Llamar a ${lead.fullName}`} href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} className="icon-action icon-action-phone" title="Llamar" onClick={(event) => event.stopPropagation()}><Phone size={20} /></a>
           <LeadContactActions compact showWhatsApp={false} showShare={false} contact={{ name: lead.fullName, phone: lead.phone }} />
           <button type="button" aria-label={`Ver información de ${lead.fullName}`} title="Ver información del lead" onClick={(event) => { event.stopPropagation(); setIsDetailsOpen(true); }} className="icon-action"><FileText size={20} /></button>
-          <button type="button" aria-label={`Enviar WhatsApp a ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); void sendMessage(); }} disabled={isSending || !canSend} className={`send-whatsapp-button ${!canSend ? "send-whatsapp-button-sent" : ""}`} title={!canSend ? "Mensaje ya enviado; no se duplicará" : whatsappStatus === "FAILED" ? "Reintentar envío automático" : "Enviar WhatsApp automáticamente"}>{isSending ? <LoaderCircle size={20} className="animate-spin" /> : !canSend ? <CheckCircle2 size={20} /> : <Send size={20} />}<span className="hidden sm:inline">{isSending ? "Enviando" : !canSend ? "Enviado" : whatsappStatus === "FAILED" ? "Reintentar" : "Enviar"}</span></button>
+          <button type="button" aria-label={`${sendIsRecovery ? "Reintentar" : "Enviar"} WhatsApp a ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); if (sendIsRecovery) setIsRecoveryConfirming(true); else void sendMessage(); }} disabled={isSending || !canSend} className={`send-whatsapp-button ${!canSend ? "send-whatsapp-button-sent" : ""}`} title={!canSend ? "Mensaje ya enviado y confirmado en el detalle" : sendIsRecovery ? "No hay confirmación completa del primer contacto; intentar de nuevo" : whatsappStatus === "FAILED" ? "Reintentar envío automático" : "Enviar WhatsApp automáticamente"}>{isSending ? <LoaderCircle size={20} className="animate-spin" /> : !canSend ? <CheckCircle2 size={20} /> : sendIsRecovery ? <RefreshCw size={20} /> : <Send size={20} />}<span className="hidden sm:inline">{isSending ? "Enviando" : !canSend ? "Enviado" : sendIsRecovery ? "Reintentar" : whatsappStatus === "FAILED" ? "Reintentar" : "Enviar"}</span></button>
           <button type="button" aria-label={purchaseDecisionAt ? "Compra registrada" : "Registrar compra"} title={purchaseDecisionAt ? "Compra registrada" : "Registrar compra"} disabled={Boolean(purchaseDecisionAt)} onClick={(event) => { event.stopPropagation(); if (!purchaseDecisionAt) setIsPurchaseConfirming(true); }} className={`icon-action purchase-action ${purchaseDecisionAt ? "purchase-action-registered" : ""}`}><CircleDollarSign size={20} /></button>
           <a aria-label={`Abrir WhatsApp manual para ${lead.fullName}`} href={`https://wa.me/${formatPhoneForWhatsapp(lead.phone)}`} target="_blank" rel="noreferrer" className="icon-action icon-action-whatsapp" title="Abrir chat de WhatsApp" onClick={(event) => event.stopPropagation()}><WhatsAppLogo size={24} /></a>
           <button type="button" aria-expanded={isExpanded} aria-label={isExpanded ? `Ocultar detalles de ${lead.fullName}` : `Mostrar detalles de ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); toggleExpanded(); }} className="icon-action compact-expand-action" title={isExpanded ? "Ocultar detalles" : "Ver detalles"}>{isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
@@ -425,11 +433,12 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
     {isExpanded && purchaseDecisionAt ? <p className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-emerald-700"><CheckCircle2 size={14} />Compra registrada · {new Intl.DateTimeFormat("es-EC", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Guayaquil" }).format(new Date(purchaseDecisionAt))}</p> : null}
 
     {isExpanded ? <FollowUpActions leadId={lead.id} actions={followUpActions} onActionsChange={setFollowUpActions} onError={setSendError} onInfo={setSendInfo} /> : null}
-    {isExpanded && lead.firstContact ? <FirstContactSummary key={`${lead.id}-${lead.firstContact.operation.operationVersion}`} lead={lead} initialOperation={lead.firstContact} /> : null}
+    {isExpanded && (lead.firstContact || hasOutboundEvidence) ? <FirstContactSummary key={`${lead.id}-${lead.firstContact?.operation.operationVersion ?? "recovery"}`} lead={lead} initialOperation={lead.firstContact} /> : null}
     {isExpanded && lead.lastCustomerMessageAt ? <p className="mt-3 text-[11px] text-[var(--muted)]">Última respuesta del cliente registrada. Las acciones pendientes se cancelan cuando llega una nueva respuesta.</p> : null}
     {isExpanded && <div className="mt-3 flex items-center justify-between gap-3 border-t border-black/[0.06] pt-3"><span className="text-[11px] text-[var(--muted)]">Se ocultará de la lista y dejará de generar recordatorios.</span><button type="button" onClick={(event) => { event.stopPropagation(); setIsDeleteModalOpen(true); setSendError(null); }} disabled={isDeleting} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-black text-[#b33a2c] hover:bg-[#fff0ee] disabled:opacity-50"><Trash2 size={14} />Eliminar contacto</button></div>}
     {isExpanded && sendError ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-red-600"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{sendError}</p> : null}{isExpanded && sendInfo ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-emerald-700"><CheckCircle2 size={14} className="mt-0.5 shrink-0" />{sendInfo}</p> : null}
     {isDetailsOpen ? <div role="presentation" onClick={(event) => { event.stopPropagation(); setIsDetailsOpen(false); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby={`details-title-${lead.id}`} onClick={(event) => event.stopPropagation()} className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_24px_80px_rgba(16,24,40,0.24)]"><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Información del lead</p><h2 id={`details-title-${lead.id}`} className="mt-1 text-lg font-black">{lead.fullName}</h2><p className="text-xs font-bold text-[var(--muted)]">{lead.phone}</p></div><button type="button" aria-label="Cerrar información del lead" title="Cerrar" onClick={() => setIsDetailsOpen(false)} className="icon-action"><X size={18} /></button></div><dl className="mt-4 grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Interés</dt><dd className="mt-1 font-bold text-[var(--ink)]">{lead.carModels.length ? lead.carModels.join(", ") : lead.carModel}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Momento de compra</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getTimeframeLabel(lead.timeframe)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Forma de pago</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getPaymentMethodLabel(lead.paymentMethod)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Tiene vehículo como parte de pago</dt><dd className="mt-1 font-bold text-[var(--ink)]">{lead.tradeInCar ? "Sí" : "No"}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Estado</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getStatusLabel(lead.status)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Prioridad</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getTemperatureLabel(lead.temperature)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Agregado</dt><dd className="mt-1 font-bold text-[var(--ink)]">{new Intl.DateTimeFormat("es-EC", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Guayaquil" }).format(new Date(lead.createdAt))}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Score</dt><dd className="mt-1 font-bold text-[var(--ink)]">{lead.score}/100</dd></div></dl><div className="mt-3 rounded-xl border border-black/[0.06] bg-white p-3"><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Nota rápida</p><p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-[var(--ink)]">{lead.notes?.trim() || "Sin nota"}</p></div></div></div> : null}
+    {isRecoveryConfirming ? <div role="presentation" onClick={(event) => { event.stopPropagation(); setIsRecoveryConfirming(false); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby={`recovery-title-${lead.id}`} onClick={(event) => event.stopPropagation()} className="w-full max-w-sm rounded-[22px] border border-black/[0.08] bg-white p-5 shadow-[0_24px_80px_rgba(16,24,40,0.24)]"><h2 id={`recovery-title-${lead.id}`} className="text-lg font-black">Reintentar primer contacto</h2><p className="mt-2 text-sm leading-6 text-[var(--muted)]">No tenemos confirmación completa del intento anterior. Reintentar puede volver a enviar los recursos que no estén confirmados.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsRecoveryConfirming(false)} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cancelar</button><button type="button" onClick={() => void sendMessage()} className="button-primary min-h-9 px-3 py-2 text-[11px]">Reintentar</button></div></div></div> : null}
     {isPurchaseConfirming ? <div role="presentation" onClick={(event) => { event.stopPropagation(); if (!isRecordingPurchase) setIsPurchaseConfirming(false); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby={`purchase-title-${lead.id}`} onClick={(event) => event.stopPropagation()} className="w-full max-w-sm rounded-[22px] border border-black/[0.08] bg-white p-5 shadow-[0_24px_80px_rgba(16,24,40,0.24)]"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#fff8df] text-[#8a5b00]"><CircleDollarSign size={20} /></span><div><h2 id={`purchase-title-${lead.id}`} className="text-lg font-black">Registrar compra</h2><p className="mt-1 text-sm leading-6 text-[var(--muted)]">¿Confirmas que {lead.fullName} decidió comprar?</p></div></div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsPurchaseConfirming(false)} disabled={isRecordingPurchase} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cancelar</button><button type="button" disabled={isRecordingPurchase} onClick={() => void recordPurchaseDecision()} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isRecordingPurchase ? "Registrando…" : "Confirmar"}</button></div></div></div> : null}
     {isDeleteModalOpen ? <div role="presentation" onClick={(event) => { event.stopPropagation(); if (!isDeleting) setIsDeleteModalOpen(false); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby={`delete-title-${lead.id}`} onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-[26px] border border-black/[0.08] bg-white p-5 shadow-[0_24px_80px_rgba(16,24,40,0.24)] sm:p-6"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#fff0ee] text-[#b33a2c]"><Trash2 size={18} /></span><div><h2 id={`delete-title-${lead.id}`} className="text-lg font-black">¿Eliminar a {lead.fullName}?</h2><p className="mt-1 text-sm leading-6 text-[var(--muted)]">El contacto se ocultará del resumen, dejará de generar recordatorios y no se eliminarán físicamente sus datos. Podrás conservarlo para auditoría.</p></div></div>{sendError ? <p className="mt-4 flex items-start gap-2 rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{sendError}</p> : null}<div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsDeleteModalOpen(false)} disabled={isDeleting} className="button-secondary">Cancelar</button><button type="button" onClick={() => void deleteContact()} disabled={isDeleting} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#b33a2c] px-4 text-sm font-black text-white disabled:opacity-60"><Trash2 size={16} />{isDeleting ? "Eliminando" : "Eliminar contacto"}</button></div></div></div> : null}
   </article>;

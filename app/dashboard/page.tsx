@@ -15,5 +15,5 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
   const leads = await getLeads();
   const params = await searchParams;
   const leadId = Array.isArray(params?.leadId) ? params.leadId[0] : params?.leadId;
-  return <DashboardClient initialLeads={leads} initialExpandedLeadId={leadId ?? null} />;
+  return <DashboardClient initialLeads={leads} initialExpandedLeadId={leadId ?? null} initialNowIso={new Date().toISOString()} />;
 }

@@ -9,15 +9,41 @@ export function getResponseReminderAt(messageAt: string): string {
   return new Date(new Date(messageAt).getTime() + RESPONSE_REMINDER_DELAY_MINUTES * 60_000).toISOString();
 }
 
-function getSellerDateParts(date: Date): { year: number; month: number; day: number } {
+type SellerDateTimeParts = { year: number; month: number; day: number; hour: number; minute: number; second: number };
+
+function getSellerDateTimeParts(date: Date): SellerDateTimeParts {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: SELLER_TIME_ZONE,
     year: "numeric",
     month: "numeric",
     day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
   }).formatToParts(date);
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return { year: Number(values.year), month: Number(values.month), day: Number(values.day) };
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+    second: Number(values.second),
+  };
+}
+
+function getSellerDateParts(date: Date): Pick<SellerDateTimeParts, "year" | "month" | "day"> {
+  const { year, month, day } = getSellerDateTimeParts(date);
+  return { year, month, day };
+}
+
+/**
+ * Ecuador has a fixed UTC-5 offset. The application talks to the database in
+ * UTC instants, but product rules are expressed in the advisor's local clock.
+ */
+function sellerLocalDateTimeToUtc(parts: { year: number; month: number; day: number; hour: number; minute?: number; second?: number }): string {
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour + 5, parts.minute ?? 0, parts.second ?? 0)).toISOString();
 }
 
 /**
@@ -31,14 +57,13 @@ export function getStartOfSellerDayAfter(days: number, reference = new Date()): 
 
 export function resolveScheduleShortcut(shortcut: ScheduleShortcut, reference = new Date()): string {
   if (shortcut === "POSTPONE_PLUS_ONE_HOUR") return new Date(reference.getTime() + 60 * 60 * 1000).toISOString();
-  const local = getSellerDateParts(reference);
-  const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: SELLER_TIME_ZONE, hour: "2-digit", hour12: false }).format(reference));
+  const local = getSellerDateTimeParts(reference);
   if (shortcut === "POSTPONE_LATER") {
-    const days = hour < 16 ? 0 : 1;
-    return new Date(Date.UTC(local.year, local.month - 1, local.day + days, 21, 0, 0, 0)).toISOString();
+    if (local.hour < 16) return sellerLocalDateTimeToUtc({ ...local, hour: 16, minute: 0, second: 0 });
+    return new Date(reference.getTime() + 60 * 60 * 1000).toISOString();
   }
   const days = shortcut === "POSTPONE_TOMORROW" ? 1 : 3;
-  return new Date(Date.UTC(local.year, local.month - 1, local.day + days, 14, 0, 0, 0)).toISOString();
+  return sellerLocalDateTimeToUtc({ ...local, day: local.day + days, hour: 14, minute: 0, second: 0 });
 }
 
 export function isLeadReminderDue(nextActionAt: string | null, reference = new Date()): boolean {

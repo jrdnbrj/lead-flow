@@ -55,13 +55,14 @@ button, a { touch-action: manipulation; }
 .send-whatsapp-button:hover { background: #25d366; color: white; }
 .send-whatsapp-button:disabled { cursor: not-allowed; opacity: .72; }
 .send-whatsapp-button-sent { background: #e9eef0; color: #52616b; }
-.compact-lead-header .icon-action, .compact-lead-header .send-whatsapp-button { min-height: 42px; min-width: 42px; border-radius: 12px; padding: 0; }
-.compact-lead-header .send-whatsapp-button { padding-inline: .75rem; }
+.compact-lead-header .icon-action, .compact-lead-header .send-whatsapp-button { min-height: 38px; min-width: 38px; border-radius: 10px; padding: 0; }
+.compact-lead-header .icon-action svg, .compact-lead-header .send-whatsapp-button svg { width: 18px; height: 18px; }
+.compact-lead-header .send-whatsapp-button { padding-inline: .65rem; }
 .compact-lead-actions { overflow: visible; }
-.compact-lead-header .icon-action-whatsapp { min-height: 42px; min-width: 42px; padding: 0; border-color: #b7ecc9; background: #e9fff0; }
-.compact-lead-header .icon-action-whatsapp svg { display: block; width: 24px; height: 24px; }
-.compact-lead-header .compact-expand-action { min-height: 42px; min-width: 42px; padding: 0; }
-.compact-lead-header .lead-contact-save { min-height: 42px; min-width: 42px; padding: 0; border-color: #b9df73; background: var(--lime); color: var(--ink); }
+.compact-lead-header .icon-action-whatsapp { min-height: 38px; min-width: 38px; padding: 0; border-color: #b7ecc9; background: #e9fff0; }
+.compact-lead-header .icon-action-whatsapp svg { display: block; width: 21px; height: 21px; }
+.compact-lead-header .compact-expand-action { min-height: 38px; min-width: 38px; padding: 0; }
+.compact-lead-header .lead-contact-save { min-height: 38px; min-width: 38px; padding: 0; border-color: #b9df73; background: var(--lime); color: var(--ink); }
 .compact-lead-header .lead-contact-save:hover { border-color: #91bd3d; background: #b7e94f; }
 .compact-lead-header .purchase-action { border-color: #ead7a8; background: #fff8df; color: #8a5b00; }
 .compact-lead-header .purchase-action:hover { border-color: #cba44c; background: #ffefb7; }
