@@ -6,6 +6,7 @@ import { formatPhoneForWhatsapp } from "@/lib/domain/lead";
 import { classifyInboundMessage } from "@/lib/leads/inbound-classifier";
 import { InboundMessageLedger } from "@/lib/leads/inbound-dedup";
 import { normalizeInboundPayload } from "@/lib/leads/inbound-dto";
+import { getResponseReminderAt } from "@/lib/leads/follow-up";
 import { createLeadMessageForProvider, findLeadByPhoneForProvider, findLeadMessageByProviderIdForProvider, markLeadAfterOutboundMessageForProvider, markLeadConversationActiveForProvider, markLeadCustomerReplyForProvider, persistInboundMessageForProvider, resolveInboundLeadMatchForProvider, updateLeadMessageForProvider, upsertInboundResponseActionForProvider } from "@/lib/leads/repository";
 import { extractEvolutionMessageId, normalizeEvolutionStatus } from "@/lib/whatsapp/service";
 
@@ -153,13 +154,13 @@ async function processIncomingMessage(item: JsonRecord, event: string, ledger: I
   });
   if (!persisted) return { handled: false, retryable: true };
   if (persisted.replayed === true || persisted.status === "REPLAYED") return { handled: true, retryable: false };
-  const replyProjection = await markLeadCustomerReplyForProvider(match.leadId, normalized.dto.body, normalized.dto.timestamp);
+  const replyProjection = await markLeadCustomerReplyForProvider(match.leadId, normalized.dto.body, normalized.dto.timestamp, classification);
   if (!replyProjection.ok) return { handled: false, retryable: true };
   if (replyProjection.stale) return { handled: true, retryable: false };
   if (classification === "NO_SUGGESTION") return { handled: true, retryable: false };
   const sourceMessageId = typeof persisted.message_id === "string" ? persisted.message_id : null;
   if (!sourceMessageId) return { handled: false, retryable: true };
-  const scheduledFor = new Date(new Date(normalized.dto.timestamp).getTime() + 60 * 60 * 1000).toISOString();
+  const scheduledFor = getResponseReminderAt(normalized.dto.timestamp);
   const action = await upsertInboundResponseActionForProvider({
     leadId: match.leadId,
     sourceMessageId,

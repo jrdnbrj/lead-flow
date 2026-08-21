@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireAdvisor } from "@/lib/auth/advisor";
+import { resolveScheduleShortcut, type ScheduleShortcut } from "@/lib/leads/follow-up";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type PushQuery = { maybeSingle: () => Promise<{ data: { action_id: string } | null }>; eq: (column: string, value: unknown) => PushQuery };
@@ -28,7 +29,8 @@ export async function GET(request: Request) {
   const { data: delivery } = await pushDb.from("push_deliveries").select("action_id").eq("id", deliveryId).eq("user_id", auth.advisorUserId).maybeSingle();
   if (!delivery) return redirectTo("/dashboard?push=stale");
   const status = command === "DONE" ? "DONE" : command === "IGNORE" ? "IGNORED" : "POSTPONED";
-  const scheduledFor = command === "POSTPONE_PLUS_ONE_HOUR" ? new Date(Date.now() + 3600000).toISOString() : command === "POSTPONE_LATER" ? new Date(Date.now() + 2 * 3600000).toISOString() : command === "POSTPONE_TOMORROW" ? new Date(Date.now() + 86400000).toISOString() : command === "POSTPONE_IN_THREE_DAYS" ? new Date(Date.now() + 3 * 86400000).toISOString() : null;
+  const shortcut = (command === "POSTPONE_PLUS_ONE_HOUR" || command === "POSTPONE_LATER" || command === "POSTPONE_TOMORROW" || command === "POSTPONE_IN_THREE_DAYS" ? command : null) as ScheduleShortcut | null;
+  const scheduledFor = shortcut ? resolveScheduleShortcut(shortcut) : null;
   const { error } = await pushDb.rpc("transition_lead_follow_up_action_v1", { p_action_id: delivery.action_id, p_status: status, p_expected_action_version: actionVersion, p_scheduled_for: scheduledFor ?? undefined, p_note: undefined, p_idempotency_key: `push-${deliveryId}-${command}-${actionVersion}`, p_cancel_reason: "PUSH_COMMAND" });
   return redirectTo(`/dashboard?push=${error ? "error" : "applied"}`);
 }

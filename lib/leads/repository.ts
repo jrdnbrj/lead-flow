@@ -629,6 +629,12 @@ export async function markLeadAfterOutboundMessageForProvider(id: string, status
   if (!context || !(await isProviderOwnedLead(context, id))) return false;
   if (status === "FAILED") return updateLeadWhatsappStatusWithClient(context.supabase, id, status, "WhatsApp no confirmó el envío.");
 
+  const { error: responseActionsError } = await context.supabase.from("lead_follow_up_actions").update({
+    status: "CANCELED",
+    completed_at: createdAt,
+    note: "Cancelada porque el asesor respondió al cliente.",
+  }).eq("lead_id", id).eq("action_type", "RESPONSE").in("status", ["PENDING", "POSTPONED"]);
+  if (responseActionsError) return false;
   const { error } = await context.supabase.from("leads").update({
     whatsapp_status: status,
     whatsapp_last_error: null,
@@ -726,6 +732,17 @@ export async function clearLeadAction(id: string): Promise<boolean> {
   return true;
 }
 
+export async function deleteCanceledFollowUpAction(id: string): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return false;
+  const { error } = await supabase
+    .from("lead_follow_up_actions")
+    .delete()
+    .eq("id", id)
+    .eq("status", "CANCELED");
+  return !error;
+}
+
 export async function softDeleteLead(id: string): Promise<boolean> {
   const supabase = createSupabaseAdminClient();
   if (!supabase) return false;
@@ -744,7 +761,9 @@ export async function markLeadCustomerReply(id: string, preview: string | null, 
 
 type CustomerReplyProjection = { ok: boolean; stale: boolean };
 
-async function markLeadCustomerReplyWithClient(supabase: LeadflowDbClient, id: string, preview: string | null, messageAt: string): Promise<CustomerReplyProjection> {
+type InboundResponseClassification = "NO_SUGGESTION" | "PENDING" | "REVIEW";
+
+async function markLeadCustomerReplyWithClient(supabase: LeadflowDbClient, id: string, preview: string | null, messageAt: string, classification?: InboundResponseClassification): Promise<CustomerReplyProjection> {
   const { data: lead, error: leadReadError } = await supabase
     .from("leads")
     .select("last_customer_message_at")
@@ -755,28 +774,34 @@ async function markLeadCustomerReplyWithClient(supabase: LeadflowDbClient, id: s
   const incomingAt = Date.parse(messageAt);
   const currentAt = lead.last_customer_message_at ? Date.parse(lead.last_customer_message_at) : Number.NaN;
   if (Number.isFinite(currentAt) && Number.isFinite(incomingAt) && incomingAt <= currentAt) return { ok: true, stale: true };
-  const { error: actionsError } = await supabase.from("lead_follow_up_actions").update({
+  let actionsQuery = supabase.from("lead_follow_up_actions").update({
     status: "CANCELED",
     completed_at: messageAt,
     note: "Cancelada porque el cliente respondió y la conversación está activa.",
   }).eq("lead_id", id).in("status", ["PENDING", "POSTPONED"]);
-  const { error } = await supabase.from("leads").update({
+  if (classification === "PENDING" || classification === "REVIEW") actionsQuery = actionsQuery.neq("action_type", "RESPONSE");
+  const { error: actionsError } = await actionsQuery;
+  if (actionsError) return { ok: false, stale: false };
+  const leadUpdate: Database["public"]["Tables"]["leads"]["Update"] = {
     conversation_state: "ACTIVE",
-    next_action_at: null,
-    next_action_type: null,
     last_activity_at: messageAt,
     last_customer_message_at: messageAt,
     last_customer_message_preview: preview?.slice(0, 180) ?? null,
-  }).eq("id", id).is("deleted_at", null);
-  if (!actionsError && !error) await supabase.from("leads").update({ status: "CONTACTADO" }).eq("id", id).eq("status", "NUEVO").is("deleted_at", null);
-  return { ok: !actionsError && !error, stale: false };
+  };
+  if (classification !== "PENDING" && classification !== "REVIEW") {
+    leadUpdate.next_action_at = null;
+    leadUpdate.next_action_type = null;
+  }
+  const { error } = await supabase.from("leads").update(leadUpdate).eq("id", id).is("deleted_at", null);
+  if (!error) await supabase.from("leads").update({ status: "CONTACTADO" }).eq("id", id).eq("status", "NUEVO").is("deleted_at", null);
+  return { ok: !error, stale: false };
 }
 
-export async function markLeadCustomerReplyForProvider(id: string, preview: string | null, messageAt: string): Promise<CustomerReplyProjection> {
+export async function markLeadCustomerReplyForProvider(id: string, preview: string | null, messageAt: string, classification?: InboundResponseClassification): Promise<CustomerReplyProjection> {
   const context = await getProviderContext();
   if (!context) return { ok: false, stale: false };
   const owned = await isProviderOwnedLead(context, id);
-  return owned ? markLeadCustomerReplyWithClient(context.supabase, id, preview, messageAt) : { ok: false, stale: false };
+  return owned ? markLeadCustomerReplyWithClient(context.supabase, id, preview, messageAt, classification) : { ok: false, stale: false };
 }
 
 export async function markLeadConversationActiveForProvider(id: string): Promise<boolean> {

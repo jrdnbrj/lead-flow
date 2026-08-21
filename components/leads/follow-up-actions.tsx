@@ -1,11 +1,11 @@
 "use client";
 
-import { Ban, CalendarClock, Check, LoaderCircle, RotateCcw, X } from "lucide-react";
+import { Ban, CalendarClock, Check, LoaderCircle, RotateCcw, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 import type { FollowUpAction, ScheduleShortcut } from "@/lib/domain/lead";
 import { getFollowUpActionStatusLabel, getNextActionLabel } from "@/lib/domain/lead";
-import { clearLeadActionAction, scheduleLeadActionAction, updateFollowUpActionAction } from "@/lib/leads/actions";
+import { clearLeadActionAction, deleteCanceledFollowUpActionAction, scheduleLeadActionAction, updateFollowUpActionAction } from "@/lib/leads/actions";
 import { formatElapsedSince, formatScheduledDateTime, isLeadReminderDue } from "@/lib/leads/follow-up";
 
 type TransitionStatus = "DONE" | "POSTPONED" | "IGNORED" | "CANCELED";
@@ -60,7 +60,11 @@ export function FollowUpActions({
   const [isScheduling, setIsScheduling] = useState(false);
   const [isIgnoringAll, setIsIgnoringAll] = useState(false);
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
+  const [isShowingCanceled, setIsShowingCanceled] = useState(false);
+  const [deletingActionId, setDeletingActionId] = useState<string | null>(null);
   const openActions = actions.filter(isOpenAction);
+  const canceledActions = actions.filter((action) => action.status === "CANCELED");
+  const visibleActions = actions.filter((action) => action.status !== "CANCELED");
   const canSchedule = Boolean(actionType && schedulePreset && (schedulePreset !== "CUSTOM" || customDateTime));
 
   async function schedule() {
@@ -122,15 +126,30 @@ export function FollowUpActions({
     }
   }
 
+  async function deleteCanceledAction(action: FollowUpAction) {
+    if (deletingActionId) return;
+    setDeletingActionId(action.id);
+    onError?.(null);
+    const response = await deleteCanceledFollowUpActionAction(action.id);
+    if (response.success) {
+      onActionsChange(actions.filter((current) => current.id !== action.id));
+      onInfo?.("Acción cancelada eliminada.");
+    } else {
+      onError?.(response.error || "No pudimos quitar esa acción.");
+    }
+    setDeletingActionId(null);
+  }
+
   return <div className="compact-follow-up mt-2 min-w-0 max-w-full overflow-hidden rounded-xl bg-[#faf9f6] p-2">
     <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs font-black"><CalendarClock size={15} />Seguimiento del lead</div>{openActions.length ? <button type="button" disabled={isIgnoringAll || !!busyActionId} aria-busy={isIgnoringAll} onClick={() => void ignoreAll()} className="text-[11px] font-bold text-[var(--muted)] hover:text-[var(--ink)] disabled:cursor-wait disabled:opacity-50">{isIgnoringAll ? "Ignorando…" : "Ignorar pendientes"}</button> : null}</div>
     {isIgnoringAll ? <p className="mt-1 text-[11px] font-bold text-[var(--muted)]" aria-live="polite">Actualizando pendientes…</p> : null}
-    {actions.length ? <div className="mt-2 space-y-1.5">{actions.map((action) => {
+    {visibleActions.length ? <div className="mt-2 space-y-1.5">{visibleActions.map((action) => {
       const due = isOpenAction(action) && isLeadReminderDue(action.scheduledFor);
       return <div key={action.id} className={`rounded-lg border px-2 py-1.5 ${due ? "border-[#f3b257] bg-[#fff8ed]" : "border-black/[0.06] bg-white"}`}>
         <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${actionStatusClasses(action.status)}`}>{getFollowUpActionStatusLabel(action.status)}</span><span className={`text-xs font-black ${due ? "text-[#b94910]" : "text-[var(--ink)]"}`}>{due ? "Vencida · " : ""}{getNextActionLabel(action.actionType)}</span><span className="text-[10px] text-[var(--muted)]">{due ? formatElapsedSince(action.scheduledFor) : formatScheduledDateTime(action.scheduledFor)}</span></div>{action.note ? <p className="mt-0.5 line-clamp-1 text-[10px] text-[var(--muted)]">{action.note}</p> : null}</div>{isOpenAction(action) ? <div className="flex flex-wrap gap-1"><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "DONE")} className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#e4f8e9] px-2 text-[10px] font-black text-[#18733a] disabled:opacity-50"><Check size={12} />Hecha</button><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "POSTPONED")} className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#edf3ff] px-2 text-[10px] font-black text-[#3c5f9b] disabled:opacity-50"><RotateCcw size={12} />+1 día</button><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "IGNORED")} className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#f1f1f1] px-2 py-1 text-[10px] font-black text-[#777c86] disabled:opacity-50"><Ban size={12} />Ignorar</button><button type="button" disabled={busyActionId === action.id || isIgnoringAll} onClick={() => void transition(action, "CANCELED")} className="inline-flex h-7 items-center gap-1 rounded-lg bg-[#f1f1f1] px-2 py-1 text-[10px] font-black text-[#777c86] disabled:opacity-50"><X size={12} />Cancelar</button></div> : null}</div>
       </div>;
     })}</div> : <p className="mt-1 text-[11px] font-semibold text-[var(--muted)]">Sin próxima acción.</p>}
+    {canceledActions.length ? <div className="mt-2 border-t border-black/[0.06] pt-1.5"><button type="button" onClick={() => setIsShowingCanceled((current) => !current)} className="text-[10px] font-bold text-[var(--muted)]">{isShowingCanceled ? "Ocultar" : "Ver"} acciones canceladas ({canceledActions.length})</button>{isShowingCanceled ? <div className="mt-1 space-y-1">{canceledActions.map((action) => <div key={action.id} className="flex items-center justify-between gap-2 rounded-lg border border-black/[0.06] bg-white px-2 py-1.5"><div className="min-w-0"><p className="truncate text-[10px] font-bold text-[var(--muted)]">{getNextActionLabel(action.actionType)} · Cancelada</p>{action.note ? <p className="truncate text-[10px] text-[var(--muted)]">{action.note}</p> : null}</div><button type="button" aria-label="Eliminar acción cancelada" title="Eliminar acción cancelada" disabled={deletingActionId === action.id} onClick={() => void deleteCanceledAction(action)} className="icon-action size-7 shrink-0 text-[var(--muted)] disabled:opacity-50"><Trash2 size={13} /></button></div>)}</div> : null}</div> : null}
     <div className="mt-2 border-t border-black/[0.06] pt-2">
       <div className="grid grid-cols-3 gap-1" role="radiogroup" aria-label="Qué acción realizar">
         {actionTypes.map((option) => <button key={option.value} type="button" role="radio" aria-checked={actionType === option.value} onClick={() => setActionType(option.value)} className={`h-8 rounded-lg border px-1 text-[10px] font-black transition ${actionType === option.value ? "border-[var(--ink)] bg-[var(--ink)] text-white" : "border-black/10 bg-white text-[var(--muted)] hover:border-black/25"}`}>{option.label}</button>)}

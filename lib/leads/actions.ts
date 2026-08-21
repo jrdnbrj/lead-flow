@@ -6,8 +6,8 @@ import { requireAdvisor } from "@/lib/auth/advisor";
 import { executeFirstContact, retryFirstContact } from "@/lib/first-contact/command";
 import { createEvolutionFirstContactProvider } from "@/lib/first-contact/provider";
 import type { FirstContactOperationResult } from "@/lib/first-contact/types";
-import { getStartOfSellerDayAfter, resolveScheduleShortcut } from "@/lib/leads/follow-up";
-import { clearLeadAction, correctInboundResponseForAdvisor, createLead, findLeadByPhone, getInboundMessageCreatedAtForAdvisor, getLeadById, recordPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState } from "@/lib/leads/repository";
+import { getResponseReminderAt, getStartOfSellerDayAfter, resolveScheduleShortcut } from "@/lib/leads/follow-up";
+import { clearLeadAction, correctInboundResponseForAdvisor, createLead, deleteCanceledFollowUpAction, findLeadByPhone, getInboundMessageCreatedAtForAdvisor, getLeadById, recordPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState } from "@/lib/leads/repository";
 import { correctInboundResponseSchema, firstContactRetrySchema, leadSchema, purchaseDecisionSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema } from "@/lib/leads/validation";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
 
@@ -151,6 +151,16 @@ export async function clearLeadActionAction(leadId: string): Promise<ActionRespo
   return { success: persisted, data: persisted ? { leadId } : undefined, error: persisted ? undefined : "No pudimos actualizar el seguimiento." };
 }
 
+export async function deleteCanceledFollowUpActionAction(actionId: string): Promise<ActionResponse<{ actionId: string }>> {
+  if (!actionId.trim()) return { success: false, error: "No encontramos esa acción." };
+  const auth = await requireAdvisorAction<{ actionId: string }>();
+  if (auth) return auth;
+  const deleted = await deleteCanceledFollowUpAction(actionId);
+  return deleted
+    ? { success: true, data: { actionId } }
+    : { success: false, error: "No pudimos quitar esa acción. Actualiza e inténtalo de nuevo." };
+}
+
 export async function correctInboundResponseAction(input: {
   leadId: string;
   decision: "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED";
@@ -169,7 +179,7 @@ export async function correctInboundResponseAction(input: {
     if (parsed.data.decision === "REQUIRES_RESPONSE" && parsed.data.sourceMessageId) {
       const createdAt = await getInboundMessageCreatedAtForAdvisor(parsed.data.sourceMessageId, parsed.data.leadId);
       if (!createdAt) return { success: false, error: "No encontramos el mensaje inbound para corregirlo." };
-      scheduledFor = new Date(new Date(createdAt).getTime() + 60 * 60 * 1000).toISOString();
+      scheduledFor = getResponseReminderAt(createdAt);
     }
     const result = await correctInboundResponseForAdvisor({
       ...parsed.data,

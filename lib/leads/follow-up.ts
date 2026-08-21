@@ -1,8 +1,13 @@
 import type { Lead, NextActionType } from "@/lib/domain/lead";
 
 export const SELLER_TIME_ZONE = "America/Guayaquil";
+export const RESPONSE_REMINDER_DELAY_MINUTES = 10;
 
 export type ScheduleShortcut = "POSTPONE_PLUS_ONE_HOUR" | "POSTPONE_LATER" | "POSTPONE_TOMORROW" | "POSTPONE_IN_THREE_DAYS";
+
+export function getResponseReminderAt(messageAt: string): string {
+  return new Date(new Date(messageAt).getTime() + RESPONSE_REMINDER_DELAY_MINUTES * 60_000).toISOString();
+}
 
 function getSellerDateParts(date: Date): { year: number; month: number; day: number } {
   const parts = new Intl.DateTimeFormat("en-US", {
