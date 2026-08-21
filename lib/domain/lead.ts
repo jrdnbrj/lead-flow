@@ -28,6 +28,7 @@ export const carModels = [
   "M60 Pasajeros",
   "Honor S Cargo",
   "Star Truck",
+  "Alsvin Plus",
   "Otro modelo",
 ] as const;
 
