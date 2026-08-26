@@ -15,20 +15,23 @@ export const paymentMethods = [
 ] as const;
 
 export const carModels = [
-  "V3",
+  "Alsvin V3",
+  "Alsvin Plus",
+  "CS15",
+  "Q05",
   "CS55 Plus R-EV",
-  "Deepal S07 Max",
-  "Deepal S05 E",
-  "Deepal S05 Max Híbrido",
-  "Deepal G318 R-EV",
-  "CS75 Plus",
   "X7 Plus",
-  "HUNTER E",
+  "CS75 Plus",
+  "Deepal S05 Max Híbrido",
+  "Deepal S05 E",
+  "Deepal S07 E",
+  "Deepal S07 REEV",
+  "Deepal G318 R-EV",
   "HUNTER Turbo Diésel",
-  "M60 Pasajeros",
+  "HUNTER E",
   "Honor S Cargo",
   "Star Truck",
-  "Alsvin Plus",
+  "M60 Pasajeros",
   "Otro modelo",
 ] as const;
 
@@ -71,8 +74,11 @@ export interface Lead {
   userId: string | null;
   tenantId: string | null;
   createdAt: string;
+  updatedAt: string;
   fullName: string;
   phone: string;
+  nationalId: string | null;
+  email: string | null;
   carModel: string;
   carModels: string[];
   timeframe: LeadTimeframe;
@@ -106,12 +112,16 @@ export interface Lead {
 export interface CreateLeadInput {
   fullName: string;
   phone: string;
+  nationalId?: string;
+  email?: string;
   carModels: string[];
   timeframe: LeadTimeframe;
   paymentMethod: PaymentMethod;
   tradeInCar: boolean;
   notes?: string;
 }
+
+export type UpdateLeadInput = Pick<CreateLeadInput, "fullName" | "phone" | "nationalId" | "email" | "carModels" | "timeframe" | "paymentMethod" | "tradeInCar" | "notes"> & { leadId: string };
 
 export interface SendLeadInput {
   leadId: string;

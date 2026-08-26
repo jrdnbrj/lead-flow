@@ -660,6 +660,7 @@ export type Database = {
       }
       lead_milestones: {
         Row: {
+          buyer_national_id: string | null
           created_at: string
           id: string
           lead_id: string
@@ -668,6 +669,7 @@ export type Database = {
           recorded_at: string
         }
         Insert: {
+          buyer_national_id?: string | null
           created_at?: string
           id?: string
           lead_id: string
@@ -676,6 +678,7 @@ export type Database = {
           recorded_at?: string
         }
         Update: {
+          buyer_national_id?: string | null
           created_at?: string
           id?: string
           lead_id?: string
@@ -875,6 +878,8 @@ export type Database = {
           deleted_at: string | null
           full_name: string
           id: string
+          national_id: string | null
+          email: string | null
           last_activity_at: string | null
           last_agent_message_at: string | null
           last_customer_message_at: string | null
@@ -907,6 +912,8 @@ export type Database = {
           deleted_at?: string | null
           full_name: string
           id?: string
+          national_id?: string | null
+          email?: string | null
           last_activity_at?: string | null
           last_agent_message_at?: string | null
           last_customer_message_at?: string | null
@@ -939,6 +946,8 @@ export type Database = {
           deleted_at?: string | null
           full_name?: string
           id?: string
+          national_id?: string | null
+          email?: string | null
           last_activity_at?: string | null
           last_agent_message_at?: string | null
           last_customer_message_at?: string | null
@@ -1093,6 +1102,15 @@ export type Database = {
         Args: {
           p_idempotency_key?: string
           p_lead_id: string
+          p_recorded_at?: string
+        }
+        Returns: Json
+      }
+      record_purchase_decision_v2: {
+        Args: {
+          p_idempotency_key?: string
+          p_lead_id: string
+          p_national_id: string
           p_recorded_at?: string
         }
         Returns: Json

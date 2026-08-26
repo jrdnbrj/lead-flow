@@ -1,14 +1,14 @@
 "use server";
 
-import type { ActionResponse, ConversationState, CreateLeadInput, ExistingLeadSummary, FollowUpAction, Lead, ScheduleLeadActionInput, SendLeadInput, UpdateFollowUpActionInput, WhatsappSendResult } from "@/lib/domain/lead";
+import type { ActionResponse, ConversationState, CreateLeadInput, ExistingLeadSummary, FollowUpAction, Lead, ScheduleLeadActionInput, SendLeadInput, UpdateFollowUpActionInput, UpdateLeadInput, WhatsappSendResult } from "@/lib/domain/lead";
 import { authRequiredResult, isAuthRequiredEnabled } from "@/lib/auth/auth-required";
 import { requireAdvisor } from "@/lib/auth/advisor";
 import { executeFirstContact, retryFirstContact, retryFirstContactResourceFromRecovery } from "@/lib/first-contact/command";
 import { createEvolutionFirstContactProvider } from "@/lib/first-contact/provider";
 import type { FirstContactOperationResult } from "@/lib/first-contact/types";
 import { getResponseReminderAt, getStartOfSellerDayAfter, resolveScheduleShortcut } from "@/lib/leads/follow-up";
-import { clearLeadAction, correctInboundResponseForAdvisor, createLead, deleteCanceledFollowUpAction, findLeadByPhone, getInboundMessageCreatedAtForAdvisor, getLeadById, recordPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState } from "@/lib/leads/repository";
-import { correctInboundResponseSchema, firstContactRecoveryRetrySchema, firstContactRetrySchema, leadSchema, purchaseDecisionSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema } from "@/lib/leads/validation";
+import { clearLeadAction, correctInboundResponseForAdvisor, createLead, deleteCanceledFollowUpAction, findLeadByPhone, getInboundMessageCreatedAtForAdvisor, getLeadById, recordPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadDetails } from "@/lib/leads/repository";
+import { correctInboundResponseSchema, firstContactRecoveryRetrySchema, firstContactRetrySchema, leadSchema, purchaseDecisionSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema, updateLeadSchema } from "@/lib/leads/validation";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
 
 async function requireAdvisorAction<T>(): Promise<ActionResponse<T> | null> {
@@ -16,17 +16,30 @@ async function requireAdvisorAction<T>(): Promise<ActionResponse<T> | null> {
   return authorization.status === "AUTHORIZED" ? null : authRequiredResult();
 }
 
-export async function recordPurchaseDecisionAction(input: { leadId: string; idempotencyKey?: string }): Promise<ActionResponse<{ milestoneId: string; recordedAt: string }>> {
+export async function recordPurchaseDecisionAction(input: { leadId: string; nationalId: string; idempotencyKey?: string }): Promise<ActionResponse<{ milestoneId: string; recordedAt: string }>> {
   const parsed = purchaseDecisionSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "No encontramos el lead para registrar la decisión." };
   const auth = await requireAdvisorAction<{ milestoneId: string; recordedAt: string }>();
   if (auth) return auth;
   try {
-    const result = await recordPurchaseDecision(parsed.data.leadId, parsed.data.idempotencyKey ?? crypto.randomUUID());
+    const result = await recordPurchaseDecision(parsed.data.leadId, parsed.data.nationalId, parsed.data.idempotencyKey ?? crypto.randomUUID());
     if (!result) return { success: false, error: "No pudimos registrar la decisión de compra. Puedes reintentarlo." };
     return { success: true, data: { milestoneId: result.milestone.id, recordedAt: result.milestone.recordedAt }, message: result.replayed ? "La compra ya estaba registrada." : "Compra registrada." };
   } catch {
     return { success: false, error: "No pudimos registrar la decisión de compra. Puedes reintentarlo." };
+  }
+}
+
+export async function updateLeadDetailsAction(input: UpdateLeadInput): Promise<ActionResponse<Lead>> {
+  const parsed = updateLeadSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "Revisa los datos del prospecto antes de guardar." };
+  const auth = await requireAdvisorAction<Lead>();
+  if (auth) return auth;
+  try {
+    const lead = await updateLeadDetails(parsed.data);
+    return lead ? { success: true, data: lead, message: "Información actualizada." } : { success: false, error: "No pudimos actualizar la información. Puedes reintentarlo." };
+  } catch {
+    return { success: false, error: "No pudimos actualizar la información. Puedes reintentarlo." };
   }
 }
 

@@ -38,7 +38,7 @@ export function LeadCaptureForm() {
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadSchema),
     mode: "onChange",
-    defaultValues: { fullName: "", phone: "", carModels: [], timeframe: "INMEDIATA", paymentMethod: "CREDITO", tradeInCar: false, notes: "" },
+    defaultValues: { fullName: "", phone: "", nationalId: "", email: "", carModels: [], timeframe: "INMEDIATA", paymentMethod: "CREDITO", tradeInCar: false, notes: "" },
   });
   const { formState, register, setValue } = form;
   const fullNameField = register("fullName");
@@ -131,6 +131,16 @@ export function LeadCaptureForm() {
             <input {...register("phone")} autoComplete="tel" inputMode="tel" placeholder="Ej. 0987654321" className="field-input" />
             <p className="mt-1.5 text-[11px] font-medium text-[var(--muted)]">Ecuador: 0984790449 · Otro país: escribe el código, por ejemplo +57 315 204 8890.</p>
             <FieldError message={formState.errors.phone?.message} />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-[var(--muted)]">Cédula <span className="font-semibold normal-case tracking-normal">(opcional)</span></span>
+            <input {...register("nationalId")} autoComplete="off" inputMode="numeric" placeholder="Ej. 0102030405" className="field-input" />
+            <FieldError message={formState.errors.nationalId?.message} />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-[var(--muted)]">Correo <span className="font-semibold normal-case tracking-normal">(opcional)</span></span>
+            <input {...register("email")} autoComplete="email" inputMode="email" placeholder="cliente@correo.com" className="field-input" />
+            <FieldError message={formState.errors.email?.message} />
           </label>
         </div>
       </section>

@@ -1,4 +1,4 @@
-import type { ConversationState, CreateLeadInput, ExistingLeadSummary, FollowUpAction, FollowUpActionStatus, Lead, LeadMessage, MessageDirection, NextActionType, WhatsappStatus } from "@/lib/domain/lead";
+import type { ConversationState, CreateLeadInput, ExistingLeadSummary, FollowUpAction, FollowUpActionStatus, Lead, LeadMessage, MessageDirection, NextActionType, UpdateLeadInput, WhatsappStatus } from "@/lib/domain/lead";
 import { calculateLeadScore, formatPhoneForWhatsapp } from "@/lib/domain/lead";
 import type { Database } from "@/lib/supabase/database";
 import { getInstallationAdvisorUserId } from "@/lib/config/installation";
@@ -8,15 +8,18 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveInboundLeadMatch, type InboundLeadMatch } from "@/lib/leads/inbound-matching";
 import type { FirstContactItem, FirstContactOperation, FirstContactOperationResult, FirstContactResource, FirstContactResult, ProviderOutcome } from "@/lib/first-contact/types";
 
-const leadSelect = "id,user_id,tenant_id,created_at,full_name,phone,car_model,car_models,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,conversation_state,next_action_at,next_action_type,last_activity_at,last_customer_message_at,last_agent_message_at,last_customer_message_preview,deleted_at,status";
+const leadSelect = "id,user_id,tenant_id,created_at,updated_at,full_name,phone,national_id,email,car_model,car_models,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,conversation_state,next_action_at,next_action_type,last_activity_at,last_customer_message_at,last_agent_message_at,last_customer_message_preview,deleted_at,status";
 
 type LeadRow = {
   id: string;
   user_id: string | null;
   tenant_id: string | null;
   created_at: string;
+  updated_at: string;
   full_name: string;
   phone: string;
+  national_id: string | null;
+  email: string | null;
   car_model: Lead["carModel"];
   car_models: string[];
   timeframe: Lead["timeframe"];
@@ -91,8 +94,11 @@ function toDomainLead(row: LeadRow, followUpActions: FollowUpAction[] = []): Lea
     userId: row.user_id,
     tenantId: row.tenant_id,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
     fullName: row.full_name,
     phone: row.phone,
+    nationalId: row.national_id,
+    email: row.email,
     carModel: row.car_model,
     carModels: row.car_models?.length ? row.car_models : row.car_model.split(",").map((model) => model.trim()).filter(Boolean),
     timeframe: row.timeframe,
@@ -220,8 +226,11 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
     userId: null,
     tenantId: null,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     fullName: input.fullName.trim(),
     phone: input.phone.trim(),
+    nationalId: input.nationalId?.trim() || null,
+    email: input.email?.trim() || null,
     carModel: input.carModels.join(", "),
     carModels: input.carModels,
     timeframe: input.timeframe,
@@ -270,6 +279,8 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
       user_id: ownerId,
       full_name: localLead.fullName,
       phone: localLead.phone,
+      national_id: localLead.nationalId,
+      email: localLead.email,
       car_model: localLead.carModel,
       car_models: localLead.carModels,
       timeframe: localLead.timeframe,
@@ -286,6 +297,30 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
   }
 
   return { lead: toDomainLead(data as unknown as LeadRow), warning: "Lead guardado. Envíalo desde el dashboard cuando estés listo." };
+}
+
+export async function updateLeadDetails(input: UpdateLeadInput): Promise<Lead | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data: userData } = await supabase.auth.getUser();
+  const payload: Database["public"]["Tables"]["leads"]["Update"] = {
+    full_name: input.fullName.trim(),
+    phone: input.phone.trim(),
+    national_id: input.nationalId?.trim() || null,
+    email: input.email?.trim() || null,
+    car_model: input.carModels.join(", "),
+    car_models: input.carModels,
+    timeframe: input.timeframe,
+    payment_method: input.paymentMethod,
+    trade_in_car: input.tradeInCar,
+    notes: input.notes?.trim() || null,
+  };
+  let query = supabase.from("leads").update(payload).eq("id", input.leadId).is("deleted_at", null);
+  query = userData.user ? query.eq("user_id", userData.user.id) : query.is("user_id", null);
+  const { data, error } = await query.select(leadSelect).maybeSingle();
+  if (error || !data) return null;
+  const [lead] = await attachLeadRelations(supabase, [toDomainLead(data as unknown as LeadRow)]);
+  return lead ?? null;
 }
 
 export async function getLeadById(id: string): Promise<Lead | null> {
@@ -316,6 +351,9 @@ export type CarModelContactAssets = {
 };
 
 const legacyCarModelIds: Record<string, string> = {
+  V3: "v3",
+  "Alsvin V3": "v3",
+  "Deepal S07 Max": "deepal-s07-reev",
   "CS15 - Modelo 2027": "cs15-2027",
   CS75: "cs75",
   "CS55 R-EV - Modelo 2027": "cs55-rev-2027",
@@ -539,10 +577,11 @@ function toPurchaseDecisionMilestone(value: unknown): PurchaseDecisionMilestone 
   return { id: row.id, leadId: row.lead_id, milestoneType: "PURCHASE_DECISION", recordedAt: row.recorded_at, origin: "MANUAL" };
 }
 
-export async function recordPurchaseDecision(leadId: string, idempotencyKey: string): Promise<{ status: string; replayed: boolean; milestone: PurchaseDecisionMilestone } | null> {
+export async function recordPurchaseDecision(leadId: string, nationalId: string, idempotencyKey: string): Promise<{ status: string; replayed: boolean; milestone: PurchaseDecisionMilestone } | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data, error } = await invokeRpc(supabase, "record_purchase_decision_v1", { p_lead_id: leadId, p_idempotency_key: idempotencyKey, p_recorded_at: new Date().toISOString() });
+  // record_purchase_decision_v1 remains available for historical compatibility; new purchases use v2 so the buyer identity is atomic.
+  const { data, error } = await invokeRpc(supabase, "record_purchase_decision_v2", { p_lead_id: leadId, p_national_id: nationalId.trim(), p_idempotency_key: idempotencyKey, p_recorded_at: new Date().toISOString() });
   if (error || !data || typeof data !== "object") return null;
   const result = data as Record<string, unknown>;
   const milestone = toPurchaseDecisionMilestone(result.milestone);
