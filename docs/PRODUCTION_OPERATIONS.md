@@ -25,6 +25,7 @@ Production artifacts:
 - `scripts/deploy-production.sh`
 - `scripts/rollback-production.sh`
 - `scripts/migration-release-preflight.sh`
+- `scripts/backup-production-database.sh`
 - `.github/workflows/production-deploy.yml`
 
 The development `docker-compose.yml` remains separate and still exposes its
@@ -46,6 +47,7 @@ then create root-owned, mode-0600 files outside Git:
 /etc/leadflow/evolution.env
 /etc/leadflow/caddy.env
 /etc/leadflow/ghcr.env
+/etc/leadflow/backup.env
 ```
 
 Use the corresponding `deploy/env/*.env.example` files as templates. The
@@ -118,9 +120,77 @@ environment values into tickets or chat.
 
 ## Backups and recovery
 
-- **Supabase:** use the managed backup/PITR and recovery capabilities of the
-  selected Supabase plan. Confirm retention and perform a restore drill before
-  production approval; no second database backup stack is introduced here.
+The production Supabase database has an independent logical backup in the
+private Cloudflare R2 bucket `leadflow-backups`. The VPS job backs up the
+application `public` schema and PostgreSQL role definitions; it does not back
+up Supabase Storage objects, vehicle files, Evolution state, Redis, or VPS
+volumes. Supabase-managed backups remain the recovery path for managed Auth and
+other Supabase-managed schemas. Supabase's CLI dump behavior also excludes
+managed schemas by default, so this boundary is intentional.
+
+The R2 S3 endpoint is `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`, and the
+bucket remains private. `/etc/leadflow/backup.env` is root-owned with mode
+`0600`; it contains the verified production PostgreSQL URL without an embedded
+password, the database password separately, and the bucket-scoped R2 access
+keys. Never copy its values into GitHub, Docker containers, tickets, or chat.
+
+`leadflow-db-backup.timer` runs at 06:00, 09:00, 12:00, 15:00, 18:00, and
+21:00 in `America/Guayaquil`. Each run creates one compressed archive under
+`database/`, validates it locally, uploads it, verifies the remote size and
+checksum sidecar, and only then rotates older successful backups. The latest
+two successful archives are retained. A failed run never deletes an older
+verified archive.
+
+Install the repository-managed files on the VPS as root:
+
+```sh
+sudo install -o root -g root -m 0750 scripts/backup-production-database.sh /usr/local/sbin/leadflow-db-backup
+sudo install -o root -g root -m 0644 deploy/systemd/leadflow-db-backup.service /etc/systemd/system/leadflow-db-backup.service
+sudo install -o root -g root -m 0644 deploy/systemd/leadflow-db-backup.timer /etc/systemd/system/leadflow-db-backup.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now leadflow-db-backup.timer
+```
+
+Check the timer and run one controlled manual backup:
+
+```sh
+sudo systemctl list-timers leadflow-db-backup.timer
+sudo systemctl start leadflow-db-backup.service
+sudo journalctl -u leadflow-db-backup.service -n 100 --no-pager
+```
+
+The same service is used by the timer and manual run, so the lock prevents
+overlapping executions. It uses the pinned PostgreSQL 17 client image for
+`pg_dump`/`pg_dumpall` and `rclone`; the PostgreSQL image is a short-lived
+utility container and does not restart application services or build LeadFlow.
+
+### Backup restore runbook
+
+1. List private objects from the VPS with the root-only R2 configuration. The
+   command creates a short-lived rclone config and removes it automatically;
+   it does not print credentials:
+
+   ```sh
+   sudo bash -c 'set -Eeuo pipefail; tmp=$(mktemp); trap '\''rm -f "$tmp"'\'' EXIT; chmod 600 "$tmp"; . /etc/leadflow/backup.env; { printf "[r2]\\ntype = s3\\nprovider = Other\\nenv_auth = false\\naccess_key_id = %s\\nsecret_access_key = %s\\nendpoint = %s\\nregion = auto\\nno_check_bucket = true\\n" "$R2_ACCESS_KEY_ID" "$R2_SECRET_ACCESS_KEY" "$R2_ENDPOINT"; } >"$tmp"; rclone lsl --config "$tmp" --log-level ERROR "r2:$R2_BACKUP_BUCKET/database"'
+   ```
+
+2. Download one archive and its `.sha256` sidecar into an isolated recovery
+   directory, then verify `sha256sum -c` and `tar -tzf` before inspecting it.
+3. Extract `roles.sql`, `schema.sql`, and `data.sql` only into a new isolated
+   PostgreSQL/Supabase target. Apply schema before data, and review role/Auth
+   compatibility for the target project first.
+4. Validate tables, row counts, RLS/policies, login, and application behavior
+   in the isolated target before considering any recovery action.
+
+Never restore directly to production, overwrite an existing backup during
+recovery, or treat a checksum/integrity failure as a usable backup. A
+production restore requires explicit recovery authorization and a separately
+reviewed downtime/data-loss decision.
+
+- **Supabase managed recovery:** retain the managed backup/PITR capabilities of
+  the selected Supabase plan for Auth and managed schemas. The independent R2
+  copy is protection from accidental deletion or provider-console mistakes,
+  not a replacement for Supabase's native recovery.
 - **Evolution PostgreSQL:** the database referenced by the private
   `EVOLUTION_DATABASE_URL` is the responsibility of its database owner. Record
   its backup and restore procedure without copying its DSN into documentation.
@@ -192,6 +262,11 @@ renews HTTPS for `leadflow.jrdnbrj.com` after DNS resolves.
 | `VPS_SSH_PRIVATE_KEY` | GitHub production environment | Deploy workflow only | Dedicated deploy user key; rotate independently |
 | `GHCR_USERNAME` | VPS `/etc/leadflow/ghcr.env` | Docker pull on VPS | Use a package-read identity; rotate independently |
 | `GHCR_READ_TOKEN` | VPS `/etc/leadflow/ghcr.env` | Docker pull on VPS | Revoke and replace without changing app secrets |
+| `SUPABASE_DB_URL` | VPS `/etc/leadflow/backup.env` | Database backup service only | Keep password-free; use verified IPv4-reachable connection |
+| `SUPABASE_DB_PASSWORD` | VPS `/etc/leadflow/backup.env` | `pg_dump`/`pg_dumpall` only | Rotate in Supabase, update secure file, test one manual backup |
+| `R2_ACCOUNT_ID` | VPS `/etc/leadflow/backup.env` | Backup service only | Non-secret endpoint identifier; verify if account changes |
+| `R2_ACCESS_KEY_ID` | VPS `/etc/leadflow/backup.env` | `rclone` upload only | Revoke/reissue bucket-scoped credential |
+| `R2_SECRET_ACCESS_KEY` | VPS `/etc/leadflow/backup.env` | `rclone` upload only | Revoke/reissue bucket-scoped credential |
 
 Public seller values and `CADDY_HOSTNAME`/`ACME_EMAIL` are configuration, not
 secrets. No `.env` or device-specific file belongs in Git or a Docker image.

@@ -1,0 +1,16 @@
+[Unit]
+Description=Run LeadFlow production database backup six times daily
+
+[Timer]
+OnCalendar=*-*-* 06:00:00 America/Guayaquil
+OnCalendar=*-*-* 09:00:00 America/Guayaquil
+OnCalendar=*-*-* 12:00:00 America/Guayaquil
+OnCalendar=*-*-* 15:00:00 America/Guayaquil
+OnCalendar=*-*-* 18:00:00 America/Guayaquil
+OnCalendar=*-*-* 21:00:00 America/Guayaquil
+AccuracySec=1min
+Persistent=false
+Unit=leadflow-db-backup.service
+
+[Install]
+WantedBy=timers.target

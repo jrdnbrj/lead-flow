@@ -1,0 +1,15 @@
+[Unit]
+Description=LeadFlow production Supabase database backup
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/leadflow/backup.env
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/leadflow-db-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=30min
