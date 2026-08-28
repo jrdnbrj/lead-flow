@@ -9,6 +9,7 @@ const order = read("lib/first-contact/order.ts");
 const ui = read("components/leads/first-contact-summary.tsx");
 const repository = read("lib/leads/repository.ts");
 const migration = read("supabase/migrations/049_first_contact_multi_vehicle_resources.sql");
+const eventProjectionMigration = read("supabase/migrations/052_first_contact_event_resource_projection.sql");
 
 for (const token of [
   "lead.carModels.slice(0, 3)",
@@ -27,6 +28,7 @@ for (const token of ["jsonb_array_length(p_items) not in (3, 5, 7)", "count(*) f
 assert(migration.includes("photo_count <> sheet_count"), "photo/sheet model pairing validation missing");
 assert(migration.includes("grant execute on function public.request_first_contact_v1") && migration.includes("to authenticated"), "request RPC grant is not preserved");
 assert(!migration.includes("grant execute on function public.request_first_contact_v1(uuid, text, jsonb, text) to anon"), "request RPC must not be granted to anon");
+assert(eventProjectionMigration.includes("select distinct") && eventProjectionMigration.includes("requested_resource_kinds"), "multi-vehicle event resource projection must deduplicate categories");
 
 assert(order.includes("itemKey") && order.includes("Number(leftScoped[2]) - Number(rightScoped[2])"), "model-major resource ordering missing");
 assert(ui.includes("firstContactItemLabel") && ui.includes("leadModels={lead.carModels}"), "model/resource labels missing from First Contact UI");
