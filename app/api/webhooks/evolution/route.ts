@@ -30,6 +30,20 @@ function normalizeEvent(value: unknown): string {
   return asString(value)?.toUpperCase().replace(/[.\s-]+/g, "_") ?? "";
 }
 
+function extractEvolutionInstance(value: JsonRecord, parentInstance: string | null): string | null {
+  const data = asRecord(value.data);
+  return asString(value.instance)
+    ?? asString(value.instanceName)
+    ?? asString(data?.instance)
+    ?? asString(data?.instanceName)
+    ?? parentInstance;
+}
+
+function belongsToCustomerInstance(value: JsonRecord, parentInstance: string | null): boolean {
+  const instance = extractEvolutionInstance(value, parentInstance);
+  return Boolean(EVOLUTION_INSTANCE && instance && instance === EVOLUTION_INSTANCE);
+}
+
 function flattenEventData(value: unknown): JsonRecord[] {
   if (Array.isArray(value)) return value.flatMap((item) => flattenEventData(item));
   const record = asRecord(value);
@@ -215,11 +229,16 @@ export async function POST(request: Request) {
   }
 
   const event = normalizeEvent(payload.event ?? payload.type);
+  const payloadInstance = extractEvolutionInstance(payload, null);
   const items = flattenEventData(payload.data ?? payload);
   const inboundLedger = new InboundMessageLedger();
   let processed = 0;
   let retryableFailures = 0;
   for (const item of items) {
+    // Authenticate and isolate the Evolution instance before any phone
+    // matching, persistence, or RESPONSE projection. The reminder instance
+    // is intentionally not allowed to enter the customer inbound pipeline.
+    if (!belongsToCustomerInstance(item, payloadInstance)) continue;
     let handled = false;
     if (event === "MESSAGES_UPSERT" || event === "MESSAGES_SET") {
       const inbound = await processIncomingMessage(item, event, inboundLedger);

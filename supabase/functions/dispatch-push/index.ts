@@ -10,6 +10,7 @@ webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
 const headers = { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}`, "content-type": "application/json" };
 const query = async (path: string, init?: RequestInit) => fetch(`${supabaseUrl}/rest/v1/${path}`, { ...init, headers: { ...headers, ...(init?.headers || {}) } });
+const rpc = async (name: string, body: Record<string, unknown>) => fetch(`${supabaseUrl}/rest/v1/rpc/${name}`, { method: "POST", headers, body: JSON.stringify(body) });
 
 const unauthorized = () => new Response(JSON.stringify({ error: "UNAUTHORIZED" }), { status: 401, headers: { "content-type": "application/json" } });
 
@@ -68,20 +69,54 @@ Deno.serve(async (request) => {
         auth: storedSubscription.auth,
       },
     };
-    await query(`push_deliveries?id=eq.${delivery.id}&status=eq.SCHEDULED`, { method: "PATCH", body: JSON.stringify({ status: "CLAIMED", claimed_at: new Date().toISOString(), updated_at: new Date().toISOString() }) });
+    const claimedAt = new Date().toISOString();
+    const claimResponse = await rpc("claim_push_delivery_v1", { p_delivery_id: delivery.id, p_now: claimedAt });
+    if (!claimResponse.ok) {
+      console.error("push_claim_failed", JSON.stringify({ deliveryId: delivery.id, statusCode: claimResponse.status }));
+      results.push({ id: delivery.id, status: "CLAIM_FAILED" });
+      continue;
+    }
+    const claim = await claimResponse.json().catch(() => null);
+    if (claim?.status !== "CLAIMED") {
+      results.push({ id: delivery.id, status: claim?.status || "CLAIM_NOT_APPLIED" });
+      continue;
+    }
+    const claimedDeliveryResponse = await query(`push_deliveries?id=eq.${delivery.id}&status=eq.CLAIMED&select=*`);
+    if (!claimedDeliveryResponse.ok) {
+      console.error("push_claimed_delivery_unavailable", JSON.stringify({ deliveryId: delivery.id, statusCode: claimedDeliveryResponse.status }));
+      results.push({ id: delivery.id, status: "CLAIMED_DELIVERY_UNAVAILABLE" });
+      continue;
+    }
+    const [claimedDelivery] = await claimedDeliveryResponse.json();
+    if (!claimedDelivery) {
+      results.push({ id: delivery.id, status: "CLAIMED_DELIVERY_MISSING" });
+      continue;
+    }
+    const revalidatedAt = new Date().toISOString();
+    const revalidationResponse = await rpc("revalidate_push_delivery_v1", { p_delivery_id: claimedDelivery.id, p_now: revalidatedAt });
+    if (!revalidationResponse.ok) {
+      console.error("push_revalidation_failed", JSON.stringify({ deliveryId: claimedDelivery.id, statusCode: revalidationResponse.status }));
+      results.push({ id: claimedDelivery.id, status: "REVALIDATION_FAILED" });
+      continue;
+    }
+    const revalidation = await revalidationResponse.json().catch(() => null);
+    if (revalidation?.status !== "READY_FOR_IO") {
+      results.push({ id: claimedDelivery.id, status: revalidation?.status || "REVALIDATION_NOT_APPLIED" });
+      continue;
+    }
     const actionLabels: Record<string, string> = { CALL: "Llamar", WHATSAPP: "Escribir por WhatsApp", QUOTE: "Cotizar", OTHER: "Dar seguimiento", RESPONSE: "Responder" };
-    const actionLabel = actionLabels[delivery.action_type] || "Dar seguimiento";
-    const payload = JSON.stringify({ title: delivery.lead_name || "Seguimiento pendiente", body: `${actionLabel} · ${formatPushSchedule(delivery.scheduled_for)}`, tag: `leadflow-${delivery.id}`, deliveryId: delivery.id, actionVersion: delivery.action_version, openUrl: "/dashboard" });
+    const actionLabel = actionLabels[claimedDelivery.action_type] || "Dar seguimiento";
+    const payload = JSON.stringify({ title: claimedDelivery.lead_name || "Seguimiento pendiente", body: `${actionLabel} · ${formatPushSchedule(claimedDelivery.scheduled_for)}`, tag: `leadflow-${claimedDelivery.id}`, deliveryId: claimedDelivery.id, actionVersion: claimedDelivery.action_version, openUrl: "/dashboard" });
     try {
       const response = await webpush.sendNotification(subscription, payload, { TTL: 3600, urgency: "high" });
       const acceptedAt = new Date().toISOString();
       const acceptedProviderStatus = providerStatus(response);
       console.info("push_provider_accepted", JSON.stringify({
-        deliveryId: delivery.id,
-        actionId: delivery.action_id,
-        actionVersion: delivery.action_version,
-        subscriptionId: delivery.subscription_id,
-        subscriptionGeneration: delivery.subscription_generation,
+        deliveryId: claimedDelivery.id,
+        actionId: claimedDelivery.action_id,
+        actionVersion: claimedDelivery.action_version,
+        subscriptionId: claimedDelivery.subscription_id,
+        subscriptionGeneration: claimedDelivery.subscription_generation,
         endpointHost: new URL(subscription.endpoint).host,
         payloadBytes: new TextEncoder().encode(payload).byteLength,
         ttl: 3600,
@@ -90,19 +125,19 @@ Deno.serve(async (request) => {
         contentEncoding: "aes128gcm",
         providerStatus: acceptedProviderStatus,
         sentAt: acceptedAt,
-        effectId: delivery.effect_id,
+        effectId: claimedDelivery.effect_id,
       }));
-      await query(`push_deliveries?id=eq.${delivery.id}`, { method: "PATCH", body: JSON.stringify({ status: "ACCEPTED", provider_status: acceptedProviderStatus, sent_at: acceptedAt, updated_at: acceptedAt }) });
-      results.push({ id: delivery.id, status: "ACCEPTED", providerStatus: acceptedProviderStatus });
+      await query(`push_deliveries?id=eq.${claimedDelivery.id}&status=eq.CLAIMED`, { method: "PATCH", body: JSON.stringify({ status: "ACCEPTED", provider_status: acceptedProviderStatus, sent_at: acceptedAt, updated_at: acceptedAt }) });
+      results.push({ id: claimedDelivery.id, status: "ACCEPTED", providerStatus: acceptedProviderStatus });
     } catch (error) {
       const detail = describeProviderError(error);
       const statusCode = detail.statusCode;
       const status = statusCode === 404 || statusCode === 410 ? "FAILED" : "UNKNOWN";
       const providerStatus = statusCode ? String(statusCode) : `ERROR:${detail.name}${detail.message ? `:${detail.message}` : ""}`;
       console.error("push_provider_failed", JSON.stringify({ status, statusCode, name: detail.name, message: detail.message }));
-      await query(`push_deliveries?id=eq.${delivery.id}`, { method: "PATCH", body: JSON.stringify({ status, provider_status: providerStatus, updated_at: new Date().toISOString() }) });
-      if (statusCode === 404 || statusCode === 410) await query(`push_subscriptions?id=eq.${delivery.subscription_id}`, { method: "PATCH", body: JSON.stringify({ status: "INVALIDATED", invalidated_at: new Date().toISOString(), updated_at: new Date().toISOString() }) });
-      results.push({ id: delivery.id, status });
+      await query(`push_deliveries?id=eq.${claimedDelivery.id}&status=eq.CLAIMED`, { method: "PATCH", body: JSON.stringify({ status, provider_status: providerStatus, updated_at: new Date().toISOString() }) });
+      if (statusCode === 404 || statusCode === 410) await query(`push_subscriptions?id=eq.${claimedDelivery.subscription_id}`, { method: "PATCH", body: JSON.stringify({ status: "INVALIDATED", invalidated_at: new Date().toISOString(), updated_at: new Date().toISOString() }) });
+      results.push({ id: claimedDelivery.id, status });
     }
   }
   return new Response(JSON.stringify({ materialized: true, results }), { headers: { "content-type": "application/json" } });

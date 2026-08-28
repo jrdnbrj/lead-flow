@@ -24,3 +24,9 @@ export function validateSchedulerSecret(headers: Headers): boolean {
   const receivedSecret = headers.get("x-leadflow-scheduler-secret") ?? bearerToken(headers.get("authorization"));
   return Boolean(expectedSecret && receivedSecret && timingSafeEqualString(receivedSecret, expectedSecret));
 }
+
+export function validateWhatsappReminderDispatcherRequest(headers: Headers): boolean {
+  const expectedSecret = process.env.WHATSAPP_REMINDER_DISPATCH_SECRET;
+  const receivedSecret = headers.get("x-leadflow-whatsapp-reminder-secret") ?? bearerToken(headers.get("authorization"));
+  return Boolean(expectedSecret && receivedSecret && timingSafeEqualString(receivedSecret, expectedSecret));
+}

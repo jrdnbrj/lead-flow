@@ -28,6 +28,7 @@ checks=(
   scripts/e5-batch1-contract-check.mjs
   scripts/e5-batch2-contract-check.mjs
   scripts/e5-integrated-contract-check.mjs
+  scripts/whatsapp-reminder-companion-contract-check.mjs
   scripts/e5-push-runtime-contract-check.mjs
   scripts/e6-integrated-contract-check.mjs
   scripts/e6-s1-s2-contract-check.mjs

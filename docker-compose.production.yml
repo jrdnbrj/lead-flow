@@ -24,9 +24,13 @@ services:
       EVOLUTION_API_INSTANCE_NAME: ${EVOLUTION_API_INSTANCE_NAME:?EVOLUTION_API_INSTANCE_NAME is required}
       EVOLUTION_WEBHOOK_URL: ${EVOLUTION_WEBHOOK_URL:?EVOLUTION_WEBHOOK_URL is required}
       EVOLUTION_WEBHOOK_TOKEN: ${EVOLUTION_WEBHOOK_TOKEN:?EVOLUTION_WEBHOOK_TOKEN is required}
+      WHATSAPP_REMINDER_ENABLED: ${WHATSAPP_REMINDER_ENABLED:-false}
+      WHATSAPP_REMINDER_EVOLUTION_INSTANCE: ${WHATSAPP_REMINDER_EVOLUTION_INSTANCE:-}
+      WHATSAPP_REMINDER_RECIPIENT: ${WHATSAPP_REMINDER_RECIPIENT:-}
+      WHATSAPP_REMINDER_DISPATCH_SECRET: ${WHATSAPP_REMINDER_DISPATCH_SECRET:-}
+      WHATSAPP_REMINDER_SEND_TIMEOUT_MS: ${WHATSAPP_REMINDER_SEND_TIMEOUT_MS:-5000}
     networks:
       - edge
-      - backend
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
@@ -121,6 +125,7 @@ services:
       - caddy_config:/config
     networks:
       - edge
+      - backend
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:2019/config/ || exit 1"]
