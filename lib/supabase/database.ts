@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      car_model_colors: {
+        Row: {
+          active: boolean
+          car_model_id: string
+          created_at: string
+          id: string
+          name: string
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          active?: boolean
+          car_model_id: string
+          created_at?: string
+          id: string
+          name: string
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          active?: boolean
+          car_model_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "car_model_colors_car_model_id_fkey"
+            columns: ["car_model_id"]
+            isOneToOne: false
+            referencedRelation: "car_models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       car_model_images: {
         Row: {
           alt_text: string | null

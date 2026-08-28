@@ -33,6 +33,7 @@ checks=(
   scripts/e5-push-runtime-contract-check.mjs
   scripts/e6-integrated-contract-check.mjs
   scripts/e6-s1-s2-contract-check.mjs
+  scripts/catalog-contract-check.mjs
 )
 
 for check in "${checks[@]}"; do
