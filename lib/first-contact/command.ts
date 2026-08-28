@@ -3,9 +3,10 @@ import { createHash } from "node:crypto";
 import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-template";
 import { renderWhatsappMessageTemplate } from "@/lib/config/message-template-shared";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
-import { claimFirstContactEffect, beginFirstContactEffect, getCarModelContactAssets, recordFirstContactEffectResult, requestFirstContact, retryFirstContactEffect } from "@/lib/leads/repository";
+import { claimFirstContactEffect, beginFirstContactEffect, getCarModelContactAssetsForModels, recordFirstContactEffectResult, requestFirstContact, retryFirstContactEffect } from "@/lib/leads/repository";
 import type { Lead } from "@/lib/domain/lead";
 import { orderFirstContactItems } from "@/lib/first-contact/order";
+import { getResourcesForItem, modelSlug, planFirstContactResourceItems, type FirstContactModelResources, type FirstContactRequestItem } from "@/lib/first-contact/resource-plan";
 import type { FirstContactItem, FirstContactOperationResult, FirstContactProvider, ProviderOutcome, FirstContactResource } from "@/lib/first-contact/types";
 import { ensureEvolutionWebhook } from "@/lib/whatsapp/service";
 
@@ -13,11 +14,22 @@ function digest(value: string): string { return createHash("sha256").update(valu
 
 type FirstContactLead = Pick<Lead, "id" | "fullName" | "phone" | "carModels">;
 type PreparedFirstContactItem = { item: FirstContactItem; attemptNo: number; claimTokenDigest: string };
+type FirstContactRequest = {
+  text: string;
+  configurationDigest: string;
+  items: FirstContactRequestItem[];
+  modelResources: FirstContactModelResources[];
+  resourcesByItemKey: Record<string, FirstContactModelResources>;
+};
 
-function messageBodyForResource(resource: FirstContactItem["resourceKind"], text: string): string {
+function resourcesForRequestItem(item: Pick<FirstContactItem, "resourceKind" | "itemKey">, request: FirstContactRequest): FirstContactModelResources | null {
+  return getResourcesForItem(item, request.modelResources, request.resourcesByItemKey);
+}
+
+function messageBodyForResource(resource: FirstContactItem["resourceKind"], text: string, modelName?: string): string {
   if (resource === "MESSAGE") return text;
-  if (resource === "PHOTOS") return "Foto del vehículo enviada";
-  return "Ficha técnica enviada";
+  if (resource === "PHOTOS") return modelName ? `Foto de ${modelName} enviada` : "Foto del vehículo enviada";
+  return modelName ? `Ficha técnica de ${modelName} enviada` : "Ficha técnica enviada";
 }
 
 async function prepareFirstContactItem(input: {
@@ -35,26 +47,28 @@ async function prepareFirstContactItem(input: {
 
 async function beginPreparedFirstContactItem(input: {
   prepared: PreparedFirstContactItem;
-  request: Awaited<ReturnType<typeof buildFirstContactRequest>>;
+  request: FirstContactRequest;
 }): Promise<boolean> {
   const { prepared, request } = input;
-  const payloadDigest = digest(JSON.stringify({ resource: prepared.item.resourceKind, version: prepared.item.resourceVersion, text: prepared.item.resourceKind === "MESSAGE" ? request.text : null, imageUrl: prepared.item.resourceKind === "PHOTOS" ? request.imageUrl : null, technicalSheetUrl: prepared.item.resourceKind === "TECHNICAL_SHEET" ? request.technicalSheetUrl : null }));
+  const resources = resourcesForRequestItem(prepared.item, request);
+  const payloadDigest = digest(JSON.stringify({ resource: prepared.item.resourceKind, itemKey: prepared.item.itemKey, version: prepared.item.resourceVersion, text: prepared.item.resourceKind === "MESSAGE" ? request.text : null, imageUrl: prepared.item.resourceKind === "PHOTOS" ? resources?.imageUrl : null, technicalSheetUrl: prepared.item.resourceKind === "TECHNICAL_SHEET" ? resources?.technicalSheetUrl : null }));
   return beginFirstContactEffect(prepared.item.effectId as string, prepared.attemptNo, prepared.claimTokenDigest, payloadDigest);
 }
 
 async function recordPreparedFirstContactItem(input: {
   prepared: PreparedFirstContactItem;
-  request: Awaited<ReturnType<typeof buildFirstContactRequest>>;
+  request: FirstContactRequest;
   outcome: ProviderOutcome;
 }): Promise<void> {
   const { prepared, request, outcome } = input;
-  await recordFirstContactEffectResult(prepared.item.effectId as string, prepared.attemptNo, prepared.claimTokenDigest, { ...outcome, messageBody: outcome.result === "ACCEPTED" ? messageBodyForResource(prepared.item.resourceKind, request.text) : null });
+  const resources = resourcesForRequestItem(prepared.item, request);
+  await recordFirstContactEffectResult(prepared.item.effectId as string, prepared.attemptNo, prepared.claimTokenDigest, { ...outcome, messageBody: outcome.result === "ACCEPTED" ? messageBodyForResource(prepared.item.resourceKind, request.text, resources?.modelName) : null });
 }
 
 async function executeFirstContactItem(input: {
   item: FirstContactItem;
   lead: FirstContactLead;
-  request: Awaited<ReturnType<typeof buildFirstContactRequest>>;
+  request: FirstContactRequest;
   idempotencyKey: string;
   provider: FirstContactProvider;
 }): Promise<{ attempted: boolean; outcome: ProviderOutcome | null }> {
@@ -85,8 +99,9 @@ export async function retryFirstContactResourceFromRecovery(
   });
   if (!initial) return null;
 
-  const item = initial.items.find((candidate) => candidate.resourceKind === resourceKind);
-  if (item) await executeFirstContactItem({ item, lead, request, idempotencyKey, provider });
+  for (const item of orderFirstContactItems(initial.items.filter((candidate) => candidate.resourceKind === resourceKind))) {
+    await executeFirstContactItem({ item, lead, request, idempotencyKey, provider });
+  }
 
   const final = await requestFirstContact({
     leadId: lead.id,
@@ -97,33 +112,51 @@ export async function retryFirstContactResourceFromRecovery(
   return final ? { ...final, replayed: initial.replayed } : null;
 }
 
-async function sendFirstContactItem(item: FirstContactItem, lead: FirstContactLead, request: Awaited<ReturnType<typeof buildFirstContactRequest>>, provider: FirstContactProvider): Promise<ProviderOutcome> {
-  return item.resourceKind === "MESSAGE"
-    ? provider.sendMessage({ phone: lead.phone, text: request.text })
-    : item.resourceKind === "PHOTOS"
-      ? provider.sendPhoto({ phone: lead.phone, imageUrl: request.imageUrl ?? "", caption: `Información de ${lead.carModels[0] ?? "tu vehículo"}`, fileName: request.imageFileName ?? `leadflow-${(lead.carModels[0] ?? "vehiculo").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg` })
-      : provider.sendDocument({ phone: lead.phone, documentUrl: request.technicalSheetUrl ?? "", caption: `Ficha técnica de ${lead.carModels[0] ?? "tu vehículo"}`, fileName: request.technicalSheetFileName ?? `Ficha técnica - ${(lead.carModels[0] ?? "vehiculo")}.pdf` });
+async function sendFirstContactItem(item: Pick<FirstContactItem, "resourceKind" | "itemKey">, lead: FirstContactLead, request: FirstContactRequest, provider: FirstContactProvider): Promise<ProviderOutcome> {
+  if (item.resourceKind === "MESSAGE") return provider.sendMessage({ phone: lead.phone, text: request.text });
+  const resources = resourcesForRequestItem(item, request);
+  if (!resources) throw new Error("FIRST_CONTACT_RESOURCE_NOT_RESOLVED");
+  if (item.resourceKind === "PHOTOS") {
+    if (!resources.imageUrl) throw new Error("FIRST_CONTACT_PHOTO_NOT_AVAILABLE");
+    return provider.sendPhoto({ phone: lead.phone, imageUrl: resources.imageUrl, caption: `Información de ${resources.modelName}`, fileName: resources.imageFileName ?? `leadflow-${modelSlug(resources.modelName)}.jpg` });
+  }
+  if (!resources.technicalSheetUrl) throw new Error("FIRST_CONTACT_SHEET_NOT_AVAILABLE");
+  return provider.sendDocument({ phone: lead.phone, documentUrl: resources.technicalSheetUrl, caption: `Ficha técnica de ${resources.modelName}`, fileName: resources.technicalSheetFileName ?? `Ficha técnica - ${resources.modelName}.pdf` });
 }
 
-export async function buildFirstContactRequest(lead: FirstContactLead) {
+export async function buildFirstContactRequest(lead: FirstContactLead): Promise<FirstContactRequest> {
   const template = await getEffectiveWhatsappMessageTemplate();
   const seller = await getEffectiveSellerProfile();
   const text = renderWhatsappMessageTemplate(template, { nombre: lead.fullName.trim().split(/\s+/)[0] || "cliente", numero: lead.phone, carro: lead.carModels.join(", "), nombre_vendedor: seller.name, correo_vendedor: seller.email, empresa_vendedor: seller.company, numero_vendedor: seller.phone });
-  const assets = lead.carModels[0] ? await getCarModelContactAssets(lead.carModels[0]) : { imageUrl: null, imageFileName: null, technicalSheetUrl: null, technicalSheetFileName: null };
-  const imageUrl = assets.imageUrl;
-  const technicalSheetUrl = assets.technicalSheetUrl;
+  const selectedModels = lead.carModels.slice(0, 3);
+  const assetsByModel = await getCarModelContactAssetsForModels(selectedModels);
+  const modelResources = selectedModels.map((modelName) => {
+    const assets = assetsByModel.get(modelName) ?? { modelId: null, modelName, imageUrl: null, imageFileName: null, technicalSheetUrl: null, technicalSheetFileName: null };
+    return { modelName, modelId: assets.modelId, imageUrl: assets.imageUrl, imageFileName: assets.imageFileName, technicalSheetUrl: assets.technicalSheetUrl, technicalSheetFileName: assets.technicalSheetFileName };
+  });
+  const resourcePlan = planFirstContactResourceItems(modelResources);
+  const resourcesByItemKey = resourcePlan.resourcesByItemKey;
+  const resourceItems = resourcePlan.items.map((item) => ({
+    ...item,
+    resourceVersion: item.availability === "AVAILABLE" ? digest(item.resourceVersion) : item.resourceVersion,
+  }));
+  const firstModel = modelResources[0];
+  if (firstModel) {
+    // These aliases preserve retries for operations created before the
+    // model-scoped item keys existed. They are never sent to the database for
+    // a new operation.
+    if (firstModel.imageUrl) resourcesByItemKey[`PHOTO:${digest(firstModel.imageUrl).slice(0, 24)}`] = firstModel;
+    if (firstModel.technicalSheetUrl) resourcesByItemKey[`TECHNICAL_SHEET:${digest(firstModel.technicalSheetUrl).slice(0, 24)}`] = firstModel;
+  }
   return {
     text,
-    imageUrl,
-    configurationDigest: digest(JSON.stringify({ template, seller, models: lead.carModels, imageUrl, technicalSheetUrl })),
+    configurationDigest: digest(JSON.stringify({ template, seller, models: lead.carModels, resources: modelResources })),
     items: [
       { resourceKind: "MESSAGE" as const, itemKey: "TEXT", resourceVersion: digest(text), availability: "AVAILABLE" as const },
-      { resourceKind: "PHOTOS" as const, itemKey: imageUrl ? `PHOTO:${digest(imageUrl).slice(0, 24)}` : "PHOTO:UNAVAILABLE", resourceVersion: imageUrl ? digest(imageUrl) : "unavailable-v1", availability: imageUrl ? "AVAILABLE" as const : "NOT_AVAILABLE" as const },
-      { resourceKind: "TECHNICAL_SHEET" as const, itemKey: technicalSheetUrl ? `TECHNICAL_SHEET:${digest(technicalSheetUrl).slice(0, 24)}` : "TECHNICAL_SHEET:UNAVAILABLE", resourceVersion: technicalSheetUrl ? digest(technicalSheetUrl) : "unavailable-v1", availability: technicalSheetUrl ? "AVAILABLE" as const : "NOT_AVAILABLE" as const },
-  ],
-    imageFileName: assets.imageFileName,
-    technicalSheetUrl,
-    technicalSheetFileName: assets.technicalSheetFileName,
+      ...resourceItems,
+    ],
+    modelResources,
+    resourcesByItemKey,
   };
 }
 
@@ -143,15 +176,9 @@ export async function executeFirstContact(lead: FirstContactLead, provider: Firs
   const messageAccepted = messageItem?.result === "ACCEPTED" || messageExecution.outcome?.result === "ACCEPTED";
   let providerAttempted = messageExecution.attempted;
   if (messageAccepted) {
-    const preparedResources = await Promise.allSettled(orderedItems
-      .filter((item) => item.resourceKind !== "MESSAGE")
-      .map((item) => prepareFirstContactItem({ item, idempotencyKey })));
-    const readyResources = preparedResources.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
-    const begunResources = (await Promise.allSettled(readyResources.map(async (prepared) => ({ prepared, begun: await beginPreparedFirstContactItem({ prepared, request }) })))).flatMap((result) => result.status === "fulfilled" && result.value.begun ? [result.value.prepared] : []);
-    const resourceSends = await Promise.all(begunResources.map(async (prepared) => ({ prepared, outcome: await sendFirstContactItem(prepared.item, lead, request, provider).catch((): ProviderOutcome => ({ result: "UNKNOWN", providerMessageId: null, providerStatus: null })) })));
-    for (const resourceSend of resourceSends) {
-      await recordPreparedFirstContactItem({ prepared: resourceSend.prepared, request, outcome: resourceSend.outcome });
-      providerAttempted = true;
+    for (const item of orderedItems.filter((candidate) => candidate.resourceKind !== "MESSAGE")) {
+      const execution = await executeFirstContactItem({ item, lead, request, idempotencyKey, provider });
+      providerAttempted = providerAttempted || execution.attempted;
     }
   }
   const final = await requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });
@@ -167,15 +194,21 @@ export async function retryFirstContact(lead: FirstContactLead, effectId: string
   if (!claim || claim.status !== "CLAIMED" || typeof claim.attempt_no !== "number" || typeof claim.claim_token_digest !== "string" || typeof claim.resource_kind !== "string") {
     return requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });
   }
-  const item = request.items.find((candidate) => candidate.resourceKind === claim.resource_kind);
+  const claimItemKey = typeof claim.item_key === "string" ? claim.item_key : null;
+  const directItem = claimItemKey ? request.items.find((candidate) => candidate.itemKey === claimItemKey) : null;
+  const legacyItem = claimItemKey && (claim.resource_kind === "PHOTOS" || claim.resource_kind === "TECHNICAL_SHEET")
+    ? (() => {
+      const resources = resourcesForRequestItem({ resourceKind: claim.resource_kind as FirstContactResource, itemKey: claimItemKey }, request);
+      const url = claim.resource_kind === "PHOTOS" ? resources?.imageUrl : resources?.technicalSheetUrl;
+      return url ? { resourceKind: claim.resource_kind as FirstContactResource, itemKey: claimItemKey, resourceVersion: digest(url), availability: "AVAILABLE" as const } : null;
+    })()
+    : null;
+  const item = directItem ?? legacyItem
   if (!item || item.availability !== "AVAILABLE") return null;
-  const payloadDigest = digest(JSON.stringify({ resource: item.resourceKind, version: item.resourceVersion, text: item.resourceKind === "MESSAGE" ? request.text : null, imageUrl: item.resourceKind === "PHOTOS" ? request.imageUrl : null, technicalSheetUrl: item.resourceKind === "TECHNICAL_SHEET" ? request.technicalSheetUrl : null }));
+  const resources = resourcesForRequestItem(item, request);
+  const payloadDigest = digest(JSON.stringify({ resource: item.resourceKind, itemKey: item.itemKey, version: item.resourceVersion, text: item.resourceKind === "MESSAGE" ? request.text : null, imageUrl: item.resourceKind === "PHOTOS" ? resources?.imageUrl : null, technicalSheetUrl: item.resourceKind === "TECHNICAL_SHEET" ? resources?.technicalSheetUrl : null }));
   if (!(await beginFirstContactEffect(effectId, claim.attempt_no, claim.claim_token_digest, payloadDigest))) return null;
-  const outcome = item.resourceKind === "MESSAGE"
-    ? await provider.sendMessage({ phone: lead.phone, text: request.text })
-    : item.resourceKind === "PHOTOS"
-      ? await provider.sendPhoto({ phone: lead.phone, imageUrl: request.imageUrl ?? "", caption: `Información de ${lead.carModels[0] ?? "tu vehículo"}`, fileName: request.imageFileName ?? `leadflow-${(lead.carModels[0] ?? "vehiculo").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg` })
-      : await provider.sendDocument({ phone: lead.phone, documentUrl: request.technicalSheetUrl ?? "", caption: `Ficha técnica de ${lead.carModels[0] ?? "tu vehículo"}`, fileName: request.technicalSheetFileName ?? `Ficha técnica - ${(lead.carModels[0] ?? "vehiculo")}.pdf` });
-  await recordFirstContactEffectResult(effectId, claim.attempt_no, claim.claim_token_digest, { ...outcome, messageBody: outcome.result === "ACCEPTED" ? messageBodyForResource(item.resourceKind as FirstContactItem["resourceKind"], request.text) : null });
+  const outcome = await sendFirstContactItem(item, lead, request, provider).catch((): ProviderOutcome => ({ result: "UNKNOWN", providerMessageId: null, providerStatus: null }));
+  await recordFirstContactEffectResult(effectId, claim.attempt_no, claim.claim_token_digest, { ...outcome, messageBody: outcome.result === "ACCEPTED" ? messageBodyForResource(item.resourceKind as FirstContactItem["resourceKind"], request.text, resources?.modelName) : null });
   return requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });
 }

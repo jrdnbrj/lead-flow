@@ -344,6 +344,8 @@ function getPublicVehicleAssetUrl(storagePath: string): string {
 }
 
 export type CarModelContactAssets = {
+  modelId: string | null;
+  modelName: string;
   imageUrl: string | null;
   imageFileName: string | null;
   technicalSheetUrl: string | null;
@@ -363,28 +365,67 @@ const legacyCarModelIds: Record<string, string> = {
   Startruck: "startruck",
 };
 
-export async function getCarModelContactAssets(modelName: string): Promise<CarModelContactAssets> {
+function emptyCarModelContactAssets(modelName: string): CarModelContactAssets {
+  return { modelId: null, modelName, imageUrl: null, imageFileName: null, technicalSheetUrl: null, technicalSheetFileName: null };
+}
+
+export async function getCarModelContactAssetsForModels(modelNames: string[]): Promise<Map<string, CarModelContactAssets>> {
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return { imageUrl: null, imageFileName: null, technicalSheetUrl: null, technicalSheetFileName: null };
-  const { data: modelByName } = await supabase.from("car_models").select("id").eq("name", modelName).eq("active", true).maybeSingle();
-  const { data: modelByLegacyId } = !modelByName && legacyCarModelIds[modelName]
-    ? await supabase.from("car_models").select("id").eq("id", legacyCarModelIds[modelName]).eq("active", true).maybeSingle()
-    : { data: null };
-  const model = modelByName ?? modelByLegacyId;
-  if (!model) return { imageUrl: null, imageFileName: null, technicalSheetUrl: null, technicalSheetFileName: null };
-  const { data: assets } = await supabase.from("car_model_assets").select("asset_kind,storage_path,file_name").eq("car_model_id", model.id).eq("active", true).order("sort_order", { ascending: true });
-  const image = assets?.find((asset) => asset.asset_kind === "PHOTO");
-  const sheet = assets?.find((asset) => asset.asset_kind === "TECHNICAL_SHEET");
-  if (image || sheet) {
-    return {
-      imageUrl: image ? getPublicVehicleAssetUrl(image.storage_path) : null,
+  const normalizedNames = modelNames.map((name) => name.trim()).filter(Boolean);
+  const result = new Map<string, CarModelContactAssets>();
+  normalizedNames.forEach((name) => result.set(name, emptyCarModelContactAssets(name)));
+  if (!supabase || normalizedNames.length === 0) return result;
+
+  const { data: exactModels } = await supabase.from("car_models").select("id,name").eq("active", true).in("name", normalizedNames);
+  const modelsByInput = new Map<string, { id: string; name: string }>();
+  exactModels?.forEach((model) => modelsByInput.set(model.name, model));
+
+  const legacyIds = normalizedNames
+    .filter((name) => !modelsByInput.has(name) && legacyCarModelIds[name])
+    .map((name) => legacyCarModelIds[name]);
+  if (legacyIds.length > 0) {
+    const { data: legacyModels } = await supabase.from("car_models").select("id,name").eq("active", true).in("id", legacyIds);
+    legacyModels?.forEach((model) => {
+      const inputName = normalizedNames.find((name) => !modelsByInput.has(name) && legacyCarModelIds[name] === model.id);
+      if (inputName) modelsByInput.set(inputName, model);
+    });
+  }
+
+  const modelIds = [...new Set([...modelsByInput.values()].map((model) => model.id))];
+  if (modelIds.length === 0) return result;
+
+  const { data: assetRows } = await supabase.from("car_model_assets").select("car_model_id,asset_kind,storage_path,file_name").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true });
+  const assetsByModel = new Map<string, Array<{ car_model_id: string; asset_kind: string; storage_path: string; file_name: string | null }>>();
+  assetRows?.forEach((asset) => assetsByModel.set(asset.car_model_id, [...(assetsByModel.get(asset.car_model_id) ?? []), asset]));
+
+  const legacyFallbackIds = modelIds.filter((modelId) => !assetsByModel.has(modelId));
+  const { data: legacyImages } = legacyFallbackIds.length > 0
+    ? await supabase.from("car_model_images").select("car_model_id,image_url").in("car_model_id", legacyFallbackIds).order("sort_order", { ascending: true })
+    : { data: [] as Array<{ car_model_id: string; image_url: string }> };
+  const legacyImageByModel = new Map<string, string>();
+  legacyImages?.forEach((image) => { if (!legacyImageByModel.has(image.car_model_id)) legacyImageByModel.set(image.car_model_id, image.image_url); });
+
+  normalizedNames.forEach((name) => {
+    const model = modelsByInput.get(name);
+    if (!model) return;
+    const assets = assetsByModel.get(model.id) ?? [];
+    const image = assets.find((asset) => asset.asset_kind === "PHOTO");
+    const sheet = assets.find((asset) => asset.asset_kind === "TECHNICAL_SHEET");
+    result.set(name, {
+      modelId: model.id,
+      modelName: name,
+      imageUrl: image ? getPublicVehicleAssetUrl(image.storage_path) : assets.length === 0 ? legacyImageByModel.get(model.id) ?? null : null,
       imageFileName: image?.file_name ?? null,
       technicalSheetUrl: sheet ? getPublicVehicleAssetUrl(sheet.storage_path) : null,
       technicalSheetFileName: sheet?.file_name ?? null,
-    };
-  }
-  const { data: legacyImage } = await supabase.from("car_model_images").select("image_url").eq("car_model_id", model.id).order("sort_order", { ascending: true }).limit(1).maybeSingle();
-  return { imageUrl: legacyImage?.image_url ?? null, imageFileName: null, technicalSheetUrl: null, technicalSheetFileName: null };
+    });
+  });
+  return result;
+}
+
+export async function getCarModelContactAssets(modelName: string): Promise<CarModelContactAssets> {
+  const assets = await getCarModelContactAssetsForModels([modelName]);
+  return assets.get(modelName.trim()) ?? emptyCarModelContactAssets(modelName.trim());
 }
 
 export async function getCarModelImageUrl(modelName: string): Promise<string | null> {
