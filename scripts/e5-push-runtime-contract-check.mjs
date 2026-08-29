@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const migration = fs.readFileSync("supabase/migrations/036_epic5_push_runtime.sql", "utf8");
+const deletionMigration = fs.readFileSync("supabase/migrations/054_cancel_push_on_lead_delete.sql", "utf8");
 const worker = fs.readFileSync("public/sw.js", "utf8");
 const dispatcher = fs.readFileSync("supabase/functions/dispatch-push/index.ts", "utf8");
 const subscriptionRoute = fs.readFileSync("app/api/push/subscription/route.ts", "utf8");
@@ -12,5 +13,6 @@ for (const token of ["push", "notificationclick", "showNotification", "DONE", "I
 for (const token of ["webpush", "VAPID_PRIVATE_KEY", "ACCEPTED", "FAILED", "UNKNOWN", "INVALIDATED"]) assert(dispatcher.includes(token), `missing dispatcher contract: ${token}`);
 assert(subscriptionRoute.includes("requireAdvisor"), "subscription endpoint must require ownership");
 for (const token of ["transition_lead_follow_up_action_v1", "p_expected_action_version", "PUSH_COMMAND"]) assert(commandRoute.includes(token), `missing canonical command boundary: ${token}`);
+for (const token of ["soft_delete_lead", "push_deliveries", "status in ('SCHEDULED', 'CLAIMED')", "CANCELED_LEAD_DELETED"]) assert(deletionMigration.includes(token), `missing lead deletion Push cancellation contract: ${token}`);
 assert(!/NEXT_PUBLIC_VAPID_PRIVATE_KEY|VAPID_PRIVATE_KEY.*process\.env\./.test(worker), "private VAPID key leaked to worker");
 console.log("E5 real Push runtime contract checks: PASS");
