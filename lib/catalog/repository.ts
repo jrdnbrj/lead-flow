@@ -15,8 +15,8 @@ export type CatalogModel = {
   colors: CatalogColor[];
 };
 
+type CatalogColorAsset = Pick<Database["public"]["Tables"]["car_model_color_assets"]["Row"], "car_model_color_id" | "asset_kind" | "storage_path" | "file_name" | "sort_order">;
 type CatalogAsset = Pick<Database["public"]["Tables"]["car_model_assets"]["Row"], "car_model_id" | "asset_kind" | "storage_path" | "file_name" | "sort_order">;
-type LegacyCatalogImage = Pick<Database["public"]["Tables"]["car_model_images"]["Row"], "car_model_id" | "image_url" | "alt_text" | "sort_order">;
 
 function presentCatalogColor(color: CatalogColor): CatalogColor {
   if (color.slug === "plomo") return { ...color, name: "Gris", slug: "gris" };
@@ -37,42 +37,46 @@ export async function getCatalogModels(): Promise<CatalogModel[]> {
     .from("car_models")
     .select("id,name,sort_order")
     .eq("active", true)
+    .eq("is_other", false)
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
   if (error || !models?.length) return [];
 
   const modelIds = models.map((model) => model.id);
-  const [{ data: assets }, { data: legacyImages }, { data: colors }] = await Promise.all([
-    supabase.from("car_model_assets").select("car_model_id,asset_kind,storage_path,file_name,sort_order").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }),
-    supabase.from("car_model_images").select("car_model_id,image_url,alt_text,sort_order").in("car_model_id", modelIds).order("sort_order", { ascending: true }),
+  const [{ data: assets }, { data: colors }, { data: colorAssets }] = await Promise.all([
+    supabase.from("car_model_assets").select("car_model_id,asset_kind,storage_path,file_name,sort_order").eq("active", true).eq("asset_kind", "TECHNICAL_SHEET").in("car_model_id", modelIds).order("sort_order", { ascending: true }),
     supabase.from("car_model_colors").select("id,car_model_id,name,slug,sort_order").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }).order("name", { ascending: true }),
+    supabase.from("car_model_color_assets").select("car_model_color_id,asset_kind,storage_path,file_name,sort_order").eq("active", true).eq("asset_kind", "PHOTO").order("sort_order", { ascending: true }),
   ]);
 
-  const assetsByModel = new Map<string, CatalogAsset[]>();
-  (assets ?? []).forEach((asset) => assetsByModel.set(asset.car_model_id, [...(assetsByModel.get(asset.car_model_id) ?? []), asset]));
-  const legacyByModel = new Map<string, LegacyCatalogImage>();
-  (legacyImages ?? []).forEach((image) => { if (!legacyByModel.has(image.car_model_id)) legacyByModel.set(image.car_model_id, image); });
+  const sheetByModel = new Map<string, CatalogAsset>();
+  (assets ?? []).forEach((asset) => { if (!sheetByModel.has(asset.car_model_id)) sheetByModel.set(asset.car_model_id, asset); });
+  const colorAssetByColor = new Map<string, CatalogColorAsset>();
+  (colorAssets ?? []).forEach((asset) => { if (!colorAssetByColor.has(asset.car_model_color_id)) colorAssetByColor.set(asset.car_model_color_id, asset); });
   const colorsByModel = new Map<string, CatalogColor[]>();
   (colors ?? []).forEach((color) => {
     const presentedColor = presentCatalogColor(color);
-    colorsByModel.set(color.car_model_id, [...(colorsByModel.get(color.car_model_id) ?? []), presentedColor]);
+    const colorAsset = colorAssetByColor.get(color.id);
+    colorsByModel.set(color.car_model_id, [...(colorsByModel.get(color.car_model_id) ?? []), {
+      ...presentedColor,
+      imageUrl: colorAsset ? publicVehicleUrl(colorAsset.storage_path) : null,
+    }]);
   });
 
   return models.map((model) => {
-    const modelAssets = assetsByModel.get(model.id) ?? [];
-    const photo = modelAssets.find((asset) => asset.asset_kind === "PHOTO");
-    const sheet = modelAssets.find((asset) => asset.asset_kind === "TECHNICAL_SHEET");
-    const legacyImage = modelAssets.length === 0 ? legacyByModel.get(model.id) : undefined;
+    const modelColors = colorsByModel.get(model.id) ?? [];
+    const firstColorWithPhoto = modelColors.find((color) => color.imageUrl);
+    const sheet = sheetByModel.get(model.id);
     return {
       id: model.id,
       name: model.name,
       sortOrder: model.sort_order,
-      imageUrl: photo ? publicVehicleUrl(photo.storage_path) : legacyImage?.image_url ?? null,
-      imageAlt: legacyImage?.alt_text ?? photo?.file_name ?? `Foto de ${model.name}`,
-      imageFileName: photo?.file_name ?? null,
+      imageUrl: firstColorWithPhoto?.imageUrl ?? null,
+      imageAlt: firstColorWithPhoto ? `${model.name} en color ${firstColorWithPhoto.name}` : `Foto de ${model.name}`,
+      imageFileName: firstColorWithPhoto ? `${model.name} - ${firstColorWithPhoto.name}.jpg` : null,
       technicalSheetUrl: sheet ? publicVehicleUrl(sheet.storage_path) : null,
       technicalSheetFileName: sheet?.file_name ?? null,
-      colors: colorsByModel.get(model.id) ?? [],
+      colors: modelColors,
     };
   });
 }
