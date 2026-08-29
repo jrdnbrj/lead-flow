@@ -1,7 +1,7 @@
 import type { Database } from "@/lib/supabase/database";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export type CatalogColor = Pick<Database["public"]["Tables"]["car_model_colors"]["Row"], "id" | "name" | "slug" | "sort_order">;
+export type CatalogColor = Pick<Database["public"]["Tables"]["car_model_colors"]["Row"], "id" | "name" | "slug" | "sort_order"> & { imageUrl?: string | null };
 
 export type CatalogModel = {
   id: string;
@@ -17,6 +17,12 @@ export type CatalogModel = {
 
 type CatalogAsset = Pick<Database["public"]["Tables"]["car_model_assets"]["Row"], "car_model_id" | "asset_kind" | "storage_path" | "file_name" | "sort_order">;
 type LegacyCatalogImage = Pick<Database["public"]["Tables"]["car_model_images"]["Row"], "car_model_id" | "image_url" | "alt_text" | "sort_order">;
+
+function presentCatalogColor(color: CatalogColor): CatalogColor {
+  if (color.slug === "plomo") return { ...color, name: "Gris", slug: "gris" };
+  if (color.slug === "plomo-plateado") return { ...color, name: "Gris plateado", slug: "gris-plateado" };
+  return color;
+}
 
 function publicVehicleUrl(storagePath: string): string | null {
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
@@ -47,7 +53,10 @@ export async function getCatalogModels(): Promise<CatalogModel[]> {
   const legacyByModel = new Map<string, LegacyCatalogImage>();
   (legacyImages ?? []).forEach((image) => { if (!legacyByModel.has(image.car_model_id)) legacyByModel.set(image.car_model_id, image); });
   const colorsByModel = new Map<string, CatalogColor[]>();
-  (colors ?? []).forEach((color) => colorsByModel.set(color.car_model_id, [...(colorsByModel.get(color.car_model_id) ?? []), color]));
+  (colors ?? []).forEach((color) => {
+    const presentedColor = presentCatalogColor(color);
+    colorsByModel.set(color.car_model_id, [...(colorsByModel.get(color.car_model_id) ?? []), presentedColor]);
+  });
 
   return models.map((model) => {
     const modelAssets = assetsByModel.get(model.id) ?? [];
