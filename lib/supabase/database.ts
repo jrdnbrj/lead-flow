@@ -96,6 +96,7 @@ export type Database = {
           created_at: string
           id: string
           is_other: boolean
+          lead_registration_count: number
           name: string
           sort_order: number
         }
@@ -104,6 +105,7 @@ export type Database = {
           created_at?: string
           id: string
           is_other?: boolean
+          lead_registration_count?: number
           name: string
           sort_order: number
         }
@@ -112,6 +114,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_other?: boolean
+          lead_registration_count?: number
           name?: string
           sort_order?: number
         }
