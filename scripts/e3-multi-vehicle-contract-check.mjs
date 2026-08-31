@@ -35,5 +35,12 @@ assert(eventAppendCompatibilityMigration.includes("append_leadflow_event_v1(\n  
 assert(order.includes("itemKey") && order.includes("Number(leftScoped[2]) - Number(rightScoped[2])"), "model-major resource ordering missing");
 assert(ui.includes("firstContactItemLabel") && ui.includes("leadModels={lead.carModels}"), "model/resource labels missing from First Contact UI");
 assert(repository.includes("getCarModelContactAssetsForModels") && repository.includes("assets.length === 0 ? legacyImageByModel"), "bounded resource lookup or legacy fallback contract missing");
+for (const token of [
+  'from("car_model_colors")',
+  '.eq("slug", "blanco")',
+  'from("car_model_color_assets")',
+  "whitePhotoByModel",
+  "whitePhoto ? getPublicVehicleAssetUrl(whitePhoto.storage_path)",
+]) assert(repository.includes(token), `white First Contact photo preference missing ${token}`);
 
 console.log("E3 multi-vehicle resource contract checks: PASS");

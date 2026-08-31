@@ -394,9 +394,23 @@ export async function getCarModelContactAssetsForModels(modelNames: string[]): P
   const modelIds = [...new Set([...modelsByInput.values()].map((model) => model.id))];
   if (modelIds.length === 0) return result;
 
-  const { data: assetRows } = await supabase.from("car_model_assets").select("car_model_id,asset_kind,storage_path,file_name").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true });
+  const [{ data: assetRows }, { data: whiteColors }] = await Promise.all([
+    supabase.from("car_model_assets").select("car_model_id,asset_kind,storage_path,file_name").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }),
+    supabase.from("car_model_colors").select("id,car_model_id").eq("active", true).eq("slug", "blanco").in("car_model_id", modelIds),
+  ]);
   const assetsByModel = new Map<string, Array<{ car_model_id: string; asset_kind: string; storage_path: string; file_name: string | null }>>();
   assetRows?.forEach((asset) => assetsByModel.set(asset.car_model_id, [...(assetsByModel.get(asset.car_model_id) ?? []), asset]));
+
+  const whiteColorIds = (whiteColors ?? []).map((color) => color.id);
+  const { data: whitePhotoAssets } = whiteColorIds.length > 0
+    ? await supabase.from("car_model_color_assets").select("car_model_color_id,storage_path,file_name").eq("active", true).eq("asset_kind", "PHOTO").in("car_model_color_id", whiteColorIds).order("sort_order", { ascending: true })
+    : { data: [] as Array<{ car_model_color_id: string; storage_path: string; file_name: string | null }> };
+  const whiteColorModelById = new Map((whiteColors ?? []).map((color) => [color.id, color.car_model_id]));
+  const whitePhotoByModel = new Map<string, { storage_path: string; file_name: string | null }>();
+  whitePhotoAssets?.forEach((asset) => {
+    const modelId = whiteColorModelById.get(asset.car_model_color_id);
+    if (modelId && !whitePhotoByModel.has(modelId)) whitePhotoByModel.set(modelId, { storage_path: asset.storage_path, file_name: asset.file_name });
+  });
 
   const legacyFallbackIds = modelIds.filter((modelId) => !assetsByModel.has(modelId));
   const { data: legacyImages } = legacyFallbackIds.length > 0
@@ -409,13 +423,14 @@ export async function getCarModelContactAssetsForModels(modelNames: string[]): P
     const model = modelsByInput.get(name);
     if (!model) return;
     const assets = assetsByModel.get(model.id) ?? [];
+    const whitePhoto = whitePhotoByModel.get(model.id);
     const image = assets.find((asset) => asset.asset_kind === "PHOTO");
     const sheet = assets.find((asset) => asset.asset_kind === "TECHNICAL_SHEET");
     result.set(name, {
       modelId: model.id,
       modelName: name,
-      imageUrl: image ? getPublicVehicleAssetUrl(image.storage_path) : assets.length === 0 ? legacyImageByModel.get(model.id) ?? null : null,
-      imageFileName: image?.file_name ?? null,
+      imageUrl: whitePhoto ? getPublicVehicleAssetUrl(whitePhoto.storage_path) : image ? getPublicVehicleAssetUrl(image.storage_path) : assets.length === 0 ? legacyImageByModel.get(model.id) ?? null : null,
+      imageFileName: whitePhoto?.file_name ?? image?.file_name ?? null,
       technicalSheetUrl: sheet ? getPublicVehicleAssetUrl(sheet.storage_path) : null,
       technicalSheetFileName: sheet?.file_name ?? null,
     });
