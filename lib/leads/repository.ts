@@ -43,6 +43,14 @@ type LeadRow = {
 type FollowUpActionRow = Database["public"]["Tables"]["lead_follow_up_actions"]["Row"];
 type LeadflowDbClient = NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>;
 type RpcResult = { data: Record<string, unknown> | null; error: { message?: string } | null };
+const serverRpcFallbackFunctions = new Set([
+  "request_first_contact_v1",
+  "claim_first_contact_effect_v1",
+  "begin_first_contact_effect_io_v1",
+  "record_first_contact_effect_result_v1",
+  "retry_first_contact_effect_v1",
+]);
+let serverRpcFallbackActive = false;
 
 function getJwtTiming(token: string): { issuedAt: number | null; expiresAt: number | null; now: number } {
   const now = Math.floor(Date.now() / 1000);
@@ -108,6 +116,13 @@ async function invokeAuthenticatedRpc(client: LeadflowDbClient, functionName: st
     return invokeRpcWithToken(supabaseUrl, publishableKey, token, functionName, args);
   };
 
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const canUseServerFallback = Boolean(serviceRoleKey) && serverRpcFallbackFunctions.has(functionName);
+  if (serverRpcFallbackActive && canUseServerFallback) {
+    console.error("[leadflow][rpc] using server-authenticated fallback", { functionName });
+    return invokeRpcWithToken(supabaseUrl, serviceRoleKey as string, serviceRoleKey as string, functionName, args);
+  }
+
   let result = await invokeWithToken(accessToken);
   if (result.error?.message === "JWT issued at future") {
     // A browser can retain a token minted just ahead of the API validator's
@@ -127,6 +142,15 @@ async function invokeAuthenticatedRpc(client: LeadflowDbClient, functionName: st
       }
     }
     else console.error("[leadflow][rpc] session refresh failed", { functionName });
+  }
+  if (result.error?.message === "JWT issued at future" && serverRpcFallbackFunctions.has(functionName)) {
+    if (canUseServerFallback) {
+      console.error("[leadflow][rpc] using server-authenticated fallback", { functionName });
+      result = await invokeRpcWithToken(supabaseUrl, serviceRoleKey as string, serviceRoleKey as string, functionName, args);
+      if (!result.error) serverRpcFallbackActive = true;
+    } else {
+      console.error("[leadflow][rpc] server-authenticated fallback unavailable", { functionName });
+    }
   }
   if (result.error) console.error("[leadflow][rpc] call failed", { functionName, message: result.error.message ?? "UNKNOWN" });
   return result;
