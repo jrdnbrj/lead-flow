@@ -5,6 +5,7 @@ import { getInstallationAdvisorUserId } from "@/lib/config/installation";
 import { AUTH_REQUIRED_MESSAGE } from "@/lib/auth/auth-required";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 import { resolveInboundLeadMatch, type InboundLeadMatch } from "@/lib/leads/inbound-matching";
 import type { FirstContactItem, FirstContactOperation, FirstContactOperationResult, FirstContactResource, FirstContactResult, ProviderOutcome } from "@/lib/first-contact/types";
 
@@ -49,13 +50,29 @@ async function invokeRpc(client: LeadflowDbClient, functionName: string, args: R
 }
 
 async function invokeAuthenticatedRpc(client: LeadflowDbClient, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
-  // Server Actions validate the advisor before entering the repository, but
-  // Supabase SSR clients initialize their cookie-backed session lazily. Force
-  // that initialization on the same client that performs the RPC so auth.uid()
-  // is present inside security-definer E3 functions.
-  const { data, error } = await client.auth.getClaims();
-  if (error || !data?.claims?.sub) return { data: null, error: { message: "AUTH_REQUIRED" } };
-  return invokeRpc(client, functionName, args);
+  // Server Actions validate the advisor through the SSR client, but the
+  // PostgREST request must carry the access token explicitly. This avoids a
+  // lazy SSR-session race where auth.getClaims() succeeds while the following
+  // RPC is sent without auth.uid().
+  const { data: claimsData, error: claimsError } = await client.auth.getClaims();
+  if (claimsError || !claimsData?.claims?.sub) return { data: null, error: { message: "AUTH_REQUIRED" } };
+
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (sessionError || !accessToken || !supabaseUrl || !publishableKey) {
+    console.error("[leadflow][rpc] authenticated session unavailable", { functionName });
+    return { data: null, error: { message: "AUTH_REQUIRED" } };
+  }
+
+  const authenticatedClient = createClient<Database>(supabaseUrl, publishableKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
+  const result = await invokeRpc(authenticatedClient as unknown as LeadflowDbClient, functionName, args);
+  if (result.error) console.error("[leadflow][rpc] call failed", { functionName, message: result.error.message ?? "UNKNOWN" });
+  return result;
 }
 
 type ActionRpcPayload = {
@@ -670,7 +687,10 @@ export async function requestFirstContact(input: { leadId: string; configuration
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
   const { data, error } = await invokeAuthenticatedRpc(supabase, "request_first_contact_v1", { p_lead_id: input.leadId, p_configuration_digest: input.configurationDigest, p_items: input.items.map((item) => ({ resource_kind: item.resourceKind, item_key: item.itemKey, resource_version: item.resourceVersion, availability: item.availability })), p_idempotency_key: input.idempotencyKey });
-  return error ? null : toFirstContactResult(data);
+  if (error) return null;
+  const result = toFirstContactResult(data);
+  if (!result) console.error("[leadflow][first-contact] invalid RPC response", { itemCount: input.items.length, responseStatus: data && typeof data.status === "string" ? data.status : "MISSING" });
+  return result;
 }
 
 export async function claimFirstContactEffect(effectId: string, claimTokenDigest: string): Promise<{ status: string; effectId: string; attemptNo: number } | null> {
