@@ -5,7 +5,6 @@ import { getInstallationAdvisorUserId } from "@/lib/config/installation";
 import { AUTH_REQUIRED_MESSAGE } from "@/lib/auth/auth-required";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createClient } from "@supabase/supabase-js";
 import { resolveInboundLeadMatch, type InboundLeadMatch } from "@/lib/leads/inbound-matching";
 import type { FirstContactItem, FirstContactOperation, FirstContactOperationResult, FirstContactResource, FirstContactResult, ProviderOutcome } from "@/lib/first-contact/types";
 
@@ -60,6 +59,34 @@ async function invokeRpc(client: LeadflowDbClient, functionName: string, args: R
   return (client.rpc as unknown as (name: string, parameters: Record<string, unknown>) => Promise<RpcResult>)(functionName, args);
 }
 
+async function invokeRpcWithToken(supabaseUrl: string, publishableKey: string, accessToken: string, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
+    method: "POST",
+    headers: {
+      apikey: publishableKey,
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(args),
+    cache: "no-store",
+  });
+
+  const body = await response.text();
+  let parsed: unknown = null;
+  try {
+    parsed = body ? JSON.parse(body) : null;
+  } catch {
+    parsed = null;
+  }
+
+  if (!response.ok) {
+    const error = parsed && typeof parsed === "object" ? parsed as { message?: unknown } : null;
+    return { data: null, error: { message: typeof error?.message === "string" ? error.message : `RPC_HTTP_${response.status}` } };
+  }
+
+  return { data: parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null, error: null };
+}
+
 async function invokeAuthenticatedRpc(client: LeadflowDbClient, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
   // Server Actions validate the advisor through the SSR client, but the
   // PostgREST request must carry the access token explicitly. This avoids a
@@ -78,11 +105,7 @@ async function invokeAuthenticatedRpc(client: LeadflowDbClient, functionName: st
   }
 
   const invokeWithToken = async (token: string): Promise<RpcResult> => {
-    const authenticatedClient = createClient<Database>(supabaseUrl, publishableKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    return invokeRpc(authenticatedClient as unknown as LeadflowDbClient, functionName, args);
+    return invokeRpcWithToken(supabaseUrl, publishableKey, token, functionName, args);
   };
 
   let result = await invokeWithToken(accessToken);
