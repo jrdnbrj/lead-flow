@@ -42,6 +42,9 @@ jobs:
         with:
           ref: ${{ env.DEPLOY_COMMIT }}
 
+      - name: Verify production safety contract
+        run: node scripts/first-contact-safety-contract-check.mjs
+
       - name: Verify production deployment inputs
         shell: bash
         env:

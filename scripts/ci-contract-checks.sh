@@ -9,6 +9,7 @@ cd "$repo_root"
 # are updated to the accepted current implementation. E4-S5b requires a
 # local PostgreSQL fixture and is not a pure CI source check.
 checks=(
+  scripts/first-contact-safety-contract-check.mjs
   scripts/e1-s6-s7-action-contract-check.mjs
   scripts/e1-s8-action-adapter-contract-check.mjs
   scripts/e1-s9-s11-ui-contract-check.mjs

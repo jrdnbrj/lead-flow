@@ -1,5 +1,10 @@
 # LeadFlow operations
 
+The focused production safety context is in
+[`project-context.md`](./project-context.md). For First Contact incidents use
+[`whatsapp-first-contact-runbook.md`](./whatsapp-first-contact-runbook.md),
+and for releases use [`production-release-checklist.md`](./production-release-checklist.md).
+
 ## Current environment model
 
 LeadFlow currently uses one environment: `development`. The project identity is

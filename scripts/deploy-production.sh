@@ -12,6 +12,15 @@ cd "$repo_root"
 command -v docker >/dev/null 2>&1 || fail "docker is required"
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required"
 
+# Supabase rejects freshly issued JWTs when the host clock is ahead. Keep this
+# as a deployment gate while allowing non-systemd test hosts to proceed.
+if command -v timedatectl >/dev/null 2>&1; then
+  ntp_synchronized="$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || true)"
+  if [[ -n "$ntp_synchronized" && "$ntp_synchronized" != "yes" ]]; then
+    fail "host clock is not synchronized; refusing deployment"
+  fi
+fi
+
 deploy_commit="${DEPLOY_COMMIT:-${1:-origin/main}}"
 env_dir="${DEPLOY_ENV_DIR:-/etc/leadflow}"
 leadflow_env_file="${LEADFLOW_ENV_FILE:-$env_dir/leadflow.env}"

@@ -4,6 +4,17 @@ This is the operator runbook for the single-advisor production pilot. It is
 intentionally small: Supabase remains managed, and one VPS runs only the web
 ingress, LeadFlow, Evolution API, and Redis.
 
+For the incident-prevention contract and First Contact diagnosis, start with:
+
+- [`project-context.md`](./project-context.md) — compact BMAD context and
+  non-negotiable boundaries;
+- [`architecture-spine-production-safety.md`](./architecture-spine-production-safety.md)
+  — invariants that must survive future changes;
+- [`whatsapp-first-contact-runbook.md`](./whatsapp-first-contact-runbook.md) —
+  safe diagnosis and recovery;
+- [`production-release-checklist.md`](./production-release-checklist.md) —
+  pre-release and post-deploy gates.
+
 ## Topology
 
 ```text
