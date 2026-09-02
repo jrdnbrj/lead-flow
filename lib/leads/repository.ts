@@ -206,7 +206,10 @@ async function attachLeadRelations(supabase: LeadflowDbClient, leads: Lead[]): P
 }
 
 export async function getLeads(advisorUserId: string): Promise<Lead[]> {
-  const supabase = await createSupabaseServerClient();
+  // The dashboard validates this singleton owner before calling the repository.
+  // Use the server-only client here so a stale/missing SSR auth lookup cannot
+  // turn an authenticated dashboard into a false empty state.
+  const supabase = createSupabaseAdminClient();
   if (!supabase) throw new Error("No pudimos cargar los contactos.");
 
   const query = supabase.from("leads").select(leadSelect).is("deleted_at", null).order("created_at", { ascending: false }).limit(100);
