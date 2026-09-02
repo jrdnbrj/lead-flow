@@ -48,6 +48,16 @@ async function invokeRpc(client: LeadflowDbClient, functionName: string, args: R
   return (client.rpc as unknown as (name: string, parameters: Record<string, unknown>) => Promise<RpcResult>)(functionName, args);
 }
 
+async function invokeAuthenticatedRpc(client: LeadflowDbClient, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
+  // Server Actions validate the advisor before entering the repository, but
+  // Supabase SSR clients initialize their cookie-backed session lazily. Force
+  // that initialization on the same client that performs the RPC so auth.uid()
+  // is present inside security-definer E3 functions.
+  const { data, error } = await client.auth.getClaims();
+  if (error || !data?.claims?.sub) return { data: null, error: { message: "AUTH_REQUIRED" } };
+  return invokeRpc(client, functionName, args);
+}
+
 type ActionRpcPayload = {
   id: string;
   lead_id: string;
@@ -595,7 +605,7 @@ export async function correctInboundResponseForAdvisor(input: {
 }): Promise<{ action: FollowUpAction | null; status: string; manualDecision: string } | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data, error } = await invokeRpc(supabase, "correct_inbound_response_v1", {
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "correct_inbound_response_v1", {
     p_lead_id: input.leadId,
     p_decision: input.decision,
     p_source_message_id: input.sourceMessageId ?? null,
@@ -659,14 +669,14 @@ function toFirstContactResult(value: unknown): FirstContactOperationResult | nul
 export async function requestFirstContact(input: { leadId: string; configurationDigest: string; items: Array<{ resourceKind: FirstContactResource; itemKey: string; resourceVersion: string; availability: "AVAILABLE" | "NOT_AVAILABLE" }>; idempotencyKey: string }): Promise<FirstContactOperationResult | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data, error } = await invokeRpc(supabase, "request_first_contact_v1", { p_lead_id: input.leadId, p_configuration_digest: input.configurationDigest, p_items: input.items.map((item) => ({ resource_kind: item.resourceKind, item_key: item.itemKey, resource_version: item.resourceVersion, availability: item.availability })), p_idempotency_key: input.idempotencyKey });
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "request_first_contact_v1", { p_lead_id: input.leadId, p_configuration_digest: input.configurationDigest, p_items: input.items.map((item) => ({ resource_kind: item.resourceKind, item_key: item.itemKey, resource_version: item.resourceVersion, availability: item.availability })), p_idempotency_key: input.idempotencyKey });
   return error ? null : toFirstContactResult(data);
 }
 
 export async function claimFirstContactEffect(effectId: string, claimTokenDigest: string): Promise<{ status: string; effectId: string; attemptNo: number } | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data, error } = await invokeRpc(supabase, "claim_first_contact_effect_v1", { p_effect_id: effectId, p_claim_token_digest: claimTokenDigest });
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "claim_first_contact_effect_v1", { p_effect_id: effectId, p_claim_token_digest: claimTokenDigest });
   if (error || !data || typeof data !== "object") return null;
   const result = data as Record<string, unknown>;
   return typeof result.status === "string" && typeof result.effect_id === "string" && typeof result.attempt_no === "number" ? { status: result.status, effectId: result.effect_id, attemptNo: result.attempt_no } : null;
@@ -675,21 +685,21 @@ export async function claimFirstContactEffect(effectId: string, claimTokenDigest
 export async function beginFirstContactEffect(effectId: string, attemptNo: number, claimTokenDigest: string, payloadDigest?: string): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
-  const { data, error } = await invokeRpc(supabase, "begin_first_contact_effect_io_v1", { p_effect_id: effectId, p_attempt_no: attemptNo, p_claim_token_digest: claimTokenDigest, p_payload_digest: payloadDigest ?? null });
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "begin_first_contact_effect_io_v1", { p_effect_id: effectId, p_attempt_no: attemptNo, p_claim_token_digest: claimTokenDigest, p_payload_digest: payloadDigest ?? null });
   return !error && Boolean(data);
 }
 
 export async function recordFirstContactEffectResult(effectId: string, attemptNo: number, claimTokenDigest: string, outcome: ProviderOutcome & { messageBody?: string | null }): Promise<boolean> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
-  const { error } = await invokeRpc(supabase, "record_first_contact_effect_result_v1", { p_effect_id: effectId, p_attempt_no: attemptNo, p_claim_token_digest: claimTokenDigest, p_result_kind: outcome.result, p_provider_message_id: outcome.providerMessageId ?? null, p_provider_status: outcome.providerStatus ?? null, p_message_body: outcome.messageBody ?? null });
+  const { error } = await invokeAuthenticatedRpc(supabase, "record_first_contact_effect_result_v1", { p_effect_id: effectId, p_attempt_no: attemptNo, p_claim_token_digest: claimTokenDigest, p_result_kind: outcome.result, p_provider_message_id: outcome.providerMessageId ?? null, p_provider_status: outcome.providerStatus ?? null, p_message_body: outcome.messageBody ?? null });
   return !error;
 }
 
 export async function retryFirstContactEffect(effectId: string, expectedEffectVersion: number | undefined, idempotencyKey: string): Promise<Record<string, unknown> | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data, error } = await invokeRpc(supabase, "retry_first_contact_effect_v1", { p_effect_id: effectId, p_expected_effect_version: expectedEffectVersion ?? null, p_idempotency_key: idempotencyKey });
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "retry_first_contact_effect_v1", { p_effect_id: effectId, p_expected_effect_version: expectedEffectVersion ?? null, p_idempotency_key: idempotencyKey });
   return error || !data || typeof data !== "object" ? null : data as Record<string, unknown>;
 }
 
