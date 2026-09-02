@@ -37,6 +37,6 @@ $$;
 grant execute on function public.leadflow_first_contact_owner_v1(uuid) to service_role;
 grant execute on function public.request_first_contact_v1(uuid, text, jsonb, text) to service_role;
 grant execute on function public.claim_first_contact_effect_v1(uuid, text) to service_role;
-grant execute on function public.begin_first_contact_effect_io_v1(uuid, integer, text) to service_role;
+grant execute on function public.begin_first_contact_effect_io_v1(uuid, integer, text, text) to service_role;
 grant execute on function public.record_first_contact_effect_result_v1(uuid, integer, text, text, text, text, text) to service_role;
 grant execute on function public.retry_first_contact_effect_v1(uuid, bigint, text) to service_role;
