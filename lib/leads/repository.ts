@@ -66,11 +66,23 @@ async function invokeAuthenticatedRpc(client: LeadflowDbClient, functionName: st
     return { data: null, error: { message: "AUTH_REQUIRED" } };
   }
 
-  const authenticatedClient = createClient<Database>(supabaseUrl, publishableKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
-  });
-  const result = await invokeRpc(authenticatedClient as unknown as LeadflowDbClient, functionName, args);
+  const invokeWithToken = async (token: string): Promise<RpcResult> => {
+    const authenticatedClient = createClient<Database>(supabaseUrl, publishableKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    return invokeRpc(authenticatedClient as unknown as LeadflowDbClient, functionName, args);
+  };
+
+  let result = await invokeWithToken(accessToken);
+  if (result.error?.message === "JWT issued at future") {
+    // A browser can retain a token minted just ahead of the API validator's
+    // clock. Refresh once before failing the action; never retry provider IO.
+    const { data: refreshedSession, error: refreshError } = await client.auth.refreshSession();
+    const refreshedToken = refreshedSession.session?.access_token;
+    if (!refreshError && refreshedToken) result = await invokeWithToken(refreshedToken);
+    else console.error("[leadflow][rpc] session refresh failed", { functionName });
+  }
   if (result.error) console.error("[leadflow][rpc] call failed", { functionName, message: result.error.message ?? "UNKNOWN" });
   return result;
 }
