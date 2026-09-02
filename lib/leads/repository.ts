@@ -116,10 +116,15 @@ async function invokeAuthenticatedRpc(client: LeadflowDbClient, functionName: st
     const refreshedToken = refreshedSession.session?.access_token;
     if (!refreshError && refreshedToken) {
       console.error("[leadflow][rpc] JWT timing rejected", { functionName, original: getJwtTiming(accessToken), refreshed: getJwtTiming(refreshedToken) });
-      // Supabase validates `iat` against a clock with sub-second precision;
-      // give a freshly minted token a small safety margin before retrying.
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      result = await invokeWithToken(refreshedToken);
+      // Supabase validates `iat` against a clock with sub-second precision.
+      // Keep the same user-authenticated token and give the validator a bounded
+      // safety window; never bypass Auth/RLS or retry provider IO here.
+      for (const [attempt, delayMs] of [3000, 6000, 12000].entries()) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        result = await invokeWithToken(refreshedToken);
+        if (result.error?.message !== "JWT issued at future") break;
+        console.error("[leadflow][rpc] JWT timing still rejected", { functionName, attempt: attempt + 1, delayMs });
+      }
     }
     else console.error("[leadflow][rpc] session refresh failed", { functionName });
   }
