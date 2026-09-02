@@ -205,17 +205,14 @@ async function attachLeadRelations(supabase: LeadflowDbClient, leads: Lead[]): P
   return attachFirstContact(supabase, await attachPurchaseMilestones(supabase, await attachInboundManualDecisions(supabase, await attachLatestMessages(supabase, await attachFollowUpActions(supabase, leads)))));
 }
 
-export async function getLeads(): Promise<Lead[]> {
+export async function getLeads(advisorUserId: string): Promise<Lead[]> {
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return [];
+  if (!supabase) throw new Error("No pudimos cargar los contactos.");
 
-  const { data: userData } = await supabase.auth.getUser();
   const query = supabase.from("leads").select(leadSelect).is("deleted_at", null).order("created_at", { ascending: false }).limit(100);
-  const { data, error } = userData.user
-    ? await query.eq("user_id", userData.user.id)
-    : await query.is("user_id", null);
+  const { data, error } = await query.eq("user_id", advisorUserId);
 
-  if (error || !data) return [];
+  if (error || !data) throw new Error("No pudimos cargar los contactos.");
   return attachLeadRelations(supabase, data.map((row) => toDomainLead(row as unknown as LeadRow)));
 }
 

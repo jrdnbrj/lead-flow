@@ -83,7 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link role="menuitem" href="/push-diagnostics" onClick={closeUserMenu} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-black text-[var(--ink)] transition hover:bg-[#f6f3ed]"><Activity size={16} />Push Diagnostics</Link>
                 <div className="my-1 border-t border-black/[0.06]" />
                 <form action={logoutAction}>
-                  <button role="menuitem" type="submit" onClick={closeUserMenu} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-black text-[var(--ink)] transition hover:bg-[#f6f3ed]"><LogOut size={16} />Cerrar sesión</button>
+                  <button role="menuitem" type="submit" className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-black text-[var(--ink)] transition hover:bg-[#f6f3ed]"><LogOut size={16} />Cerrar sesión</button>
                 </form>
                 <button type="button" aria-label="Cerrar menú de usuario" onClick={closeUserMenu} className="absolute right-2 top-2 grid size-7 place-items-center rounded-lg text-[var(--muted)] hover:bg-[#f6f3ed] sm:hidden"><X size={14} /></button>
               </div> : null}
