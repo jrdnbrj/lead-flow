@@ -11,6 +11,7 @@ const repository = read("lib/leads/repository.ts");
 const migration = read("supabase/migrations/049_first_contact_multi_vehicle_resources.sql");
 const eventProjectionMigration = read("supabase/migrations/052_first_contact_event_resource_projection.sql");
 const eventAppendCompatibilityMigration = read("supabase/migrations/053_first_contact_event_append_compatibility.sql");
+const resourceRecoveryMigration = read("supabase/migrations/059_e3_resource_recovery.sql");
 
 for (const token of [
   "lead.carModels.slice(0, 3)",
@@ -41,6 +42,11 @@ for (const token of [
   'from("car_model_color_assets")',
   "whitePhotoByModel",
   "whitePhoto ? getPublicVehicleAssetUrl(whitePhoto.storage_path)",
+  "createSupabaseAdminClient() ?? await createSupabaseServerClient()",
+  "FIRST_CONTACT_CATALOG_LOOKUP_FAILED",
 ]) assert(repository.includes(token), `white First Contact photo preference missing ${token}`);
+for (const token of ["hydrate_first_contact_resource_v1", "FIRST_CONTACT_RESOURCE_INPUT_INVALID", "ALREADY_ACCEPTED", "ALREADY_AVAILABLE", "HYDRATED", "on conflict (lead_id, effect_kind, business_key) do nothing", "to service_role"]) assert(resourceRecoveryMigration.includes(token), `resource recovery migration missing ${token}`);
+for (const token of ["hydrateMissingFirstContactResource", "itemKey", "const refreshed = await requestFirstContact"]) assert(command.includes(token), `resource recovery execution missing ${token}`);
+for (const token of ["No disponible aún", "retryItem", "item.availability === \"NOT_AVAILABLE\""]) assert(ui.includes(token), `resource recovery UI missing ${token}`);
 
 console.log("E3 multi-vehicle resource contract checks: PASS");

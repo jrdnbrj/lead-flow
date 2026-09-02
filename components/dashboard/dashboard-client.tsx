@@ -333,7 +333,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
   }, [lead]);
 
   const isReminderDue = followUpActions.some(isDueAction);
-  const firstContactHasRetryableItem = lead.firstContact?.items.some((item) => item.result === null || item.result === "FAILED" || item.result === "UNKNOWN") ?? false;
+  const firstContactHasRetryableItem = lead.firstContact?.items.some((item) => item.result === null || item.result === "FAILED" || item.result === "UNKNOWN" || (item.resourceKind !== "MESSAGE" && item.availability === "NOT_AVAILABLE" && item.result === "NOT_AVAILABLE")) ?? false;
   const hasOutboundEvidence = Boolean(lead.lastAgentMessageAt || lead.lastMessageDirection === "OUTBOUND" || whatsappStatus !== "PENDING");
   const firstContactNeedsRecovery = !lead.firstContact && hasOutboundEvidence;
   const canSend = firstContactHasRetryableItem || (!lead.firstContact && (whatsappStatus === "PENDING" || whatsappStatus === "FAILED" || firstContactNeedsRecovery));

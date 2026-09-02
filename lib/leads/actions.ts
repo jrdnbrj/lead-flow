@@ -129,7 +129,7 @@ export async function retryFirstContactResourceAction(input: { leadId: string; e
   }
 }
 
-export async function retryFirstContactRecoveryResourceAction(input: { leadId: string; resourceKind: "MESSAGE" | "PHOTOS" | "TECHNICAL_SHEET"; idempotencyKey: string }): Promise<ActionResponse<FirstContactOperationResult>> {
+export async function retryFirstContactRecoveryResourceAction(input: { leadId: string; resourceKind: "MESSAGE" | "PHOTOS" | "TECHNICAL_SHEET"; itemKey?: string; idempotencyKey: string }): Promise<ActionResponse<FirstContactOperationResult>> {
   const parsed = firstContactRecoveryRetrySchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "El reintento no es válido." };
   const auth = await requireAdvisorAction<FirstContactOperationResult>();
@@ -137,7 +137,7 @@ export async function retryFirstContactRecoveryResourceAction(input: { leadId: s
   try {
     const lead = await getLeadById(parsed.data.leadId);
     if (!lead) return { success: false, error: "No encontramos este lead para reintentar el recurso." };
-    const result = await retryFirstContactResourceFromRecovery(lead, parsed.data.resourceKind, createEvolutionFirstContactProvider(), parsed.data.idempotencyKey);
+    const result = await retryFirstContactResourceFromRecovery(lead, parsed.data.resourceKind, createEvolutionFirstContactProvider(), parsed.data.idempotencyKey, parsed.data.itemKey);
     if (!result) return { success: false, error: "No pudimos reintentar el recurso. Puedes actualizar e intentarlo nuevamente." };
     return { success: true, data: result, message: "Reintento procesado." };
   } catch {

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { getEffectiveWhatsappMessageTemplate } from "@/lib/config/message-template";
 import { renderWhatsappMessageTemplate } from "@/lib/config/message-template-shared";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
-import { claimFirstContactEffect, beginFirstContactEffect, getCarModelContactAssetsForModels, recordFirstContactEffectResult, requestFirstContact, retryFirstContactEffect } from "@/lib/leads/repository";
+import { claimFirstContactEffect, beginFirstContactEffect, getCarModelContactAssetsForModels, hydrateFirstContactResource, recordFirstContactEffectResult, requestFirstContact, retryFirstContactEffect } from "@/lib/leads/repository";
 import type { Lead } from "@/lib/domain/lead";
 import { orderFirstContactItems } from "@/lib/first-contact/order";
 import { getResourcesForItem, modelSlug, planFirstContactResourceItems, type FirstContactModelResources, type FirstContactRequestItem } from "@/lib/first-contact/resource-plan";
@@ -87,6 +87,7 @@ export async function retryFirstContactResourceFromRecovery(
   resourceKind: FirstContactResource,
   provider: FirstContactProvider,
   idempotencyKey: string,
+  itemKey?: string,
 ): Promise<FirstContactOperationResult | null> {
   const request = await buildFirstContactRequest(lead);
   await ensureEvolutionWebhook().catch(() => false);
@@ -99,7 +100,18 @@ export async function retryFirstContactResourceFromRecovery(
   });
   if (!initial) return null;
 
-  for (const item of orderFirstContactItems(initial.items.filter((candidate) => candidate.resourceKind === resourceKind))) {
+  const initialCandidates = initial.items.filter((candidate) => candidate.resourceKind === resourceKind && (!itemKey || candidate.itemKey === itemKey));
+  for (const item of initialCandidates) {
+    await hydrateMissingFirstContactResource(lead.id, item, request);
+  }
+  const refreshed = await requestFirstContact({
+    leadId: lead.id,
+    configurationDigest: request.configurationDigest,
+    items: request.items,
+    idempotencyKey,
+  });
+  const operation = refreshed ?? initial;
+  for (const item of orderFirstContactItems(operation.items.filter((candidate) => candidate.resourceKind === resourceKind && (!itemKey || candidate.itemKey === itemKey)))) {
     await executeFirstContactItem({ item, lead, request, idempotencyKey, provider });
   }
 
@@ -110,6 +122,15 @@ export async function retryFirstContactResourceFromRecovery(
     idempotencyKey,
   });
   return final ? { ...final, replayed: initial.replayed } : null;
+}
+
+async function hydrateMissingFirstContactResource(leadId: string, item: FirstContactItem, request: FirstContactRequest): Promise<boolean> {
+  if (item.resourceKind === "MESSAGE" || item.availability !== "NOT_AVAILABLE") return false;
+  const resources = resourcesForRequestItem(item, request);
+  const resourceUrl = item.resourceKind === "PHOTOS" ? resources?.imageUrl : resources?.technicalSheetUrl;
+  if (!resourceUrl) return false;
+  const result = await hydrateFirstContactResource({ leadId, resourceKind: item.resourceKind, itemKey: item.itemKey, resourceVersion: digest(resourceUrl) });
+  return Boolean(result);
 }
 
 async function sendFirstContactItem(item: Pick<FirstContactItem, "resourceKind" | "itemKey">, lead: FirstContactLead, request: FirstContactRequest, provider: FirstContactProvider): Promise<ProviderOutcome> {
@@ -168,7 +189,10 @@ export async function executeFirstContact(lead: FirstContactLead, provider: Firs
   await ensureEvolutionWebhook().catch(() => false);
   const initial = await requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });
   if (!initial) return null;
-  const orderedItems = orderFirstContactItems(initial.items);
+  for (const item of initial.items) await hydrateMissingFirstContactResource(lead.id, item, request);
+  const refreshed = await requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });
+  const operation = refreshed ?? initial;
+  const orderedItems = orderFirstContactItems(operation.items);
   const messageItem = orderedItems.find((item) => item.resourceKind === "MESSAGE");
   const messageExecution = messageItem
     ? await executeFirstContactItem({ item: messageItem, lead, request, idempotencyKey, provider })

@@ -474,13 +474,21 @@ function emptyCarModelContactAssets(modelName: string): CarModelContactAssets {
 }
 
 export async function getCarModelContactAssetsForModels(modelNames: string[]): Promise<Map<string, CarModelContactAssets>> {
-  const supabase = await createSupabaseServerClient();
+  // First Contact is already authorized against the lead before this lookup.
+  // Resolve public catalog metadata with the server-only client so a stale or
+  // timing-invalid browser JWT cannot turn existing assets into false
+  // NOT_AVAILABLE items.
+  const supabase = createSupabaseAdminClient() ?? await createSupabaseServerClient();
   const normalizedNames = modelNames.map((name) => name.trim()).filter(Boolean);
   const result = new Map<string, CarModelContactAssets>();
   normalizedNames.forEach((name) => result.set(name, emptyCarModelContactAssets(name)));
   if (!supabase || normalizedNames.length === 0) return result;
 
-  const { data: exactModels } = await supabase.from("car_models").select("id,name").eq("active", true).in("name", normalizedNames);
+  const { data: exactModels, error: exactModelsError } = await supabase.from("car_models").select("id,name").eq("active", true).in("name", normalizedNames);
+  if (exactModelsError) {
+    console.error("[leadflow][first-contact] catalog model lookup failed", { modelCount: normalizedNames.length, message: exactModelsError.message });
+    throw new Error("FIRST_CONTACT_CATALOG_LOOKUP_FAILED");
+  }
   const modelsByInput = new Map<string, { id: string; name: string }>();
   exactModels?.forEach((model) => modelsByInput.set(model.name, model));
 
@@ -488,7 +496,11 @@ export async function getCarModelContactAssetsForModels(modelNames: string[]): P
     .filter((name) => !modelsByInput.has(name) && legacyCarModelIds[name])
     .map((name) => legacyCarModelIds[name]);
   if (legacyIds.length > 0) {
-    const { data: legacyModels } = await supabase.from("car_models").select("id,name").eq("active", true).in("id", legacyIds);
+    const { data: legacyModels, error: legacyModelsError } = await supabase.from("car_models").select("id,name").eq("active", true).in("id", legacyIds);
+    if (legacyModelsError) {
+      console.error("[leadflow][first-contact] legacy catalog model lookup failed", { modelCount: legacyIds.length, message: legacyModelsError.message });
+      throw new Error("FIRST_CONTACT_CATALOG_LOOKUP_FAILED");
+    }
     legacyModels?.forEach((model) => {
       const inputName = normalizedNames.find((name) => !modelsByInput.has(name) && legacyCarModelIds[name] === model.id);
       if (inputName) modelsByInput.set(inputName, model);
@@ -498,17 +510,25 @@ export async function getCarModelContactAssetsForModels(modelNames: string[]): P
   const modelIds = [...new Set([...modelsByInput.values()].map((model) => model.id))];
   if (modelIds.length === 0) return result;
 
-  const [{ data: assetRows }, { data: whiteColors }] = await Promise.all([
+  const [{ data: assetRows, error: assetError }, { data: whiteColors, error: whiteColorError }] = await Promise.all([
     supabase.from("car_model_assets").select("car_model_id,asset_kind,storage_path,file_name").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }),
     supabase.from("car_model_colors").select("id,car_model_id").eq("active", true).eq("slug", "blanco").in("car_model_id", modelIds),
   ]);
+  if (assetError || whiteColorError) {
+    console.error("[leadflow][first-contact] catalog asset lookup failed", { modelCount: modelIds.length, assetMessage: assetError?.message ?? null, whiteColorMessage: whiteColorError?.message ?? null });
+    throw new Error("FIRST_CONTACT_CATALOG_LOOKUP_FAILED");
+  }
   const assetsByModel = new Map<string, Array<{ car_model_id: string; asset_kind: string; storage_path: string; file_name: string | null }>>();
   assetRows?.forEach((asset) => assetsByModel.set(asset.car_model_id, [...(assetsByModel.get(asset.car_model_id) ?? []), asset]));
 
   const whiteColorIds = (whiteColors ?? []).map((color) => color.id);
-  const { data: whitePhotoAssets } = whiteColorIds.length > 0
+  const { data: whitePhotoAssets, error: whitePhotoError } = whiteColorIds.length > 0
     ? await supabase.from("car_model_color_assets").select("car_model_color_id,storage_path,file_name").eq("active", true).eq("asset_kind", "PHOTO").in("car_model_color_id", whiteColorIds).order("sort_order", { ascending: true })
     : { data: [] as Array<{ car_model_color_id: string; storage_path: string; file_name: string | null }> };
+  if (whitePhotoError) {
+    console.error("[leadflow][first-contact] color photo lookup failed", { colorCount: whiteColorIds.length, message: whitePhotoError.message });
+    throw new Error("FIRST_CONTACT_CATALOG_LOOKUP_FAILED");
+  }
   const whiteColorModelById = new Map((whiteColors ?? []).map((color) => [color.id, color.car_model_id]));
   const whitePhotoByModel = new Map<string, { storage_path: string; file_name: string | null }>();
   whitePhotoAssets?.forEach((asset) => {
@@ -517,9 +537,11 @@ export async function getCarModelContactAssetsForModels(modelNames: string[]): P
   });
 
   const legacyFallbackIds = modelIds.filter((modelId) => !assetsByModel.has(modelId));
-  const { data: legacyImages } = legacyFallbackIds.length > 0
+  const { data: legacyImages, error: legacyImageError } = legacyFallbackIds.length > 0
     ? await supabase.from("car_model_images").select("car_model_id,image_url").in("car_model_id", legacyFallbackIds).order("sort_order", { ascending: true })
     : { data: [] as Array<{ car_model_id: string; image_url: string }> };
+  if (legacyImageError) console.error("[leadflow][first-contact] legacy image lookup failed", { modelCount: legacyFallbackIds.length, message: legacyImageError.message });
+  if (legacyImageError) throw new Error("FIRST_CONTACT_CATALOG_LOOKUP_FAILED");
   const legacyImageByModel = new Map<string, string>();
   legacyImages?.forEach((image) => { if (!legacyImageByModel.has(image.car_model_id)) legacyImageByModel.set(image.car_model_id, image.image_url); });
 
@@ -540,6 +562,30 @@ export async function getCarModelContactAssetsForModels(modelNames: string[]): P
     });
   });
   return result;
+}
+
+export async function hydrateFirstContactResource(input: {
+  leadId: string;
+  resourceKind: "PHOTOS" | "TECHNICAL_SHEET";
+  itemKey: string;
+  resourceVersion: string;
+}): Promise<Record<string, unknown> | null> {
+  // This is intentionally server-only. The caller has already passed the
+  // advisor authorization boundary, and the RPC verifies lead ownership again
+  // before creating an effect for a previously unavailable item.
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("hydrate_first_contact_resource_v1", {
+    p_lead_id: input.leadId,
+    p_resource_kind: input.resourceKind,
+    p_item_key: input.itemKey,
+    p_resource_version: input.resourceVersion,
+  });
+  if (error || !data || typeof data !== "object") {
+    console.error("[leadflow][first-contact] resource hydration failed", { resourceKind: input.resourceKind, message: error?.message ?? "INVALID_RESPONSE" });
+    return null;
+  }
+  return data as Record<string, unknown>;
 }
 
 export async function getCarModelContactAssets(modelName: string): Promise<CarModelContactAssets> {

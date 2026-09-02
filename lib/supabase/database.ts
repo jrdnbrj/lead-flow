@@ -1103,6 +1103,15 @@ export type Database = {
         Returns: Json
       }
       get_first_contact_v1: { Args: { p_lead_id: string }; Returns: Json }
+      hydrate_first_contact_resource_v1: {
+        Args: {
+          p_item_key: string
+          p_lead_id: string
+          p_resource_kind: string
+          p_resource_version: string
+        }
+        Returns: Json
+      }
       leadflow_action_command_replay_v1: {
         Args: { p_key: string }
         Returns: Json

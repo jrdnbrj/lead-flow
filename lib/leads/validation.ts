@@ -17,6 +17,7 @@ export const firstContactRetrySchema = z.object({
 export const firstContactRecoveryRetrySchema = z.object({
   leadId: z.string().trim().min(1),
   resourceKind: z.enum(["MESSAGE", "PHOTOS", "TECHNICAL_SHEET"]),
+  itemKey: z.string().trim().min(1).max(240).optional(),
   idempotencyKey: z.string().trim().min(16).max(200),
 });
 
