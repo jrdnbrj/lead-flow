@@ -45,6 +45,17 @@ type FollowUpActionRow = Database["public"]["Tables"]["lead_follow_up_actions"][
 type LeadflowDbClient = NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>;
 type RpcResult = { data: Record<string, unknown> | null; error: { message?: string } | null };
 
+function getJwtTiming(token: string): { issuedAt: number | null; expiresAt: number | null; now: number } {
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    const payload = token.split(".")[1];
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { iat?: unknown; exp?: unknown };
+    return { issuedAt: typeof claims.iat === "number" ? claims.iat : null, expiresAt: typeof claims.exp === "number" ? claims.exp : null, now };
+  } catch {
+    return { issuedAt: null, expiresAt: null, now };
+  }
+}
+
 async function invokeRpc(client: LeadflowDbClient, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
   return (client.rpc as unknown as (name: string, parameters: Record<string, unknown>) => Promise<RpcResult>)(functionName, args);
 }
@@ -80,7 +91,10 @@ async function invokeAuthenticatedRpc(client: LeadflowDbClient, functionName: st
     // clock. Refresh once before failing the action; never retry provider IO.
     const { data: refreshedSession, error: refreshError } = await client.auth.refreshSession();
     const refreshedToken = refreshedSession.session?.access_token;
-    if (!refreshError && refreshedToken) result = await invokeWithToken(refreshedToken);
+    if (!refreshError && refreshedToken) {
+      console.error("[leadflow][rpc] JWT timing rejected", { functionName, original: getJwtTiming(accessToken), refreshed: getJwtTiming(refreshedToken) });
+      result = await invokeWithToken(refreshedToken);
+    }
     else console.error("[leadflow][rpc] session refresh failed", { functionName });
   }
   if (result.error) console.error("[leadflow][rpc] call failed", { functionName, message: result.error.message ?? "UNKNOWN" });
