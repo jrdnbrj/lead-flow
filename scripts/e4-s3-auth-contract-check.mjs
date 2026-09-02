@@ -56,7 +56,8 @@ requireMatch("repository", /createSupabaseAdminClient/, "provider repository pat
 requireMatch("repository", /getInstallationAdvisorUserId/, "provider repository path must derive the singleton owner internally");
 requireMatch("repository", /isProviderOwnedLead/, "provider repository path must validate singleton ownership before provider updates");
 requireMatch("repository", /findProviderOwnedMessageByProviderId/, "provider message lookup must validate parent lead ownership");
-requireMatch("repository", /userData\.user\.id !== ownerId/, "authenticated legacy lead capture must not assign singleton ownership to a non-advisor session");
+requireMatch("repository", /const ownerId = await getInstallationAdvisorUserId\(\)/, "lead capture must derive ownership from the validated singleton advisor");
+requireMatch("repository", /user_id: ownerId/, "lead capture must persist the validated singleton advisor as owner");
 requireMatch("actionResponse", /message\?: string/, "ActionResponse must carry a functional message separate from machine error code");
 for (const key of ["dashboardClient", "leadCaptureForm", "sellerProfileForm", "messageTemplateEditor", "unlinkButton"]) {
   requireMatch(key, /response\.message \|\| response\.error/, "client must display functional AUTH_REQUIRED message before machine code");

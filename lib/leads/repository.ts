@@ -260,19 +260,11 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
     followUpActions: [],
   };
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   if (!supabase) throw new Error("No pudimos preparar el guardado del contacto. Intenta de nuevo y avísame si continúa.");
 
-  const { data: userData, error: authError } = await supabase.auth.getUser();
-  if (authError && authError.name !== "AuthSessionMissingError") {
-    throw new Error("No fue posible verificar la sesión; el lead no fue guardado.");
-  }
-  let ownerId: string | null = null;
-  if (userData.user) {
-    ownerId = await getInstallationAdvisorUserId();
-    if (!ownerId) throw new Error("La identidad de instalación no está configurada; el lead no fue guardado.");
-    if (userData.user.id !== ownerId) throw new Error(AUTH_REQUIRED_MESSAGE);
-  }
+  const ownerId = await getInstallationAdvisorUserId();
+  if (!ownerId) throw new Error("La identidad de instalación no está configurada; el lead no fue guardado.");
   const { data, error } = await supabase
     .from("leads")
     .insert({
@@ -324,14 +316,18 @@ export async function updateLeadDetails(input: UpdateLeadInput): Promise<Lead | 
 }
 
 export async function getLeadById(id: string): Promise<Lead | null> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   if (!supabase) return null;
 
-  const { data: userData } = await supabase.auth.getUser();
-  const query = supabase.from("leads").select(leadSelect).eq("id", id).is("deleted_at", null);
-  const { data, error } = userData.user
-    ? await query.eq("user_id", userData.user.id).maybeSingle()
-    : await query.is("user_id", null).maybeSingle();
+  const ownerId = await getInstallationAdvisorUserId();
+  if (!ownerId) return null;
+  const { data, error } = await supabase
+    .from("leads")
+    .select(leadSelect)
+    .eq("id", id)
+    .eq("user_id", ownerId)
+    .is("deleted_at", null)
+    .maybeSingle();
 
   if (error || !data) return null;
   const [lead] = await attachLeadRelations(supabase, [toDomainLead(data as unknown as LeadRow)]);
