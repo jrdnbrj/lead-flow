@@ -12,6 +12,7 @@ import { formatElapsedSince, formatScheduledDateTime, getDashboardLeadBucket, is
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { FirstContactSummary } from "@/components/leads/first-contact-summary";
 import { FirstContactColorSelector } from "@/components/leads/first-contact-color-selector";
+import { CardQuoteTool } from "@/components/leads/card-quote-tool";
 import { LeadContactActions } from "@/components/leads/lead-contact-actions";
 import { PendingNotifications } from "@/components/leads/pending-notifications";
 import { PushNotifications } from "@/components/leads/push-notifications";
@@ -576,6 +577,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
     {isExpanded && purchaseDecisionAt ? <p className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-emerald-700"><CheckCircle2 size={14} />Compra registrada · {new Intl.DateTimeFormat("es-EC", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Guayaquil" }).format(new Date(purchaseDecisionAt))}</p> : null}
 
     {isExpanded ? <FollowUpActions leadId={lead.id} actions={followUpActions} onActionsChange={setFollowUpActions} onError={setSendError} onInfo={setSendInfo} /> : null}
+    {isExpanded && lead.paymentMethods.includes("TARJETA_CREDITO") ? <CardQuoteTool lead={lead} /> : null}
     {isExpanded && (lead.firstContact || hasOutboundEvidence) ? <FirstContactSummary key={`${lead.id}-${lead.firstContact?.operation.operationVersion ?? "recovery"}`} lead={lead} initialOperation={lead.firstContact} /> : null}
     {isColorSelectorOpen ? <FirstContactColorSelector lead={lead} initialModels={colorModels} onCancel={() => setIsColorSelectorOpen(false)} onConfirm={(colorSelections) => void sendMessage(colorSelections)} /> : null}
     {isExpanded && lead.lastCustomerMessageAt ? <p className="mt-3 text-[11px] text-[var(--muted)]">Última respuesta del cliente registrada. Las acciones pendientes se cancelan cuando llega una nueva respuesta.</p> : null}
