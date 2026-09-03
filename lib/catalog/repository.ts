@@ -1,5 +1,5 @@
 import type { Database } from "@/lib/supabase/database";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type CatalogColor = Pick<Database["public"]["Tables"]["car_model_colors"]["Row"], "id" | "name" | "slug" | "sort_order"> & { imageUrl?: string | null; imageFileName?: string | null };
 
@@ -45,7 +45,11 @@ function publicVehicleUrl(storagePath: string): string | null {
 }
 
 export async function getCatalogModels(): Promise<CatalogModel[]> {
-  const supabase = await createSupabaseServerClient();
+  // The route enforces advisor authentication before this repository is
+  // called. Catalog metadata is not owner-scoped, so keep this read server-only
+  // and independent from a browser session refresh; a stale session must not
+  // render the protected catalog as an empty catalog.
+  const supabase = createSupabaseAdminClient();
   if (!supabase) return [];
 
   const modelQuery = () => supabase
