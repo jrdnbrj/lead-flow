@@ -1,6 +1,13 @@
 import { modelResourceItemKey, planFirstContactResourceItems } from "../lib/first-contact/resource-plan.ts";
+import { orderCatalogColors } from "../lib/catalog/color-order.ts";
 
 const assert = (value, message) => { if (!value) throw new Error(message); };
+const orderedColors = orderCatalogColors([
+  { slug: "rojo", sort_order: 1, name: "Rojo" },
+  { slug: "blanco", sort_order: 2, name: "Blanco" },
+  { slug: "plateado", sort_order: 3, name: "Plateado" },
+]);
+assert(orderedColors.map((color) => color.slug).join("|") === "blanco|plateado|rojo", "color selector must share the catalog order");
 const model = (name, index, selectedColorId = null) => ({
   modelName: name,
   modelId: `model-${index}`,

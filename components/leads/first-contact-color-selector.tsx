@@ -5,6 +5,7 @@ import { Check, LoaderCircle, Palette, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Lead } from "@/lib/domain/lead";
+import { orderCatalogColors } from "@/lib/catalog/color-order";
 import { getFirstContactColorOptionsAction } from "@/lib/leads/actions";
 import type { FirstContactColorModelOption, FirstContactColorSelection } from "@/lib/first-contact/resource-plan";
 
@@ -85,7 +86,7 @@ function ColorModelCard({ model, value, onChange, onDefaultImageLoad }: { model:
       <div className="min-w-0"><p className="truncate text-sm font-black">{model.modelName}</p><p className="mt-0.5 text-[10px] font-semibold text-[var(--muted)]">{selectedColor ? selectedColor.imageUrl ? `Foto: ${selectedColor.name}` : `${selectedColor.name} · usa la foto predeterminada` : "Foto predeterminada"}</p></div>
     </div>
     <div className="mt-2 flex flex-wrap gap-1.5">
-      {model.colors.map((color) => <ColorChoice key={color.id} label={color.name} selected={value === color.id} onClick={() => onChange(color.id)} />)}
+      {orderCatalogColors(model.colors).map((color) => <ColorChoice key={color.id} label={color.name} selected={value === color.id} onClick={() => onChange(color.id)} />)}
     </div>
   </section>;
 }

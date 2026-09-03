@@ -11,6 +11,7 @@ const validation = read("lib/leads/validation.ts");
 const summary = read("components/leads/first-contact-summary.tsx");
 const selector = read("components/leads/first-contact-color-selector.tsx");
 const dashboard = read("components/dashboard/dashboard-client.tsx");
+const colorOrder = read("lib/catalog/color-order.ts");
 const migration = read("supabase/migrations/060_first_contact_color_selection_snapshot.sql");
 
 for (const required of [
@@ -39,8 +40,12 @@ for (const required of ["colorSelections", "getFirstContactColorOptionsAction"])
 assert(validation.includes("firstContactColorSelectionSchema"), "color selection validation missing");
 
 for (const required of ["getFirstContactColorOptionsAction", "defaultColorId", "isDefault", "miniatura", "fetchPriority=\"high\""]) assert(selector.includes(required), `color selector missing ${required}`);
+assert(selector.includes("orderCatalogColors(model.colors)"), "First Contact colors do not use the catalog order");
+assert(colorOrder.includes('"blanco"') && colorOrder.includes('"gris-plateado"'), "catalog color order source is incomplete");
 for (const required of ["FirstContactColorSelector", "onConfirm", "startFirstContactAction"]) assert(summary.includes(required), `First Contact selector integration missing ${required}`);
+assert(summary.includes("selectedColorName") && summary.includes("${resourceLabel} — ${modelName}${colorLabel}"), "First Contact summary does not expose the photo color");
 assert(dashboard.includes("setIsColorSelectorOpen(false);") && dashboard.includes("setIsSending(true);"), "dashboard must close the color selector and show normal send feedback");
+assert(!dashboard.includes("isRecoveryConfirming") && dashboard.includes("if (sendIsRecovery) void sendMessage()"), "recovery retry must be direct without a confirmation modal");
 
 for (const required of [
   "create table if not exists public.lead_vehicle_color_selections",

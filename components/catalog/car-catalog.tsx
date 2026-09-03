@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } fr
 
 import { PdfViewer } from "@/components/catalog/pdf-viewer";
 import { setCatalogModelDefaultColorAction } from "@/lib/catalog/actions";
+import { orderCatalogColors } from "@/lib/catalog/color-order";
 import type { CatalogColor, CatalogModel } from "@/lib/catalog/repository";
 
 const directImageLoader = ({ src }: ImageLoaderProps) => src;
@@ -36,15 +37,8 @@ const colorSwatchClasses: Record<string, string> = {
   naranja: "bg-[#e48635]",
 };
 
-const colorOrder = ["blanco", "negro", "gris", "plateado", "plata", "rojo", "azul", "celeste", "verde", "naranja", "plateado-mate", "plata-mate", "plata-silver", "gris-plateado"];
-
-function colorOrderIndex(color: CatalogColor): number {
-  const index = colorOrder.indexOf(color.slug);
-  return index >= 0 ? index : colorOrder.length;
-}
-
 function orderedColors(model: CatalogModel): CatalogColor[] {
-  return [...model.colors].sort((left, right) => colorOrderIndex(left) - colorOrderIndex(right) || left.sort_order - right.sort_order || left.name.localeCompare(right.name, "es"));
+  return orderCatalogColors(model.colors);
 }
 
 function photoSlidesFor(model: CatalogModel): CatalogPhotoSlide[] {

@@ -88,16 +88,17 @@ function ResourceResult({ item, leadModels, retrying, onRetry }: { item: FirstCo
   const resource = item.resourceKind as FirstContactResource;
   const result = item.result ?? (item.availability === "NOT_AVAILABLE" ? "NOT_AVAILABLE" : "PENDING") as FirstContactResult | "PENDING";
   const retryable = (item.availability === "AVAILABLE" && (item.result === null || item.result === "FAILED" || item.result === "UNKNOWN")) || (resource !== "MESSAGE" && item.availability === "NOT_AVAILABLE" && item.result === "NOT_AVAILABLE");
-  const label = firstContactItemLabel(resource, item.itemKey, leadModels);
+  const label = firstContactItemLabel(resource, item.itemKey, leadModels, item.selectedColorName);
   return <div className={`flex min-w-0 flex-col items-center justify-center rounded-lg border border-black/[0.06] bg-white p-2 text-center ${retryable ? "min-h-[64px]" : "min-h-[52px]"}`}><div className="flex min-w-0 flex-col items-center gap-1"><p className="text-[9px] font-black leading-3">{label}</p><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black leading-3 ${resultClass[result]}`}>{result === "PENDING" ? "No enviado" : result === "NOT_AVAILABLE" ? "No disponible aún" : resultLabel[result]}</span></div>{retryable ? <button type="button" aria-label={`Reintentar ${label.toLowerCase()}`} title={`Reintentar ${label.toLowerCase()}`} disabled={retrying} aria-busy={retrying} onClick={onRetry} className="button-primary first-contact-retry mt-1 inline-flex min-h-7 w-full items-center justify-center gap-1 rounded-md px-1 py-0.5 text-[8px] disabled:cursor-wait disabled:opacity-60">{retrying ? <LoaderCircle size={11} className="animate-spin" /> : <RefreshCw size={11} />}<span>{retrying ? "Buscando…" : "Reintentar"}</span></button> : null}</div>;
 }
 
-function firstContactItemLabel(resource: FirstContactResource, itemKey: string, leadModels: string[]): string {
+function firstContactItemLabel(resource: FirstContactResource, itemKey: string, leadModels: string[], selectedColorName?: string | null): string {
   const baseLabel = firstContactResourceLabel(resource);
   if (resource === "MESSAGE") return baseLabel;
   const scopedModel = itemKey.match(/^(?:PHOTO|TECHNICAL_SHEET):(\d{2}):/);
   const modelIndex = scopedModel ? Number(scopedModel[1]) - 1 : 0;
   const modelName = leadModels[modelIndex];
   const resourceLabel = resource === "PHOTOS" ? "Foto" : "Ficha técnica";
-  return modelName ? `${resourceLabel} — ${modelName}` : resourceLabel;
+  const colorLabel = resource === "PHOTOS" && selectedColorName ? ` · ${selectedColorName}` : "";
+  return modelName ? `${resourceLabel} — ${modelName}${colorLabel}` : `${resourceLabel}${colorLabel}`;
 }

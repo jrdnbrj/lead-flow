@@ -6,6 +6,7 @@ export type FirstContactColorOption = {
   id: string;
   name: string;
   slug: string;
+  sort_order: number;
   isDefault: boolean;
   imageUrl: string | null;
   imageFileName: string | null;

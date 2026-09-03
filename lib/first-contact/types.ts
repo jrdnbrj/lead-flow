@@ -31,6 +31,7 @@ export type FirstContactItem = {
   effectId: string | null;
   leadMessageId: string | null;
   providerMessageId: string | null;
+  selectedColorName?: string | null;
   resourceSnapshot?: FirstContactResourceSnapshot | null;
 };
 

@@ -682,7 +682,7 @@ export async function getFirstContactColorOptionsForLead(leadId: string): Promis
   const colorsByModel = new Map<string, FirstContactColorModelOption["colors"]>();
   colors?.forEach((color) => {
     const asset = firstAssetByColor.get(color.id);
-    colorsByModel.set(color.car_model_id, [...(colorsByModel.get(color.car_model_id) ?? []), { id: color.id, name: color.name, slug: color.slug, isDefault: color.is_default, imageUrl: asset ? getPublicVehicleAssetUrl(asset.storage_path) : null, imageFileName: asset?.file_name ?? null }]);
+    colorsByModel.set(color.car_model_id, [...(colorsByModel.get(color.car_model_id) ?? []), { id: color.id, name: color.name, slug: color.slug, sort_order: color.sort_order, isDefault: color.is_default, imageUrl: asset ? getPublicVehicleAssetUrl(asset.storage_path) : null, imageFileName: asset?.file_name ?? null }]);
   });
   return modelNames.map((modelName, vehicleIndex) => {
     const asset = defaults.get(modelName) ?? emptyCarModelContactAssets(modelName);
@@ -971,7 +971,8 @@ function toFirstContactResult(value: unknown, includeSnapshots = false): FirstCo
     if (!item || typeof item !== "object") return null;
     const row = item as Record<string, unknown>;
     if (typeof row.id !== "string" || typeof row.resource_kind !== "string" || typeof row.item_key !== "string" || typeof row.resource_version !== "string" || (row.availability !== "AVAILABLE" && row.availability !== "NOT_AVAILABLE")) return null;
-    return { id: row.id, resourceKind: row.resource_kind as FirstContactResource, itemKey: row.item_key, resourceVersion: row.resource_version, availability: row.availability, result: row.result as FirstContactResult | null, effectId: typeof row.effect_id === "string" ? row.effect_id : null, leadMessageId: typeof row.lead_message_id === "string" ? row.lead_message_id : null, providerMessageId: typeof row.provider_message_id === "string" ? row.provider_message_id : null, ...(includeSnapshots ? { resourceSnapshot: toResourceSnapshot(row.resource_snapshot) } : {}) };
+    const resourceSnapshot = toResourceSnapshot(row.resource_snapshot);
+    return { id: row.id, resourceKind: row.resource_kind as FirstContactResource, itemKey: row.item_key, resourceVersion: row.resource_version, availability: row.availability, result: row.result as FirstContactResult | null, effectId: typeof row.effect_id === "string" ? row.effect_id : null, leadMessageId: typeof row.lead_message_id === "string" ? row.lead_message_id : null, providerMessageId: typeof row.provider_message_id === "string" ? row.provider_message_id : null, selectedColorName: row.resource_kind === "PHOTOS" ? resourceSnapshot?.selectedColorName ?? null : null, ...(includeSnapshots ? { resourceSnapshot } : {}) };
   }) : [];
   if (items.some((item) => !item)) return null;
   return { status: typeof raw.status === "string" ? raw.status : "UNKNOWN", replayed: raw.replayed === true, operation: { id: op.id, leadId: op.lead_id, operationType: "FIRST_CONTACT", operationVersion: op.operation_version, status: op.status as FirstContactOperation["status"] }, items: items as FirstContactItem[] };
