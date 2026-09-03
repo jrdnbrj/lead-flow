@@ -12,6 +12,7 @@ const migration = read("supabase/migrations/049_first_contact_multi_vehicle_reso
 const eventProjectionMigration = read("supabase/migrations/052_first_contact_event_resource_projection.sql");
 const eventAppendCompatibilityMigration = read("supabase/migrations/053_first_contact_event_append_compatibility.sql");
 const resourceRecoveryMigration = read("supabase/migrations/059_e3_resource_recovery.sql");
+const eventCategoriesFixMigration = read("supabase/migrations/062_first_contact_event_resource_categories_fix.sql");
 
 for (const token of [
   "lead.carModels.slice(0, 3)",
@@ -32,6 +33,7 @@ assert(migration.includes("grant execute on function public.request_first_contac
 assert(!migration.includes("grant execute on function public.request_first_contact_v1(uuid, text, jsonb, text) to anon"), "request RPC must not be granted to anon");
 assert(eventProjectionMigration.includes("select distinct") && eventProjectionMigration.includes("requested_resource_kinds"), "multi-vehicle event resource projection must deduplicate categories");
 assert(eventAppendCompatibilityMigration.includes("append_leadflow_event_v1(\n  p_event jsonb,\n  p_identity_key text,\n  p_identity_components jsonb") && eventAppendCompatibilityMigration.includes("identity_components") && eventAppendCompatibilityMigration.includes("p_event || jsonb_build_object"), "multi-vehicle event append compatibility adapter missing");
+assert(eventCategoriesFixMigration.includes("select distinct value->>'resource_kind'") && eventCategoriesFixMigration.includes("requested_resources"), "first-contact event resource categories must be deduplicated");
 
 assert(order.includes("itemKey") && order.includes("Number(leftScoped[2]) - Number(rightScoped[2])"), "model-major resource ordering missing");
 assert(ui.includes("firstContactItemLabel") && ui.includes("leadModels={lead.carModels}"), "model/resource labels missing from First Contact UI");

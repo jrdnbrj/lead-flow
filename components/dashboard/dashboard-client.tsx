@@ -405,6 +405,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
   async function sendMessage(colorSelections: FirstContactColorSelection[] = []) {
     if (isSending || !canSend) return;
     setIsRecoveryConfirming(false);
+    setIsColorSelectorOpen(false);
     setIsSending(true);
     setSendError(null);
     setSendInfo(null);

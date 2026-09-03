@@ -10,6 +10,7 @@ const actions = read("lib/leads/actions.ts");
 const validation = read("lib/leads/validation.ts");
 const summary = read("components/leads/first-contact-summary.tsx");
 const selector = read("components/leads/first-contact-color-selector.tsx");
+const dashboard = read("components/dashboard/dashboard-client.tsx");
 const migration = read("supabase/migrations/060_first_contact_color_selection_snapshot.sql");
 
 for (const required of [
@@ -39,6 +40,7 @@ assert(validation.includes("firstContactColorSelectionSchema"), "color selection
 
 for (const required of ["getFirstContactColorOptionsAction", "defaultColorId", "isDefault", "miniatura", "fetchPriority=\"high\""]) assert(selector.includes(required), `color selector missing ${required}`);
 for (const required of ["FirstContactColorSelector", "onConfirm", "startFirstContactAction"]) assert(summary.includes(required), `First Contact selector integration missing ${required}`);
+assert(dashboard.includes("setIsColorSelectorOpen(false);") && dashboard.includes("setIsSending(true);"), "dashboard must close the color selector and show normal send feedback");
 
 for (const required of [
   "create table if not exists public.lead_vehicle_color_selections",
