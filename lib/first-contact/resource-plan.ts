@@ -1,15 +1,40 @@
-import type { FirstContactItem } from "@/lib/first-contact/types";
+import type { FirstContactItem, FirstContactResourceSnapshot } from "@/lib/first-contact/types";
+
+export type FirstContactColorSelection = { vehicleIndex: number; colorId: string | null };
+
+export type FirstContactColorOption = {
+  id: string;
+  name: string;
+  slug: string;
+  imageUrl: string | null;
+  imageFileName: string | null;
+};
+
+export type FirstContactColorModelOption = {
+  vehicleIndex: number;
+  modelId: string | null;
+  modelName: string;
+  defaultImageUrl: string | null;
+  colors: FirstContactColorOption[];
+};
 
 export type FirstContactModelResources = {
   modelName: string;
   modelId: string | null;
   imageUrl: string | null;
   imageFileName: string | null;
+  imageSource: "COLOR_PHOTO" | "DEFAULT_COLOR_PHOTO" | "MODEL_PHOTO" | "LEGACY_PHOTO" | "NONE";
+  imageAssetId: string | null;
+  imageStoragePath: string | null;
+  selectedColorId: string | null;
+  selectedColorName: string | null;
   technicalSheetUrl: string | null;
   technicalSheetFileName: string | null;
+  technicalSheetAssetId: string | null;
+  technicalSheetStoragePath: string | null;
 };
 
-export type FirstContactRequestItem = Pick<FirstContactItem, "resourceKind" | "itemKey" | "resourceVersion" | "availability">;
+export type FirstContactRequestItem = Pick<FirstContactItem, "resourceKind" | "itemKey" | "resourceVersion" | "availability"> & { resourceSnapshot?: FirstContactResourceSnapshot };
 
 export function modelSlug(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "modelo";
@@ -31,11 +56,39 @@ export function planFirstContactResourceItems(modelResources: FirstContactModelR
   const items = modelResources.flatMap((model, index) => {
     const photoItemKey = modelResourceItemKey("PHOTO", index, model);
     const sheetItemKey = modelResourceItemKey("TECHNICAL_SHEET", index, model);
+    const photoSnapshot: FirstContactResourceSnapshot = {
+      schema: 1,
+      resource: "PHOTO",
+      vehicleIndex: index,
+      modelId: model.modelId,
+      modelName: model.modelName,
+      selectedColorId: model.selectedColorId,
+      selectedColorName: model.selectedColorName,
+      source: model.imageSource,
+      assetId: model.imageAssetId,
+      storagePath: model.imageStoragePath,
+      fileName: model.imageFileName,
+      publicUrl: model.imageUrl,
+    };
+    const sheetSnapshot: FirstContactResourceSnapshot = {
+      schema: 1,
+      resource: "TECHNICAL_SHEET",
+      vehicleIndex: index,
+      modelId: model.modelId,
+      modelName: model.modelName,
+      selectedColorId: null,
+      selectedColorName: null,
+      source: model.technicalSheetUrl ? "MODEL_SHEET" : "NONE",
+      assetId: model.technicalSheetAssetId,
+      storagePath: model.technicalSheetStoragePath,
+      fileName: model.technicalSheetFileName,
+      publicUrl: model.technicalSheetUrl,
+    };
     resourcesByItemKey[photoItemKey] = model;
     resourcesByItemKey[sheetItemKey] = model;
     return [
-      { resourceKind: "PHOTOS" as const, itemKey: photoItemKey, resourceVersion: model.imageUrl ?? `unavailable-${model.modelId ?? modelSlug(model.modelName)}-photo-v1`, availability: model.imageUrl ? "AVAILABLE" as const : "NOT_AVAILABLE" as const },
-      { resourceKind: "TECHNICAL_SHEET" as const, itemKey: sheetItemKey, resourceVersion: model.technicalSheetUrl ?? `unavailable-${model.modelId ?? modelSlug(model.modelName)}-sheet-v1`, availability: model.technicalSheetUrl ? "AVAILABLE" as const : "NOT_AVAILABLE" as const },
+      { resourceKind: "PHOTOS" as const, itemKey: photoItemKey, resourceVersion: model.imageUrl ?? `unavailable-${model.modelId ?? modelSlug(model.modelName)}-photo-v1`, availability: model.imageUrl ? "AVAILABLE" as const : "NOT_AVAILABLE" as const, resourceSnapshot: photoSnapshot },
+      { resourceKind: "TECHNICAL_SHEET" as const, itemKey: sheetItemKey, resourceVersion: model.technicalSheetUrl ?? `unavailable-${model.modelId ?? modelSlug(model.modelName)}-sheet-v1`, availability: model.technicalSheetUrl ? "AVAILABLE" as const : "NOT_AVAILABLE" as const, resourceSnapshot: sheetSnapshot },
     ];
   });
   return { items, resourcesByItemKey };

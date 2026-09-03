@@ -22,6 +22,7 @@ checks=(
   scripts/e3-batch3-contract-check.mjs
   scripts/e3-batch4-contract-check.mjs
   scripts/e3-multi-vehicle-contract-check.mjs
+  scripts/e3-color-selection-contract-check.mjs
   scripts/e3-integrated-contract-check.mjs
   scripts/e4-s3-auth-contract-check.mjs
   scripts/e4-s4-backfill-dry-run-contract.mjs
@@ -42,5 +43,6 @@ for check in "${checks[@]}"; do
 done
 
 node --experimental-strip-types scripts/e3-multi-vehicle-runtime-check.mjs
+node --experimental-strip-types scripts/e3-color-selection-runtime-check.mjs
 
 printf '%s\n' 'CI contract checks: PASS'

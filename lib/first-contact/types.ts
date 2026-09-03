@@ -2,6 +2,21 @@ export type FirstContactResource = "MESSAGE" | "PHOTOS" | "TECHNICAL_SHEET";
 export type FirstContactResult = "ACCEPTED" | "FAILED" | "UNKNOWN" | "NOT_AVAILABLE";
 export type FirstContactAvailability = "AVAILABLE" | "NOT_AVAILABLE";
 
+export type FirstContactResourceSnapshot = {
+  schema: 1;
+  resource: "PHOTO" | "TECHNICAL_SHEET";
+  vehicleIndex: number;
+  modelId: string | null;
+  modelName: string;
+  selectedColorId: string | null;
+  selectedColorName: string | null;
+  source: "COLOR_PHOTO" | "DEFAULT_COLOR_PHOTO" | "MODEL_PHOTO" | "LEGACY_PHOTO" | "MODEL_SHEET" | "NONE";
+  assetId: string | null;
+  storagePath: string | null;
+  fileName: string | null;
+  publicUrl: string | null;
+};
+
 export function firstContactResourceLabel(resource: FirstContactResource): string {
   return { MESSAGE: "Mensaje", PHOTOS: "Fotos", TECHNICAL_SHEET: "Ficha técnica" }[resource];
 }
@@ -16,6 +31,7 @@ export type FirstContactItem = {
   effectId: string | null;
   leadMessageId: string | null;
   providerMessageId: string | null;
+  resourceSnapshot?: FirstContactResourceSnapshot | null;
 };
 
 export type FirstContactOperation = {

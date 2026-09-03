@@ -420,6 +420,7 @@ export type Database = {
           resource_kind: string
           resource_version: string
           result: string | null
+          resource_snapshot: Json | null
           updated_at: string
         }
         Insert: {
@@ -435,6 +436,7 @@ export type Database = {
           resource_kind: string
           resource_version: string
           result?: string | null
+          resource_snapshot?: Json | null
           updated_at?: string
         }
         Update: {
@@ -450,6 +452,7 @@ export type Database = {
           resource_kind?: string
           resource_version?: string
           result?: string | null
+          resource_snapshot?: Json | null
           updated_at?: string
         }
         Relationships: [
@@ -474,6 +477,55 @@ export type Database = {
             referencedRelation: "lead_contact_operations"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      lead_vehicle_color_selections: {
+        Row: {
+          car_model_color_id: string
+          car_model_id: string
+          created_at: string
+          lead_id: string
+          updated_at: string
+          vehicle_index: number
+        }
+        Insert: {
+          car_model_color_id: string
+          car_model_id: string
+          created_at?: string
+          lead_id: string
+          updated_at?: string
+          vehicle_index: number
+        }
+        Update: {
+          car_model_color_id?: string
+          car_model_id?: string
+          created_at?: string
+          lead_id?: string
+          updated_at?: string
+          vehicle_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_vehicle_color_selections_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_vehicle_color_selections_car_model_id_fkey"
+            columns: ["car_model_id"]
+            isOneToOne: false
+            referencedRelation: "car_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_vehicle_color_selections_car_model_color_id_car_model_id_fkey"
+            columns: ["car_model_color_id", "car_model_id"]
+            isOneToOne: false
+            referencedRelation: "car_model_colors"
+            referencedColumns: ["id", "car_model_id"]
+          }
         ]
       }
       lead_contact_operations: {
@@ -1215,6 +1267,26 @@ export type Database = {
           p_idempotency_key: string
           p_items: Json
           p_lead_id: string
+        }
+        Returns: Json
+      }
+      request_first_contact_v2: {
+        Args: {
+          p_color_selections: Json
+          p_configuration_digest: string
+          p_idempotency_key: string
+          p_items: Json
+          p_lead_id: string
+        }
+        Returns: Json
+      }
+      hydrate_first_contact_resource_v2: {
+        Args: {
+          p_item_key: string
+          p_lead_id: string
+          p_resource_kind: string
+          p_resource_snapshot: Json
+          p_resource_version: string
         }
         Returns: Json
       }

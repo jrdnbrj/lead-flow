@@ -1,4 +1,5 @@
 import type { FirstContactOperationResult } from "@/lib/first-contact/types";
+import type { FirstContactColorSelection } from "@/lib/first-contact/resource-plan";
 
 export const leadTimeframes = [
   { value: "INMEDIATA", label: "Ya", helper: "Esta semana" },
@@ -128,6 +129,7 @@ export interface SendLeadInput {
   fullName: string;
   phone: string;
   carModels: string[];
+  colorSelections?: FirstContactColorSelection[];
 }
 
 export interface ScheduleLeadActionInput {

@@ -1,10 +1,20 @@
 import { z } from "zod";
 
+export const firstContactColorSelectionSchema = z.object({
+  vehicleIndex: z.number().int().min(0).max(2),
+  colorId: z.string().trim().min(1).max(100).nullable(),
+});
+
 export const sendLeadSchema = z.object({
   leadId: z.string().trim().min(1),
   fullName: z.string().trim().min(2).max(100),
   phone: z.string().trim().regex(/^[0-9+\s()-]{7,20}$/, "El celular no es válido"),
   carModels: z.array(z.string().trim().min(2).max(100)).min(1).max(10),
+  colorSelections: z.array(firstContactColorSelectionSchema).max(3).optional(),
+}).superRefine((value, context) => {
+  const indexes = (value.colorSelections ?? []).map((selection) => selection.vehicleIndex);
+  if (new Set(indexes).size !== indexes.length) context.addIssue({ code: z.ZodIssueCode.custom, path: ["colorSelections"], message: "No puedes repetir la selección de un vehículo." });
+  if (indexes.some((index) => index >= Math.min(value.carModels.length, 3))) context.addIssue({ code: z.ZodIssueCode.custom, path: ["colorSelections"], message: "La selección de color no corresponde a un vehículo del lead." });
 });
 
 export const firstContactRetrySchema = z.object({

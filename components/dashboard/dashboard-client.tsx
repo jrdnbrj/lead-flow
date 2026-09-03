@@ -11,10 +11,12 @@ import { correctInboundResponseAction, deleteLeadAction, recordPurchaseDecisionA
 import { formatElapsedSince, formatScheduledDateTime, getDashboardLeadBucket, isLeadReminderDue, sortLeadsForDashboard } from "@/lib/leads/follow-up";
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { FirstContactSummary } from "@/components/leads/first-contact-summary";
+import { FirstContactColorSelector } from "@/components/leads/first-contact-color-selector";
 import { LeadContactActions } from "@/components/leads/lead-contact-actions";
 import { PendingNotifications } from "@/components/leads/pending-notifications";
 import { PushNotifications } from "@/components/leads/push-notifications";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { FirstContactColorSelection } from "@/lib/first-contact/resource-plan";
 
 type TemperatureFilter = "ALL" | LeadTemperature;
 type StatusFilter = "ALL" | LeadStatus;
@@ -318,6 +320,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
   const [detailsMessage, setDetailsMessage] = useState<string | null>(null);
   const [details, setDetails] = useState<LeadDetailsForm>(() => toLeadDetailsForm(lead));
   const [isRecoveryConfirming, setIsRecoveryConfirming] = useState(false);
+  const [isColorSelectorOpen, setIsColorSelectorOpen] = useState(false);
   const [, startStateSync] = useTransition();
 
   useEffect(() => {
@@ -399,13 +402,13 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
     setIsCorrectingInbound(false);
   }
 
-  async function sendMessage() {
+  async function sendMessage(colorSelections: FirstContactColorSelection[] = []) {
     if (isSending || !canSend) return;
     setIsRecoveryConfirming(false);
     setIsSending(true);
     setSendError(null);
     setSendInfo(null);
-    const response = await sendLeadWhatsappAction({ leadId: lead.id, fullName: lead.fullName, phone: lead.phone, carModels: lead.carModels });
+    const response = await sendLeadWhatsappAction({ leadId: lead.id, fullName: lead.fullName, phone: lead.phone, carModels: lead.carModels, colorSelections });
     if (response.success && response.data) {
       setWhatsappStatus(response.data.whatsappStatus);
       if (response.data.whatsappStatus === "SENT") setConversationState("WAITING_CUSTOMER");
@@ -463,7 +466,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
           <a aria-label={`Llamar a ${lead.fullName}`} href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} className="icon-action icon-action-phone" title="Llamar" onClick={(event) => event.stopPropagation()}><Phone size={20} /></a>
           <LeadContactActions compact showWhatsApp={false} showShare={false} contact={{ name: lead.fullName, phone: lead.phone }} />
           <button type="button" aria-label={`Ver información de ${lead.fullName}`} title="Ver información del lead" onClick={(event) => { event.stopPropagation(); setDetails(toLeadDetailsForm(lead)); setDetailsError(null); setDetailsMessage(null); setIsEditingDetails(false); setIsDetailsOpen(true); }} className="icon-action"><FileText size={20} /></button>
-          <button type="button" aria-label={`${sendIsRecovery ? "Reintentar" : "Enviar"} WhatsApp a ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); if (sendIsRecovery) setIsRecoveryConfirming(true); else void sendMessage(); }} disabled={isSending || !canSend} className={`send-whatsapp-button ${!canSend ? "send-whatsapp-button-sent" : ""}`} title={!canSend ? "Mensaje ya enviado y confirmado en el detalle" : sendIsRecovery ? "No hay confirmación completa del primer contacto; intentar de nuevo" : whatsappStatus === "FAILED" ? "Reintentar envío automático" : "Enviar WhatsApp automáticamente"}>{isSending ? <LoaderCircle size={20} className="animate-spin" /> : !canSend ? <CheckCircle2 size={20} /> : sendIsRecovery ? <RefreshCw size={20} /> : <Send size={20} />}<span className="hidden sm:inline">{isSending ? "Enviando" : !canSend ? "Enviado" : sendIsRecovery ? "Reintentar" : whatsappStatus === "FAILED" ? "Reintentar" : "Enviar"}</span></button>
+          <button type="button" aria-label={`${sendIsRecovery ? "Reintentar" : "Enviar"} WhatsApp a ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); if (sendIsRecovery) setIsRecoveryConfirming(true); else setIsColorSelectorOpen(true); }} disabled={isSending || !canSend} className={`send-whatsapp-button ${!canSend ? "send-whatsapp-button-sent" : ""}`} title={!canSend ? "Mensaje ya enviado y confirmado en el detalle" : sendIsRecovery ? "No hay confirmación completa del primer contacto; intentar de nuevo" : whatsappStatus === "FAILED" ? "Reintentar envío automático" : "Enviar WhatsApp automáticamente"}>{isSending ? <LoaderCircle size={20} className="animate-spin" /> : !canSend ? <CheckCircle2 size={20} /> : sendIsRecovery ? <RefreshCw size={20} /> : <Send size={20} />}<span className="hidden sm:inline">{isSending ? "Enviando" : !canSend ? "Enviado" : sendIsRecovery ? "Reintentar" : whatsappStatus === "FAILED" ? "Reintentar" : "Enviar"}</span></button>
           <button type="button" aria-label={purchaseDecisionAt ? "Compra registrada" : "Registrar compra"} title={purchaseDecisionAt ? "Compra registrada" : "Registrar compra"} disabled={Boolean(purchaseDecisionAt)} onClick={(event) => { event.stopPropagation(); if (!purchaseDecisionAt) { setPurchaseNationalId(lead.nationalId ?? ""); setSendError(null); setIsPurchaseConfirming(true); } }} className={`icon-action purchase-action ${purchaseDecisionAt ? "purchase-action-registered" : ""}`}><CircleDollarSign size={20} /></button>
           <a aria-label={`Abrir WhatsApp manual para ${lead.fullName}`} href={`https://wa.me/${formatPhoneForWhatsapp(lead.phone)}`} target="_blank" rel="noreferrer" className="icon-action icon-action-whatsapp" title="Abrir chat de WhatsApp" onClick={(event) => event.stopPropagation()}><WhatsAppLogo size={24} /></a>
           <button type="button" aria-expanded={isExpanded} aria-label={isExpanded ? `Ocultar detalles de ${lead.fullName}` : `Mostrar detalles de ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); toggleExpanded(); }} className="icon-action compact-expand-action" title={isExpanded ? "Ocultar detalles" : "Ver detalles"}>{isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
@@ -479,6 +482,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
 
     {isExpanded ? <FollowUpActions leadId={lead.id} actions={followUpActions} onActionsChange={setFollowUpActions} onError={setSendError} onInfo={setSendInfo} /> : null}
     {isExpanded && (lead.firstContact || hasOutboundEvidence) ? <FirstContactSummary key={`${lead.id}-${lead.firstContact?.operation.operationVersion ?? "recovery"}`} lead={lead} initialOperation={lead.firstContact} /> : null}
+    {isColorSelectorOpen ? <FirstContactColorSelector lead={lead} open onCancel={() => setIsColorSelectorOpen(false)} onConfirm={(colorSelections) => void sendMessage(colorSelections)} /> : null}
     {isExpanded && lead.lastCustomerMessageAt ? <p className="mt-3 text-[11px] text-[var(--muted)]">Última respuesta del cliente registrada. Las acciones pendientes se cancelan cuando llega una nueva respuesta.</p> : null}
     {isExpanded && <div className="mt-3 flex items-center justify-between gap-3 border-t border-black/[0.06] pt-3"><span className="text-[11px] text-[var(--muted)]">Se ocultará de la lista y dejará de generar recordatorios.</span><button type="button" onClick={(event) => { event.stopPropagation(); setIsDeleteModalOpen(true); setSendError(null); }} disabled={isDeleting} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-black text-[#b33a2c] hover:bg-[#fff0ee] disabled:opacity-50"><Trash2 size={14} />Eliminar contacto</button></div>}
     {isExpanded && sendError ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-red-600"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{sendError}</p> : null}{isExpanded && sendInfo ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-emerald-700"><CheckCircle2 size={14} className="mt-0.5 shrink-0" />{sendInfo}</p> : null}

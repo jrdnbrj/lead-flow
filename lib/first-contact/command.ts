@@ -6,21 +6,51 @@ import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { claimFirstContactEffect, beginFirstContactEffect, getCarModelContactAssetsForModels, hydrateFirstContactResource, recordFirstContactEffectResult, requestFirstContact, retryFirstContactEffect } from "@/lib/leads/repository";
 import type { Lead } from "@/lib/domain/lead";
 import { orderFirstContactItems } from "@/lib/first-contact/order";
-import { getResourcesForItem, modelSlug, planFirstContactResourceItems, type FirstContactModelResources, type FirstContactRequestItem } from "@/lib/first-contact/resource-plan";
-import type { FirstContactItem, FirstContactOperationResult, FirstContactProvider, ProviderOutcome, FirstContactResource } from "@/lib/first-contact/types";
+import { getResourcesForItem, modelSlug, planFirstContactResourceItems, type FirstContactColorSelection, type FirstContactModelResources, type FirstContactRequestItem } from "@/lib/first-contact/resource-plan";
+import type { FirstContactItem, FirstContactOperationResult, FirstContactProvider, ProviderOutcome, FirstContactResource, FirstContactResourceSnapshot } from "@/lib/first-contact/types";
 import { ensureEvolutionWebhook } from "@/lib/whatsapp/service";
 
 function digest(value: string): string { return createHash("sha256").update(value).digest("hex"); }
 
 type FirstContactLead = Pick<Lead, "id" | "fullName" | "phone" | "carModels">;
 type PreparedFirstContactItem = { item: FirstContactItem; attemptNo: number; claimTokenDigest: string };
-type FirstContactRequest = {
+export type FirstContactRequest = {
   text: string;
   configurationDigest: string;
   items: FirstContactRequestItem[];
   modelResources: FirstContactModelResources[];
   resourcesByItemKey: Record<string, FirstContactModelResources>;
 };
+
+function snapshotDigest(snapshot: FirstContactResourceSnapshot): string {
+  return digest(JSON.stringify(snapshot));
+}
+
+function applyResourceSnapshot(resource: FirstContactModelResources, snapshot: FirstContactResourceSnapshot): FirstContactModelResources {
+  if (snapshot.resource === "PHOTO") {
+    return {
+      ...resource,
+      imageUrl: snapshot.publicUrl,
+      imageFileName: snapshot.fileName,
+      imageSource: snapshot.source === "MODEL_SHEET" ? "NONE" : snapshot.source,
+      imageAssetId: snapshot.assetId,
+      imageStoragePath: snapshot.storagePath,
+      selectedColorId: snapshot.selectedColorId,
+      selectedColorName: snapshot.selectedColorName,
+    };
+  }
+  return { ...resource, technicalSheetUrl: snapshot.publicUrl, technicalSheetFileName: snapshot.fileName, technicalSheetAssetId: snapshot.assetId, technicalSheetStoragePath: snapshot.storagePath };
+}
+
+export function applyPersistedFirstContactSnapshots(operation: FirstContactOperationResult, request: FirstContactRequest): FirstContactRequest {
+  const resourcesByItemKey = { ...request.resourcesByItemKey };
+  for (const item of operation.items) {
+    if (!item.resourceSnapshot || item.availability !== "AVAILABLE") continue;
+    const resource = resourcesForRequestItem(item, request);
+    if (resource) resourcesByItemKey[item.itemKey] = applyResourceSnapshot(resource, item.resourceSnapshot);
+  }
+  return { ...request, resourcesByItemKey };
+}
 
 function resourcesForRequestItem(item: Pick<FirstContactItem, "resourceKind" | "itemKey">, request: FirstContactRequest): FirstContactModelResources | null {
   return getResourcesForItem(item, request.modelResources, request.resourcesByItemKey);
@@ -89,7 +119,7 @@ export async function retryFirstContactResourceFromRecovery(
   idempotencyKey: string,
   itemKey?: string,
 ): Promise<FirstContactOperationResult | null> {
-  const request = await buildFirstContactRequest(lead);
+  let request = await buildFirstContactRequest(lead);
   await ensureEvolutionWebhook().catch(() => false);
 
   const initial = await requestFirstContact({
@@ -99,6 +129,7 @@ export async function retryFirstContactResourceFromRecovery(
     idempotencyKey,
   });
   if (!initial) return null;
+  request = applyPersistedFirstContactSnapshots(initial, request);
 
   const initialCandidates = initial.items.filter((candidate) => candidate.resourceKind === resourceKind && (!itemKey || candidate.itemKey === itemKey));
   for (const item of initialCandidates) {
@@ -111,6 +142,7 @@ export async function retryFirstContactResourceFromRecovery(
     idempotencyKey,
   });
   const operation = refreshed ?? initial;
+  request = applyPersistedFirstContactSnapshots(operation, request);
   for (const item of orderFirstContactItems(operation.items.filter((candidate) => candidate.resourceKind === resourceKind && (!itemKey || candidate.itemKey === itemKey)))) {
     await executeFirstContactItem({ item, lead, request, idempotencyKey, provider });
   }
@@ -129,7 +161,9 @@ async function hydrateMissingFirstContactResource(leadId: string, item: FirstCon
   const resources = resourcesForRequestItem(item, request);
   const resourceUrl = item.resourceKind === "PHOTOS" ? resources?.imageUrl : resources?.technicalSheetUrl;
   if (!resourceUrl) return false;
-  const result = await hydrateFirstContactResource({ leadId, resourceKind: item.resourceKind, itemKey: item.itemKey, resourceVersion: digest(resourceUrl) });
+  const resourceSnapshot = request.items.find((candidate) => candidate.itemKey === item.itemKey)?.resourceSnapshot ?? item.resourceSnapshot;
+  if (!resourceSnapshot) return false;
+  const result = await hydrateFirstContactResource({ leadId, resourceKind: item.resourceKind, itemKey: item.itemKey, resourceVersion: snapshotDigest(resourceSnapshot), resourceSnapshot });
   return Boolean(result);
 }
 
@@ -145,21 +179,21 @@ async function sendFirstContactItem(item: Pick<FirstContactItem, "resourceKind" 
   return provider.sendDocument({ phone: lead.phone, documentUrl: resources.technicalSheetUrl, caption: `Ficha técnica de ${resources.modelName}`, fileName: resources.technicalSheetFileName ?? `Ficha técnica - ${resources.modelName}.pdf` });
 }
 
-export async function buildFirstContactRequest(lead: FirstContactLead): Promise<FirstContactRequest> {
+export async function buildFirstContactRequest(lead: FirstContactLead, colorSelections: FirstContactColorSelection[] = []): Promise<FirstContactRequest> {
   const template = await getEffectiveWhatsappMessageTemplate();
   const seller = await getEffectiveSellerProfile();
   const text = renderWhatsappMessageTemplate(template, { nombre: lead.fullName.trim().split(/\s+/)[0] || "cliente", numero: lead.phone, carro: lead.carModels.join(", "), nombre_vendedor: seller.name, correo_vendedor: seller.email, empresa_vendedor: seller.company, numero_vendedor: seller.phone });
   const selectedModels = lead.carModels.slice(0, 3);
-  const assetsByModel = await getCarModelContactAssetsForModels(selectedModels);
+  const assetsByModel = await getCarModelContactAssetsForModels(selectedModels, colorSelections);
   const modelResources = selectedModels.map((modelName) => {
-    const assets = assetsByModel.get(modelName) ?? { modelId: null, modelName, imageUrl: null, imageFileName: null, technicalSheetUrl: null, technicalSheetFileName: null };
-    return { modelName, modelId: assets.modelId, imageUrl: assets.imageUrl, imageFileName: assets.imageFileName, technicalSheetUrl: assets.technicalSheetUrl, technicalSheetFileName: assets.technicalSheetFileName };
+    const assets = assetsByModel.get(modelName) ?? { modelId: null, modelName, imageUrl: null, imageFileName: null, imageSource: "NONE" as const, imageAssetId: null, imageStoragePath: null, selectedColorId: null, selectedColorName: null, technicalSheetUrl: null, technicalSheetFileName: null, technicalSheetAssetId: null, technicalSheetStoragePath: null };
+    return assets;
   });
   const resourcePlan = planFirstContactResourceItems(modelResources);
   const resourcesByItemKey = resourcePlan.resourcesByItemKey;
   const resourceItems = resourcePlan.items.map((item) => ({
     ...item,
-    resourceVersion: item.availability === "AVAILABLE" ? digest(item.resourceVersion) : item.resourceVersion,
+    resourceVersion: item.resourceSnapshot ? snapshotDigest(item.resourceSnapshot) : item.availability === "AVAILABLE" ? digest(item.resourceVersion) : item.resourceVersion,
   }));
   const firstModel = modelResources[0];
   if (firstModel) {
@@ -171,7 +205,7 @@ export async function buildFirstContactRequest(lead: FirstContactLead): Promise<
   }
   return {
     text,
-    configurationDigest: digest(JSON.stringify({ template, seller, models: lead.carModels, resources: modelResources })),
+    configurationDigest: digest(JSON.stringify({ template, seller, models: lead.carModels, colorSelections, resources: modelResources })),
     items: [
       { resourceKind: "MESSAGE" as const, itemKey: "TEXT", resourceVersion: digest(text), availability: "AVAILABLE" as const },
       ...resourceItems,
@@ -181,17 +215,19 @@ export async function buildFirstContactRequest(lead: FirstContactLead): Promise<
   };
 }
 
-export async function executeFirstContact(lead: FirstContactLead, provider: FirstContactProvider, idempotencyKey: string): Promise<FirstContactOperationResult | null> {
-  const request = await buildFirstContactRequest(lead);
+export async function executeFirstContact(lead: FirstContactLead, provider: FirstContactProvider, idempotencyKey: string, colorSelections: FirstContactColorSelection[] = []): Promise<FirstContactOperationResult | null> {
+  let request = await buildFirstContactRequest(lead, colorSelections);
   // Evolution stores webhook configuration separately from the LeadFlow
   // process. Reassert it before a new outbound sequence so future replies can
   // reach the inbound boundary even after a provider restart.
   await ensureEvolutionWebhook().catch(() => false);
   const initial = await requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });
   if (!initial) return null;
+  request = applyPersistedFirstContactSnapshots(initial, request);
   for (const item of initial.items) await hydrateMissingFirstContactResource(lead.id, item, request);
   const refreshed = await requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });
   const operation = refreshed ?? initial;
+  request = applyPersistedFirstContactSnapshots(operation, request);
   const orderedItems = orderFirstContactItems(operation.items);
   const messageItem = orderedItems.find((item) => item.resourceKind === "MESSAGE");
   const messageExecution = messageItem
@@ -212,8 +248,10 @@ export async function executeFirstContact(lead: FirstContactLead, provider: Firs
 export function retryableFirstContactResult(result: string | null): boolean { return result === null || result === "FAILED"; }
 
 export async function retryFirstContact(lead: FirstContactLead, effectId: string, expectedEffectVersion: number | undefined, idempotencyKey: string, provider: FirstContactProvider): Promise<FirstContactOperationResult | null> {
-  const request = await buildFirstContactRequest(lead);
+  let request = await buildFirstContactRequest(lead);
   await ensureEvolutionWebhook().catch(() => false);
+  const persisted = await requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey: crypto.randomUUID() });
+  if (persisted) request = applyPersistedFirstContactSnapshots(persisted, request);
   const claim = await retryFirstContactEffect(effectId, expectedEffectVersion, idempotencyKey);
   if (!claim || claim.status !== "CLAIMED" || typeof claim.attempt_no !== "number" || typeof claim.claim_token_digest !== "string" || typeof claim.resource_kind !== "string") {
     return requestFirstContact({ leadId: lead.id, configurationDigest: request.configurationDigest, items: request.items, idempotencyKey });

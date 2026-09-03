@@ -6,7 +6,8 @@ import { AUTH_REQUIRED_MESSAGE } from "@/lib/auth/auth-required";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveInboundLeadMatch, type InboundLeadMatch } from "@/lib/leads/inbound-matching";
-import type { FirstContactItem, FirstContactOperation, FirstContactOperationResult, FirstContactResource, FirstContactResult, ProviderOutcome } from "@/lib/first-contact/types";
+import type { FirstContactItem, FirstContactOperation, FirstContactOperationResult, FirstContactResource, FirstContactResult, ProviderOutcome, FirstContactResourceSnapshot } from "@/lib/first-contact/types";
+import type { FirstContactColorModelOption, FirstContactColorSelection } from "@/lib/first-contact/resource-plan";
 
 const leadSelect = "id,user_id,tenant_id,created_at,updated_at,full_name,phone,national_id,email,car_model,car_models,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,conversation_state,next_action_at,next_action_type,last_activity_at,last_customer_message_at,last_agent_message_at,last_customer_message_preview,deleted_at,status";
 
@@ -452,8 +453,15 @@ export type CarModelContactAssets = {
   modelName: string;
   imageUrl: string | null;
   imageFileName: string | null;
+  imageSource: "COLOR_PHOTO" | "DEFAULT_COLOR_PHOTO" | "MODEL_PHOTO" | "LEGACY_PHOTO" | "NONE";
+  imageAssetId: string | null;
+  imageStoragePath: string | null;
+  selectedColorId: string | null;
+  selectedColorName: string | null;
   technicalSheetUrl: string | null;
   technicalSheetFileName: string | null;
+  technicalSheetAssetId: string | null;
+  technicalSheetStoragePath: string | null;
 };
 
 const legacyCarModelIds: Record<string, string> = {
@@ -470,10 +478,10 @@ const legacyCarModelIds: Record<string, string> = {
 };
 
 function emptyCarModelContactAssets(modelName: string): CarModelContactAssets {
-  return { modelId: null, modelName, imageUrl: null, imageFileName: null, technicalSheetUrl: null, technicalSheetFileName: null };
+  return { modelId: null, modelName, imageUrl: null, imageFileName: null, imageSource: "NONE", imageAssetId: null, imageStoragePath: null, selectedColorId: null, selectedColorName: null, technicalSheetUrl: null, technicalSheetFileName: null, technicalSheetAssetId: null, technicalSheetStoragePath: null };
 }
 
-export async function getCarModelContactAssetsForModels(modelNames: string[]): Promise<Map<string, CarModelContactAssets>> {
+export async function getCarModelContactAssetsForModels(modelNames: string[], colorSelections: FirstContactColorSelection[] = []): Promise<Map<string, CarModelContactAssets>> {
   // First Contact is already authorized against the lead before this lookup.
   // Resolve public catalog metadata with the server-only client so a stale or
   // timing-invalid browser JWT cannot turn existing assets into false
@@ -510,31 +518,32 @@ export async function getCarModelContactAssetsForModels(modelNames: string[]): P
   const modelIds = [...new Set([...modelsByInput.values()].map((model) => model.id))];
   if (modelIds.length === 0) return result;
 
-  const [{ data: assetRows, error: assetError }, { data: whiteColors, error: whiteColorError }] = await Promise.all([
-    supabase.from("car_model_assets").select("car_model_id,asset_kind,storage_path,file_name").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }),
+  const [{ data: assetRows, error: assetError }, { data: colors, error: colorError }, { data: whiteColors, error: whiteColorError }] = await Promise.all([
+    supabase.from("car_model_assets").select("id,car_model_id,asset_kind,storage_path,file_name").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }),
+    supabase.from("car_model_colors").select("id,car_model_id,name,slug").eq("active", true).in("car_model_id", modelIds),
     supabase.from("car_model_colors").select("id,car_model_id").eq("active", true).eq("slug", "blanco").in("car_model_id", modelIds),
   ]);
-  if (assetError || whiteColorError) {
-    console.error("[leadflow][first-contact] catalog asset lookup failed", { modelCount: modelIds.length, assetMessage: assetError?.message ?? null, whiteColorMessage: whiteColorError?.message ?? null });
+  if (assetError || colorError || whiteColorError) {
+    console.error("[leadflow][first-contact] catalog asset lookup failed", { modelCount: modelIds.length, assetMessage: assetError?.message ?? null, colorMessage: colorError?.message ?? null, whiteColorMessage: whiteColorError?.message ?? null });
     throw new Error("FIRST_CONTACT_CATALOG_LOOKUP_FAILED");
   }
-  const assetsByModel = new Map<string, Array<{ car_model_id: string; asset_kind: string; storage_path: string; file_name: string | null }>>();
+  const assetsByModel = new Map<string, Array<{ id: string; car_model_id: string; asset_kind: string; storage_path: string; file_name: string | null }>>();
   assetRows?.forEach((asset) => assetsByModel.set(asset.car_model_id, [...(assetsByModel.get(asset.car_model_id) ?? []), asset]));
 
-  const whiteColorIds = (whiteColors ?? []).map((color) => color.id);
-  const { data: whitePhotoAssets, error: whitePhotoError } = whiteColorIds.length > 0
-    ? await supabase.from("car_model_color_assets").select("car_model_color_id,storage_path,file_name").eq("active", true).eq("asset_kind", "PHOTO").in("car_model_color_id", whiteColorIds).order("sort_order", { ascending: true })
-    : { data: [] as Array<{ car_model_color_id: string; storage_path: string; file_name: string | null }> };
-  if (whitePhotoError) {
-    console.error("[leadflow][first-contact] color photo lookup failed", { colorCount: whiteColorIds.length, message: whitePhotoError.message });
+  const colorRows = colors ?? [];
+  const colorById = new Map(colorRows.map((color) => [color.id, color]));
+  const colorIds = colorRows.map((color) => color.id);
+  const { data: colorPhotoAssets, error: colorPhotoError } = colorIds.length > 0
+    ? await supabase.from("car_model_color_assets").select("id,car_model_color_id,storage_path,file_name").eq("active", true).eq("asset_kind", "PHOTO").in("car_model_color_id", colorIds).order("sort_order", { ascending: true })
+    : { data: [] as Array<{ id: string; car_model_color_id: string; storage_path: string; file_name: string | null }> };
+  if (colorPhotoError) {
+    console.error("[leadflow][first-contact] color photo lookup failed", { colorCount: colorIds.length, message: colorPhotoError.message });
     throw new Error("FIRST_CONTACT_CATALOG_LOOKUP_FAILED");
   }
-  const whiteColorModelById = new Map((whiteColors ?? []).map((color) => [color.id, color.car_model_id]));
-  const whitePhotoByModel = new Map<string, { storage_path: string; file_name: string | null }>();
-  whitePhotoAssets?.forEach((asset) => {
-    const modelId = whiteColorModelById.get(asset.car_model_color_id);
-    if (modelId && !whitePhotoByModel.has(modelId)) whitePhotoByModel.set(modelId, { storage_path: asset.storage_path, file_name: asset.file_name });
-  });
+  const colorPhotoById = new Map<string, { id: string; storage_path: string; file_name: string | null }>();
+  colorPhotoAssets?.forEach((asset) => { if (!colorPhotoById.has(asset.car_model_color_id)) colorPhotoById.set(asset.car_model_color_id, asset); });
+  const whitePhotoByModel = new Map<string, { id: string; storage_path: string; file_name: string | null }>();
+  whiteColors?.forEach((color) => { const photo = colorPhotoById.get(color.id); if (photo) whitePhotoByModel.set(color.car_model_id, photo); });
 
   const legacyFallbackIds = modelIds.filter((modelId) => !assetsByModel.has(modelId));
   const { data: legacyImages, error: legacyImageError } = legacyFallbackIds.length > 0
@@ -545,23 +554,68 @@ export async function getCarModelContactAssetsForModels(modelNames: string[]): P
   const legacyImageByModel = new Map<string, string>();
   legacyImages?.forEach((image) => { if (!legacyImageByModel.has(image.car_model_id)) legacyImageByModel.set(image.car_model_id, image.image_url); });
 
-  normalizedNames.forEach((name) => {
+  const selectionByIndex = new Map(colorSelections.filter((selection) => selection.vehicleIndex >= 0 && selection.vehicleIndex < 3 && selection.colorId).map((selection) => [selection.vehicleIndex, selection.colorId as string]));
+  normalizedNames.forEach((name, vehicleIndex) => {
     const model = modelsByInput.get(name);
     if (!model) return;
     const assets = assetsByModel.get(model.id) ?? [];
     const whitePhoto = whitePhotoByModel.get(model.id);
+    const requestedColorId = selectionByIndex.get(vehicleIndex) ?? null;
+    const requestedColor = requestedColorId ? colorById.get(requestedColorId) : undefined;
+    const requestedColorBelongsToModel = requestedColor?.car_model_id === model.id;
+    const selectedPhoto = requestedColorBelongsToModel ? colorPhotoById.get(requestedColorId as string) : undefined;
     const image = assets.find((asset) => asset.asset_kind === "PHOTO");
     const sheet = assets.find((asset) => asset.asset_kind === "TECHNICAL_SHEET");
+    const legacyImage = assets.length === 0 ? legacyImageByModel.get(model.id) ?? null : null;
+    const imageSource = selectedPhoto ? "COLOR_PHOTO" : whitePhoto ? "DEFAULT_COLOR_PHOTO" : image ? "MODEL_PHOTO" : legacyImage ? "LEGACY_PHOTO" : "NONE";
     result.set(name, {
       modelId: model.id,
       modelName: name,
-      imageUrl: whitePhoto ? getPublicVehicleAssetUrl(whitePhoto.storage_path) : image ? getPublicVehicleAssetUrl(image.storage_path) : assets.length === 0 ? legacyImageByModel.get(model.id) ?? null : null,
-      imageFileName: whitePhoto?.file_name ?? image?.file_name ?? null,
+      imageUrl: selectedPhoto ? getPublicVehicleAssetUrl(selectedPhoto.storage_path) : whitePhoto ? getPublicVehicleAssetUrl(whitePhoto.storage_path) : image ? getPublicVehicleAssetUrl(image.storage_path) : legacyImage,
+      imageFileName: selectedPhoto?.file_name ?? whitePhoto?.file_name ?? image?.file_name ?? null,
+      imageSource,
+      imageAssetId: selectedPhoto?.id ?? whitePhoto?.id ?? image?.id ?? null,
+      imageStoragePath: selectedPhoto?.storage_path ?? whitePhoto?.storage_path ?? image?.storage_path ?? null,
+      selectedColorId: requestedColorBelongsToModel ? requestedColor?.id ?? null : null,
+      selectedColorName: requestedColorBelongsToModel ? requestedColor?.name ?? null : null,
       technicalSheetUrl: sheet ? getPublicVehicleAssetUrl(sheet.storage_path) : null,
       technicalSheetFileName: sheet?.file_name ?? null,
+      technicalSheetAssetId: sheet?.id ?? null,
+      technicalSheetStoragePath: sheet?.storage_path ?? null,
     });
   });
   return result;
+}
+
+export async function getFirstContactColorOptionsForLead(leadId: string): Promise<FirstContactColorModelOption[]> {
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) return [];
+  const ownerId = await getInstallationAdvisorUserId();
+  if (!ownerId) return [];
+  const { data: lead, error: leadError } = await supabase.from("leads").select("car_models").eq("id", leadId).eq("user_id", ownerId).is("deleted_at", null).maybeSingle();
+  if (leadError || !lead) return [];
+  const modelNames = (lead.car_models ?? []).slice(0, 3);
+  const defaults = await getCarModelContactAssetsForModels(modelNames);
+  const modelIds = [...defaults.values()].map((asset) => asset.modelId).filter((id): id is string => Boolean(id));
+  if (modelIds.length === 0) return modelNames.map((modelName, vehicleIndex) => ({ vehicleIndex, modelId: null, modelName, defaultImageUrl: null, colors: [] }));
+  const { data: colors, error: colorError } = await supabase.from("car_model_colors").select("id,car_model_id,name,slug,sort_order").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }).order("name", { ascending: true });
+  if (colorError) throw new Error("FIRST_CONTACT_COLOR_LOOKUP_FAILED");
+  const colorIds = (colors ?? []).map((color) => color.id);
+  const { data: colorAssets, error: colorAssetError } = colorIds.length > 0
+    ? await supabase.from("car_model_color_assets").select("car_model_color_id,storage_path,file_name,sort_order").eq("active", true).eq("asset_kind", "PHOTO").in("car_model_color_id", colorIds).order("sort_order", { ascending: true })
+    : { data: [] as Array<{ car_model_color_id: string; storage_path: string; file_name: string | null; sort_order: number }>, error: null };
+  if (colorAssetError) throw new Error("FIRST_CONTACT_COLOR_LOOKUP_FAILED");
+  const firstAssetByColor = new Map<string, { storage_path: string; file_name: string | null }>();
+  colorAssets?.forEach((asset) => { if (!firstAssetByColor.has(asset.car_model_color_id)) firstAssetByColor.set(asset.car_model_color_id, asset); });
+  const colorsByModel = new Map<string, FirstContactColorModelOption["colors"]>();
+  colors?.forEach((color) => {
+    const asset = firstAssetByColor.get(color.id);
+    colorsByModel.set(color.car_model_id, [...(colorsByModel.get(color.car_model_id) ?? []), { id: color.id, name: color.name, slug: color.slug, imageUrl: asset ? getPublicVehicleAssetUrl(asset.storage_path) : null, imageFileName: asset?.file_name ?? null }]);
+  });
+  return modelNames.map((modelName, vehicleIndex) => {
+    const asset = defaults.get(modelName) ?? emptyCarModelContactAssets(modelName);
+    return { vehicleIndex, modelId: asset.modelId, modelName, defaultImageUrl: asset.imageUrl, colors: asset.modelId ? colorsByModel.get(asset.modelId) ?? [] : [] };
+  });
 }
 
 export async function hydrateFirstContactResource(input: {
@@ -569,17 +623,19 @@ export async function hydrateFirstContactResource(input: {
   resourceKind: "PHOTOS" | "TECHNICAL_SHEET";
   itemKey: string;
   resourceVersion: string;
+  resourceSnapshot?: FirstContactResourceSnapshot;
 }): Promise<Record<string, unknown> | null> {
   // This is intentionally server-only. The caller has already passed the
   // advisor authorization boundary, and the RPC verifies lead ownership again
   // before creating an effect for a previously unavailable item.
   const supabase = createSupabaseAdminClient();
   if (!supabase) return null;
-  const { data, error } = await supabase.rpc("hydrate_first_contact_resource_v1", {
+  const { data, error } = await supabase.rpc("hydrate_first_contact_resource_v2", {
     p_lead_id: input.leadId,
     p_resource_kind: input.resourceKind,
     p_item_key: input.itemKey,
     p_resource_version: input.resourceVersion,
+    p_resource_snapshot: input.resourceSnapshot ?? null,
   });
   if (error || !data || typeof data !== "object") {
     console.error("[leadflow][first-contact] resource hydration failed", { resourceKind: input.resourceKind, message: error?.message ?? "INVALID_RESPONSE" });
@@ -795,7 +851,28 @@ export async function recordPurchaseDecision(leadId: string, nationalId: string,
   return { status: typeof result.status === "string" ? result.status : "UNKNOWN", replayed: result.replayed === true, milestone };
 }
 
-function toFirstContactResult(value: unknown): FirstContactOperationResult | null {
+function toResourceSnapshot(value: unknown): FirstContactResourceSnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const source = row.source;
+  if (row.schema !== 1 || (row.resource !== "PHOTO" && row.resource !== "TECHNICAL_SHEET") || typeof row.vehicleIndex !== "number" || typeof row.modelName !== "string" || (source !== "COLOR_PHOTO" && source !== "DEFAULT_COLOR_PHOTO" && source !== "MODEL_PHOTO" && source !== "LEGACY_PHOTO" && source !== "MODEL_SHEET" && source !== "NONE")) return null;
+  return {
+    schema: 1,
+    resource: row.resource,
+    vehicleIndex: row.vehicleIndex,
+    modelId: typeof row.modelId === "string" ? row.modelId : null,
+    modelName: row.modelName,
+    selectedColorId: typeof row.selectedColorId === "string" ? row.selectedColorId : null,
+    selectedColorName: typeof row.selectedColorName === "string" ? row.selectedColorName : null,
+    source,
+    assetId: typeof row.assetId === "string" ? row.assetId : null,
+    storagePath: typeof row.storagePath === "string" ? row.storagePath : null,
+    fileName: typeof row.fileName === "string" ? row.fileName : null,
+    publicUrl: typeof row.publicUrl === "string" ? row.publicUrl : null,
+  };
+}
+
+function toFirstContactResult(value: unknown, includeSnapshots = false): FirstContactOperationResult | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
   const op = raw.operation as Record<string, unknown> | undefined;
@@ -804,18 +881,19 @@ function toFirstContactResult(value: unknown): FirstContactOperationResult | nul
     if (!item || typeof item !== "object") return null;
     const row = item as Record<string, unknown>;
     if (typeof row.id !== "string" || typeof row.resource_kind !== "string" || typeof row.item_key !== "string" || typeof row.resource_version !== "string" || (row.availability !== "AVAILABLE" && row.availability !== "NOT_AVAILABLE")) return null;
-    return { id: row.id, resourceKind: row.resource_kind as FirstContactResource, itemKey: row.item_key, resourceVersion: row.resource_version, availability: row.availability, result: row.result as FirstContactResult | null, effectId: typeof row.effect_id === "string" ? row.effect_id : null, leadMessageId: typeof row.lead_message_id === "string" ? row.lead_message_id : null, providerMessageId: typeof row.provider_message_id === "string" ? row.provider_message_id : null };
+    return { id: row.id, resourceKind: row.resource_kind as FirstContactResource, itemKey: row.item_key, resourceVersion: row.resource_version, availability: row.availability, result: row.result as FirstContactResult | null, effectId: typeof row.effect_id === "string" ? row.effect_id : null, leadMessageId: typeof row.lead_message_id === "string" ? row.lead_message_id : null, providerMessageId: typeof row.provider_message_id === "string" ? row.provider_message_id : null, ...(includeSnapshots ? { resourceSnapshot: toResourceSnapshot(row.resource_snapshot) } : {}) };
   }) : [];
   if (items.some((item) => !item)) return null;
   return { status: typeof raw.status === "string" ? raw.status : "UNKNOWN", replayed: raw.replayed === true, operation: { id: op.id, leadId: op.lead_id, operationType: "FIRST_CONTACT", operationVersion: op.operation_version, status: op.status as FirstContactOperation["status"] }, items: items as FirstContactItem[] };
 }
 
-export async function requestFirstContact(input: { leadId: string; configurationDigest: string; items: Array<{ resourceKind: FirstContactResource; itemKey: string; resourceVersion: string; availability: "AVAILABLE" | "NOT_AVAILABLE" }>; idempotencyKey: string }): Promise<FirstContactOperationResult | null> {
+export async function requestFirstContact(input: { leadId: string; configurationDigest: string; items: Array<{ resourceKind: FirstContactResource; itemKey: string; resourceVersion: string; availability: "AVAILABLE" | "NOT_AVAILABLE"; resourceSnapshot?: FirstContactResourceSnapshot }>; idempotencyKey: string }): Promise<FirstContactOperationResult | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data, error } = await invokeAuthenticatedRpc(supabase, "request_first_contact_v1", { p_lead_id: input.leadId, p_configuration_digest: input.configurationDigest, p_items: input.items.map((item) => ({ resource_kind: item.resourceKind, item_key: item.itemKey, resource_version: item.resourceVersion, availability: item.availability })), p_idempotency_key: input.idempotencyKey });
+  const colorSelections = input.items.filter((item) => item.resourceKind === "PHOTOS" && item.resourceSnapshot?.selectedColorId && item.resourceSnapshot.modelId).map((item) => ({ vehicle_index: item.resourceSnapshot?.vehicleIndex, model_id: item.resourceSnapshot?.modelId, model_name: item.resourceSnapshot?.modelName, color_id: item.resourceSnapshot?.selectedColorId }));
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "request_first_contact_v2", { p_lead_id: input.leadId, p_configuration_digest: input.configurationDigest, p_items: input.items.map((item) => ({ resource_kind: item.resourceKind, item_key: item.itemKey, resource_version: item.resourceVersion, availability: item.availability, resource_snapshot: item.resourceSnapshot ?? null })), p_color_selections: colorSelections, p_idempotency_key: input.idempotencyKey });
   if (error) return null;
-  const result = toFirstContactResult(data);
+  const result = toFirstContactResult(data, true);
   if (!result) console.error("[leadflow][first-contact] invalid RPC response", { itemCount: input.items.length, responseStatus: data && typeof data.status === "string" ? data.status : "MISSING" });
   return result;
 }

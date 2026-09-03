@@ -7,13 +7,28 @@ import { executeFirstContact, retryFirstContact, retryFirstContactResourceFromRe
 import { createEvolutionFirstContactProvider } from "@/lib/first-contact/provider";
 import type { FirstContactOperationResult } from "@/lib/first-contact/types";
 import { getResponseReminderAt, getStartOfSellerDayAfter, resolveScheduleShortcut } from "@/lib/leads/follow-up";
-import { clearLeadAction, correctInboundResponseForAdvisor, createLead, deleteCanceledFollowUpAction, findLeadByPhone, getInboundMessageCreatedAtForAdvisor, getLeadById, recordPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadDetails } from "@/lib/leads/repository";
+import { clearLeadAction, correctInboundResponseForAdvisor, createLead, deleteCanceledFollowUpAction, findLeadByPhone, getFirstContactColorOptionsForLead, getInboundMessageCreatedAtForAdvisor, getLeadById, recordPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadDetails } from "@/lib/leads/repository";
 import { correctInboundResponseSchema, firstContactRecoveryRetrySchema, firstContactRetrySchema, leadSchema, purchaseDecisionSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema, updateLeadSchema } from "@/lib/leads/validation";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
 
 async function requireAdvisorAction<T>(): Promise<ActionResponse<T> | null> {
   const authorization = await requireAdvisor();
   return authorization.status === "AUTHORIZED" ? null : authRequiredResult();
+}
+
+function hideFirstContactSnapshots(result: FirstContactOperationResult): FirstContactOperationResult {
+  return { ...result, items: result.items.map((item) => { const sanitized = { ...item }; delete sanitized.resourceSnapshot; return sanitized; }) };
+}
+
+export async function getFirstContactColorOptionsAction(leadId: string) {
+  if (!leadId.trim()) return { success: false as const, error: "No encontramos el lead." };
+  const auth = await requireAdvisorAction<Awaited<ReturnType<typeof getFirstContactColorOptionsForLead>>>();
+  if (auth) return auth;
+  try {
+    return { success: true as const, data: await getFirstContactColorOptionsForLead(leadId) };
+  } catch {
+    return { success: false as const, error: "No pudimos cargar los colores disponibles." };
+  }
 }
 
 export async function recordPurchaseDecisionAction(input: { leadId: string; nationalId: string; idempotencyKey?: string }): Promise<ActionResponse<{ milestoneId: string; recordedAt: string }>> {
@@ -83,7 +98,7 @@ export async function sendLeadWhatsappAction(input: SendLeadInput): Promise<Acti
     const storedLead = await getLeadById(parsed.data.leadId);
     if (hasSupabaseConfig() && !storedLead) return { success: false, error: "No encontramos este lead. Actualiza el dashboard e inténtalo de nuevo." };
     const target = storedLead ?? { id: parsed.data.leadId, fullName: parsed.data.fullName, phone: parsed.data.phone, carModels: parsed.data.carModels };
-    const result = await executeFirstContact(target, createEvolutionFirstContactProvider(), crypto.randomUUID());
+    const result = await executeFirstContact(target, createEvolutionFirstContactProvider(), crypto.randomUUID(), parsed.data.colorSelections ?? []);
     if (!result) return { success: false, error: "No pudimos preparar el primer contacto. Puedes reintentarlo." };
     const messageItem = result.items.find((item) => item.resourceKind === "MESSAGE");
     const photosItem = result.items.find((item) => item.resourceKind === "PHOTOS");
@@ -106,8 +121,8 @@ export async function startFirstContactAction(input: SendLeadInput): Promise<Act
     const storedLead = await getLeadById(parsed.data.leadId);
     if (hasSupabaseConfig() && !storedLead) return { success: false, error: "No encontramos este lead para iniciar el primer contacto." };
     const target = storedLead ?? { id: parsed.data.leadId, fullName: parsed.data.fullName, phone: parsed.data.phone, carModels: parsed.data.carModels };
-    const result = await executeFirstContact(target, createEvolutionFirstContactProvider(), crypto.randomUUID());
-    return result ? { success: true, data: result } : { success: false, error: "No pudimos preparar el primer contacto. Puedes reintentarlo." };
+    const result = await executeFirstContact(target, createEvolutionFirstContactProvider(), crypto.randomUUID(), parsed.data.colorSelections ?? []);
+    return result ? { success: true, data: hideFirstContactSnapshots(result) } : { success: false, error: "No pudimos preparar el primer contacto. Puedes reintentarlo." };
   } catch {
     return { success: false, error: "No pudimos iniciar el primer contacto sin cambiar parcialmente el estado." };
   }
@@ -123,7 +138,7 @@ export async function retryFirstContactResourceAction(input: { leadId: string; e
     if (!lead) return { success: false, error: "No encontramos este lead para reintentar el recurso." };
     const result = await retryFirstContact(lead, parsed.data.effectId, parsed.data.expectedEffectVersion, parsed.data.idempotencyKey, createEvolutionFirstContactProvider());
     if (!result) return { success: false, error: "No pudimos reintentar el recurso. Puedes actualizar e intentarlo nuevamente." };
-    return { success: true, data: result, message: "Reintento procesado." };
+    return { success: true, data: hideFirstContactSnapshots(result), message: "Reintento procesado." };
   } catch {
     return { success: false, error: "No pudimos reintentar el recurso sin cambiar parcialmente el estado." };
   }
@@ -139,7 +154,7 @@ export async function retryFirstContactRecoveryResourceAction(input: { leadId: s
     if (!lead) return { success: false, error: "No encontramos este lead para reintentar el recurso." };
     const result = await retryFirstContactResourceFromRecovery(lead, parsed.data.resourceKind, createEvolutionFirstContactProvider(), parsed.data.idempotencyKey, parsed.data.itemKey);
     if (!result) return { success: false, error: "No pudimos reintentar el recurso. Puedes actualizar e intentarlo nuevamente." };
-    return { success: true, data: result, message: "Reintento procesado." };
+    return { success: true, data: hideFirstContactSnapshots(result), message: "Reintento procesado." };
   } catch {
     return { success: false, error: "No pudimos reintentar el recurso sin cambiar parcialmente el estado." };
   }
