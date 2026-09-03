@@ -20,13 +20,18 @@ function hideFirstContactSnapshots(result: FirstContactOperationResult): FirstCo
   return { ...result, items: result.items.map((item) => { const sanitized = { ...item }; delete sanitized.resourceSnapshot; return sanitized; }) };
 }
 
+function logActionFailure(action: string, error: unknown): void {
+  console.error("[leadflow][action] failed", { action, message: error instanceof Error ? error.message : "UNKNOWN_ERROR" });
+}
+
 export async function getFirstContactColorOptionsAction(leadId: string) {
   if (!leadId.trim()) return { success: false as const, error: "No encontramos el lead." };
   const auth = await requireAdvisorAction<Awaited<ReturnType<typeof getFirstContactColorOptionsForLead>>>();
   if (auth) return auth;
   try {
     return { success: true as const, data: await getFirstContactColorOptionsForLead(leadId) };
-  } catch {
+  } catch (error) {
+    logActionFailure("getFirstContactColorOptions", error);
     return { success: false as const, error: "No pudimos cargar los colores disponibles." };
   }
 }
@@ -40,7 +45,8 @@ export async function recordPurchaseDecisionAction(input: { leadId: string; nati
     const result = await recordPurchaseDecision(parsed.data.leadId, parsed.data.nationalId, parsed.data.idempotencyKey ?? crypto.randomUUID());
     if (!result) return { success: false, error: "No pudimos registrar la decisión de compra. Puedes reintentarlo." };
     return { success: true, data: { milestoneId: result.milestone.id, recordedAt: result.milestone.recordedAt }, message: result.replayed ? "La compra ya estaba registrada." : "Compra registrada." };
-  } catch {
+  } catch (error) {
+    logActionFailure("recordPurchaseDecision", error);
     return { success: false, error: "No pudimos registrar la decisión de compra. Puedes reintentarlo." };
   }
 }
@@ -53,12 +59,13 @@ export async function updateLeadDetailsAction(input: UpdateLeadInput): Promise<A
   try {
     const lead = await updateLeadDetails(parsed.data);
     return lead ? { success: true, data: lead, message: "Información actualizada." } : { success: false, error: "No pudimos actualizar la información. Puedes reintentarlo." };
-  } catch {
+  } catch (error) {
+    logActionFailure("updateLeadDetails", error);
     return { success: false, error: "No pudimos actualizar la información. Puedes reintentarlo." };
   }
 }
 
-export async function createLeadAction(input: CreateLeadInput): Promise<ActionResponse<Lead>> {
+export async function createLeadAction(input: CreateLeadInput, options?: { allowDuplicate?: boolean }): Promise<ActionResponse<Lead>> {
   const parsed = leadSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: "Revisa los datos del prospecto antes de guardar." };
@@ -69,9 +76,14 @@ export async function createLeadAction(input: CreateLeadInput): Promise<ActionRe
   }
 
   try {
+    if (!options?.allowDuplicate) {
+      const duplicate = await findLeadByPhone(parsed.data.phone);
+      if (duplicate) return { success: false, error: "Este teléfono ya está registrado. Actualiza el dashboard y abre el lead existente o confirma una nueva oportunidad." };
+    }
     const result = await createLead(parsed.data);
     return { success: true, data: result.lead, warning: result.warning };
-  } catch {
+  } catch (error) {
+    logActionFailure("createLead", error);
     return { success: false, error: "No pudimos guardar el lead. Revisa tu conexión e inténtalo de nuevo." };
   }
 }
@@ -84,7 +96,8 @@ export async function findExistingLeadByPhoneAction(phone: string, excludeLeadId
   }
   try {
     return { success: true, data: await findLeadByPhone(phone, excludeLeadId) };
-  } catch {
+  } catch (error) {
+    logActionFailure("findExistingLeadByPhone", error);
     return { success: false, error: "No pudimos revisar si ya existe un contacto con ese teléfono." };
   }
 }
@@ -107,7 +120,8 @@ export async function sendLeadWhatsappAction(input: SendLeadInput): Promise<Acti
       data: { leadId: parsed.data.leadId, whatsappStatus: messageItem?.result === "ACCEPTED" ? "SENT" : messageItem?.result === "FAILED" ? "FAILED" : "PENDING", persisted: true, providerMessageId: messageItem?.providerMessageId ?? null, mediaSent: photosItem?.result === "ACCEPTED" },
       warning: result.replayed ? "El mensaje ya estaba enviado; no se duplicó." : undefined,
     };
-  } catch {
+  } catch (error) {
+    logActionFailure("sendLeadWhatsapp", error);
     return { success: false, error: "No fue posible preparar el primer contacto. Intenta de nuevo y avísame si continúa." };
   }
 }
@@ -123,7 +137,8 @@ export async function startFirstContactAction(input: SendLeadInput): Promise<Act
     const target = storedLead ?? { id: parsed.data.leadId, fullName: parsed.data.fullName, phone: parsed.data.phone, carModels: parsed.data.carModels };
     const result = await executeFirstContact(target, createEvolutionFirstContactProvider(), crypto.randomUUID(), parsed.data.colorSelections ?? []);
     return result ? { success: true, data: hideFirstContactSnapshots(result) } : { success: false, error: "No pudimos preparar el primer contacto. Puedes reintentarlo." };
-  } catch {
+  } catch (error) {
+    logActionFailure("startFirstContact", error);
     return { success: false, error: "No pudimos iniciar el primer contacto sin cambiar parcialmente el estado." };
   }
 }
@@ -139,7 +154,8 @@ export async function retryFirstContactResourceAction(input: { leadId: string; e
     const result = await retryFirstContact(lead, parsed.data.effectId, parsed.data.expectedEffectVersion, parsed.data.idempotencyKey, createEvolutionFirstContactProvider());
     if (!result) return { success: false, error: "No pudimos reintentar el recurso. Puedes actualizar e intentarlo nuevamente." };
     return { success: true, data: hideFirstContactSnapshots(result), message: "Reintento procesado." };
-  } catch {
+  } catch (error) {
+    logActionFailure("retryFirstContactResource", error);
     return { success: false, error: "No pudimos reintentar el recurso sin cambiar parcialmente el estado." };
   }
 }
@@ -155,7 +171,8 @@ export async function retryFirstContactRecoveryResourceAction(input: { leadId: s
     const result = await retryFirstContactResourceFromRecovery(lead, parsed.data.resourceKind, createEvolutionFirstContactProvider(), parsed.data.idempotencyKey, parsed.data.itemKey);
     if (!result) return { success: false, error: "No pudimos reintentar el recurso. Puedes actualizar e intentarlo nuevamente." };
     return { success: true, data: hideFirstContactSnapshots(result), message: "Reintento procesado." };
-  } catch {
+  } catch (error) {
+    logActionFailure("retryFirstContactRecoveryResource", error);
     return { success: false, error: "No pudimos reintentar el recurso sin cambiar parcialmente el estado." };
   }
 }
@@ -233,7 +250,8 @@ export async function correctInboundResponseAction(input: {
     if (!result) return { success: false, error: "No pudimos aplicar la corrección manual." };
     if (result.status === "STALE_ACTION") return { success: false, data: result, error: "La acción cambió antes de aplicar la corrección. Actualiza el seguimiento." };
     return { success: Boolean(result.action), data: result, error: result.action ? undefined : "No encontramos una acción de respuesta abierta." };
-  } catch {
+  } catch (error) {
+    logActionFailure("correctInboundResponse", error);
     return { success: false, error: "No pudimos aplicar la corrección manual sin cambiar parcialmente el estado." };
   }
 }

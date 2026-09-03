@@ -44,10 +44,10 @@ export function LeadCaptureForm() {
   const fullNameField = register("fullName");
   const values = useWatch({ control: form.control });
 
-  async function saveLead(input: LeadFormValues) {
+  async function saveLead(input: LeadFormValues, allowDuplicate = false) {
     setSubmitError(null);
     setWarning(null);
-    const response = await createLeadAction(input);
+    const response = await createLeadAction(input, { allowDuplicate });
     if (!response.success || !response.data) {
       setSubmitError(response.message || response.error || "No pudimos guardar el lead.");
       return;
@@ -79,7 +79,7 @@ export function LeadCaptureForm() {
   async function createNewOpportunity() {
     if (!pendingDuplicateInput || isCreatingOpportunity) return;
     setIsCreatingOpportunity(true);
-    await saveLead(pendingDuplicateInput);
+    await saveLead(pendingDuplicateInput, true);
     setIsCreatingOpportunity(false);
   }
 

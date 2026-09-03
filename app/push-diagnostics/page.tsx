@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 
 import { PushDiagnostics } from "@/components/push/push-diagnostics";
 import { requireAdvisorOrRedirect } from "@/lib/auth/advisor";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getInstallationAdvisorUserId } from "@/lib/config/installation";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = { title: "Diagnóstico de recordatorios" };
 export const dynamic = "force-dynamic";
@@ -36,13 +37,20 @@ async function fingerprint(value: string): Promise<string> {
 }
 
 async function getSafeSubscriptions(): Promise<SafeSubscription[]> {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return [];
-  const pushDb = supabase as unknown as { from: (table: string) => { select: (columns: string) => { order: (column: string, options: { ascending: boolean }) => Promise<{ data: SubscriptionRow[] | null }> } } };
-  const { data } = await pushDb
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) throw new Error("PUSH_DIAGNOSTICS_CONFIGURATION_MISSING");
+  const ownerId = await getInstallationAdvisorUserId();
+  if (!ownerId) throw new Error("PUSH_DIAGNOSTICS_OWNER_MISSING");
+  const pushDb = supabase as unknown as { from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { order: (column: string, options: { ascending: boolean }) => Promise<{ data: SubscriptionRow[] | null; error: { message?: string } | null }> } } } };
+  const { data, error } = await pushDb
     .from("push_subscriptions")
     .select("id,endpoint,p256dh,auth,subscription_generation,status,created_at,updated_at")
+    .eq("user_id", ownerId)
     .order("updated_at", { ascending: false });
+  if (error) {
+    console.error("[leadflow][push-diagnostics] subscription lookup failed", { message: error.message });
+    throw new Error("PUSH_DIAGNOSTICS_LOOKUP_FAILED");
+  }
   return Promise.all((data ?? []).map(async (row) => ({
     id: row.id,
     endpointFingerprint: await fingerprint(row.endpoint),

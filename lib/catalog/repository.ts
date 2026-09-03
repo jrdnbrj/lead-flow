@@ -50,7 +50,7 @@ export async function getCatalogModels(): Promise<CatalogModel[]> {
   // and independent from a browser session refresh; a stale session must not
   // render the protected catalog as an empty catalog.
   const supabase = createSupabaseAdminClient();
-  if (!supabase) return [];
+  if (!supabase) throw new Error("CATALOG_CONFIGURATION_MISSING");
 
   const modelQuery = () => supabase
     .from("car_models")
@@ -75,14 +75,30 @@ export async function getCatalogModels(): Promise<CatalogModel[]> {
     models = (fallback.data ?? []) as CatalogModelRow[];
     error = fallback.error;
   }
-  if (error || !models?.length) return [];
+  if (error) {
+    console.error("[leadflow][catalog] model lookup failed", { message: error.message });
+    throw new Error("CATALOG_LOOKUP_FAILED");
+  }
+  if (models.length === 0) return [];
 
   const modelIds = models.map((model) => model.id);
-  const [{ data: assets }, { data: colors }, { data: colorAssets }] = await Promise.all([
+  const [{ data: assets, error: assetsError }, { data: colors, error: colorsError }] = await Promise.all([
     supabase.from("car_model_assets").select("car_model_id,asset_kind,storage_path,file_name,sort_order").eq("active", true).eq("asset_kind", "TECHNICAL_SHEET").in("car_model_id", modelIds).order("sort_order", { ascending: true }),
     supabase.from("car_model_colors").select("id,car_model_id,name,slug,sort_order").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }).order("name", { ascending: true }),
-    supabase.from("car_model_color_assets").select("car_model_color_id,asset_kind,storage_path,file_name,sort_order").eq("active", true).eq("asset_kind", "PHOTO").order("sort_order", { ascending: true }),
   ]);
+  if (assetsError || colorsError) {
+    console.error("[leadflow][catalog] asset metadata lookup failed", { assetsMessage: assetsError?.message ?? null, colorsMessage: colorsError?.message ?? null });
+    throw new Error("CATALOG_LOOKUP_FAILED");
+  }
+
+  const colorIds = (colors ?? []).map((color) => color.id);
+  const { data: colorAssets, error: colorAssetsError } = colorIds.length > 0
+    ? await supabase.from("car_model_color_assets").select("car_model_color_id,asset_kind,storage_path,file_name,sort_order").eq("active", true).eq("asset_kind", "PHOTO").in("car_model_color_id", colorIds).order("sort_order", { ascending: true })
+    : { data: [] as CatalogColorAsset[], error: null };
+  if (colorAssetsError) {
+    console.error("[leadflow][catalog] color photo lookup failed", { message: colorAssetsError.message });
+    throw new Error("CATALOG_LOOKUP_FAILED");
+  }
 
   const sheetByModel = new Map<string, CatalogAsset>();
   (assets ?? []).forEach((asset) => { if (!sheetByModel.has(asset.car_model_id)) sheetByModel.set(asset.car_model_id, asset); });

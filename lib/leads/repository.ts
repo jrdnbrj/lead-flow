@@ -4,7 +4,7 @@ import type { Database } from "@/lib/supabase/database";
 import { getInstallationAdvisorUserId } from "@/lib/config/installation";
 import { AUTH_REQUIRED_MESSAGE } from "@/lib/auth/auth-required";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, hasSupabaseConfig } from "@/lib/supabase/server";
 import { resolveInboundLeadMatch, type InboundLeadMatch } from "@/lib/leads/inbound-matching";
 import type { FirstContactItem, FirstContactOperation, FirstContactOperationResult, FirstContactResource, FirstContactResult, ProviderOutcome, FirstContactResourceSnapshot } from "@/lib/first-contact/types";
 import type { FirstContactColorModelOption, FirstContactColorSelection } from "@/lib/first-contact/resource-plan";
@@ -53,6 +53,14 @@ const serverRpcFallbackFunctions = new Set([
 ]);
 let serverRpcFallbackActive = false;
 
+async function requireInstallationOwnerContext(errorCode: string) {
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) throw new Error(`${errorCode}_CONFIGURATION_MISSING`);
+  const ownerId = await getInstallationAdvisorUserId();
+  if (!ownerId) throw new Error(`${errorCode}_OWNER_MISSING`);
+  return { supabase, ownerId };
+}
+
 function getJwtTiming(token: string): { issuedAt: number | null; expiresAt: number | null; now: number } {
   const now = Math.floor(Date.now() / 1000);
   try {
@@ -65,7 +73,9 @@ function getJwtTiming(token: string): { issuedAt: number | null; expiresAt: numb
 }
 
 async function invokeRpc(client: LeadflowDbClient, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
-  return (client.rpc as unknown as (name: string, parameters: Record<string, unknown>) => Promise<RpcResult>)(functionName, args);
+  const result = await (client.rpc as unknown as (name: string, parameters: Record<string, unknown>) => Promise<RpcResult>)(functionName, args);
+  if (result.error) console.error("[leadflow][rpc] call failed", { functionName, message: result.error.message ?? "UNKNOWN" });
+  return result;
 }
 
 async function invokeRpcWithToken(supabaseUrl: string, publishableKey: string, accessToken: string, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
@@ -401,9 +411,7 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
 }
 
 export async function updateLeadDetails(input: UpdateLeadInput): Promise<Lead | null> {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return null;
-  const { data: userData } = await supabase.auth.getUser();
+  const { supabase, ownerId } = await requireInstallationOwnerContext("LEAD_UPDATE");
   const payload: Database["public"]["Tables"]["leads"]["Update"] = {
     full_name: input.fullName.trim(),
     phone: input.phone.trim(),
@@ -416,20 +424,26 @@ export async function updateLeadDetails(input: UpdateLeadInput): Promise<Lead | 
     trade_in_car: input.tradeInCar,
     notes: input.notes?.trim() || null,
   };
-  let query = supabase.from("leads").update(payload).eq("id", input.leadId).is("deleted_at", null);
-  query = userData.user ? query.eq("user_id", userData.user.id) : query.is("user_id", null);
+  const query = supabase.from("leads").update(payload).eq("id", input.leadId).eq("user_id", ownerId).is("deleted_at", null);
   const { data, error } = await query.select(leadSelect).maybeSingle();
-  if (error || !data) return null;
+  if (error) {
+    console.error("[leadflow][leads] lead update failed", { leadId: input.leadId, message: error.message });
+    throw new Error("LEAD_UPDATE_FAILED");
+  }
+  if (!data) return null;
   const [lead] = await attachLeadRelations(supabase, [toDomainLead(data as unknown as LeadRow)]);
   return lead ?? null;
 }
 
 export async function getLeadById(id: string): Promise<Lead | null> {
   const supabase = createSupabaseAdminClient();
-  if (!supabase) return null;
+  if (!supabase) {
+    if (hasSupabaseConfig()) throw new Error("LEAD_LOOKUP_CONFIGURATION_MISSING");
+    return null;
+  }
 
   const ownerId = await getInstallationAdvisorUserId();
-  if (!ownerId) return null;
+  if (!ownerId) throw new Error("LEAD_LOOKUP_OWNER_MISSING");
   const { data, error } = await supabase
     .from("leads")
     .select(leadSelect)
@@ -438,7 +452,11 @@ export async function getLeadById(id: string): Promise<Lead | null> {
     .is("deleted_at", null)
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error) {
+    console.error("[leadflow][leads] lead lookup failed", { leadId: id, message: error.message });
+    throw new Error("LEAD_LOOKUP_FAILED");
+  }
+  if (!data) return null;
   const [lead] = await attachLeadRelations(supabase, [toDomainLead(data as unknown as LeadRow)]);
   return lead ?? null;
 }
@@ -588,12 +606,13 @@ export async function getCarModelContactAssetsForModels(modelNames: string[], co
 }
 
 export async function getFirstContactColorOptionsForLead(leadId: string): Promise<FirstContactColorModelOption[]> {
-  const supabase = createSupabaseAdminClient();
-  if (!supabase) return [];
-  const ownerId = await getInstallationAdvisorUserId();
-  if (!ownerId) return [];
+  const { supabase, ownerId } = await requireInstallationOwnerContext("FIRST_CONTACT_COLOR_LOOKUP");
   const { data: lead, error: leadError } = await supabase.from("leads").select("car_models").eq("id", leadId).eq("user_id", ownerId).is("deleted_at", null).maybeSingle();
-  if (leadError || !lead) return [];
+  if (leadError) {
+    console.error("[leadflow][first-contact] color lead lookup failed", { leadId, message: leadError.message });
+    throw new Error("FIRST_CONTACT_COLOR_LOOKUP_FAILED");
+  }
+  if (!lead) return [];
   const modelNames = (lead.car_models ?? []).slice(0, 3);
   const defaults = await getCarModelContactAssetsForModels(modelNames);
   const modelIds = [...defaults.values()].map((asset) => asset.modelId).filter((id): id is string => Boolean(id));
@@ -654,16 +673,24 @@ export async function getCarModelImageUrl(modelName: string): Promise<string | n
 }
 
 export async function findLeadByPhone(phone: string, excludeLeadId?: string): Promise<ExistingLeadSummary | null> {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return null;
+  // This lookup runs only after the Server Action has authorized the advisor.
+  // Keep the read independent from the browser's SSR session refresh: a
+  // transient/stale cookie must fail closed, never look like "no duplicate"
+  // and then allow a new lead to be inserted.
+  const { supabase, ownerId } = await requireInstallationOwnerContext("DUPLICATE_LOOKUP");
 
-  const { data: userData } = await supabase.auth.getUser();
-  const query = supabase.from("leads").select(leadSelect).is("deleted_at", null).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(500);
-  const { data, error } = userData.user
-    ? await query.eq("user_id", userData.user.id)
-    : await query.is("user_id", null);
+  const { data, error } = await supabase
+    .from("leads")
+    .select("id,full_name,phone,car_model,car_models,status,created_at")
+    .eq("user_id", ownerId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
 
-  if (error || !data) return null;
+  if (error || !data) {
+    console.error("[leadflow][leads] duplicate phone lookup failed", { message: error?.message ?? "NO_DATA" });
+    throw new Error("DUPLICATE_LOOKUP_FAILED");
+  }
   const normalizedPhone = formatPhoneForWhatsapp(phone);
   const row = data.find((candidate) => candidate.id !== excludeLeadId && formatPhoneForWhatsapp(candidate.phone) === normalizedPhone);
   if (!row) return null;
@@ -824,10 +851,19 @@ export async function correctInboundResponseForAdvisor(input: {
 }
 
 export async function getInboundMessageCreatedAtForAdvisor(messageId: string, leadId: string): Promise<string | null> {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return null;
+  const { supabase, ownerId } = await requireInstallationOwnerContext("INBOUND_MESSAGE_LOOKUP");
+  const { data: lead, error: leadError } = await supabase.from("leads").select("id").eq("id", leadId).eq("user_id", ownerId).is("deleted_at", null).maybeSingle();
+  if (leadError) {
+    console.error("[leadflow][leads] inbound lead lookup failed", { leadId, message: leadError.message });
+    throw new Error("INBOUND_MESSAGE_LOOKUP_FAILED");
+  }
+  if (!lead) return null;
   const { data, error } = await supabase.from("lead_messages").select("created_at").eq("id", messageId).eq("lead_id", leadId).eq("direction", "INBOUND").maybeSingle();
-  return error || !data ? null : data.created_at;
+  if (error) {
+    console.error("[leadflow][leads] inbound message lookup failed", { messageId, leadId, message: error.message });
+    throw new Error("INBOUND_MESSAGE_LOOKUP_FAILED");
+  }
+  return data?.created_at ?? null;
 }
 
 export type PurchaseDecisionMilestone = { id: string; leadId: string; milestoneType: "PURCHASE_DECISION"; recordedAt: string; origin: "MANUAL" };
