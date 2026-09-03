@@ -1,7 +1,7 @@
 ---
 project_name: 'lead-flow'
 user_name: 'Jordan'
-date: '2026-09-02'
+date: '2026-09-03'
 sections_completed: ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns', 'current_state_roadmap', 'production_safety']
 status: 'complete'
 existing_patterns_found: 12
@@ -31,7 +31,7 @@ actualízala antes de implementar.
 - Tailwind CSS `^4`, Lucide React, React Hook Form, Zod `^4.4.3`, `qrcode.react` y `xlsx`.
 - Node.js `22-alpine` en Docker; Next.js usa `output: "standalone"` y arranca con `node server.js` dentro del runner.
 - ESLint `9` con `eslint-config-next` `16.2.12`; validaciones base: `npm run lint`, `npm run typecheck` y `npm run build`.
-- Las migraciones Supabase están versionadas y actualmente llegan hasta `059`; se aplican en orden y el estado remoto se verifica antes de afirmar que están desplegadas. La configuración TEA está instalada y el repositorio usa contratos estáticos dirigidos; no existe todavía una suite general de tests en `package.json`.
+- Las migraciones Supabase están versionadas y el repositorio llega hasta `065`; se aplican en orden y el estado remoto se verifica antes de afirmar que están desplegadas. La configuración TEA está instalada y el repositorio usa contratos estáticos dirigidos; no existe todavía una suite general de tests en `package.json`.
 
 ## Critical Implementation Rules
 
@@ -57,6 +57,8 @@ actualízala antes de implementar.
 - Mantener las credenciales privadas —`SUPABASE_SERVICE_ROLE_KEY`, `EVOLUTION_API_KEY` y tokens de webhook— exclusivamente en el servidor.
 - Los Route Handlers de Evolution deben ejecutarse en `nodejs`, validar el token `x-evolution-webhook-token` y devolver respuestas `{ success, ... }`.
 - Correlacionar mensajes mediante `provider_message_id` y respetar la progresión de estados de WhatsApp; no aplicar estados antiguos sobre estados más avanzados.
+- Mantener `payment_methods` como la intención ordenada actual del lead; `payment_method` conserva el primer valor para lectores legacy. `LEASING` sigue siendo legible para datos históricos aunque no aparece en el formulario nuevo.
+- Mantener el selector opcional de color dentro de First Contact: sólo afecta la foto de cada uno de los primeros tres modelos; la ficha técnica sigue siendo por modelo y el snapshot persistido gobierna los retries.
 - Suscribir Realtime únicamente a `leads`, `lead_messages` y `lead_follow_up_actions`; separar el estado de conexión automática del estado de refresh manual.
 - No usar `next start` para este proyecto: el build standalone se ejecuta con `node .next/standalone/server.js` o `node server.js` dentro del contenedor.
 - Antes de cambiar APIs o convenciones de Next.js, leer la documentación local indicada en `AGENTS.md` dentro de `node_modules/next/dist/docs/`.
@@ -112,6 +114,7 @@ actualízala antes de implementar.
 - No marcar un lead como contactado si el envío falló; solo un envío aceptado o una respuesta del cliente debe avanzar el estado.
 - No confundir un mensaje entrante con uno saliente: revisar `fromMe` antes de actualizar conversación, preview y estados.
 - No calcular alertas de seguimiento con la zona horaria del servidor; usar `America/Guayaquil` y el inicio del día local.
+- No convertir una selección múltiple de forma de pago en un valor escalar perdiendo datos; validar arrays únicos y conservar compatibilidad con leads históricos.
 - No enviar un modelo sin imagen: cada modelo seleccionable necesita una imagen válida o el fallback de catálogo.
 - No representar un refresh manual como una reconexión de Realtime; son estados independientes y deben conservar mensajes de UI distintos.
 - No eliminar `user_id`/`tenant_id`, aunque el modo actual sea vendedor único; son parte de la preparación multi-tenant.
@@ -134,4 +137,4 @@ actualízala antes de implementar.
 - Actualizarlo cuando cambien el stack, la arquitectura, los flujos de integración o el despliegue.
 - Revisar periódicamente las reglas y eliminar las que ya no aporten valor.
 
-Última actualización: 2026-09-02
+Última actualización: 2026-09-03

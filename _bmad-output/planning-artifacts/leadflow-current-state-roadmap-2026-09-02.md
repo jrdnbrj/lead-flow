@@ -1,7 +1,7 @@
 ---
 project_name: 'lead-flow'
 document_type: 'current-state-roadmap'
-date: '2026-09-02'
+date: '2026-09-03'
 status: 'active'
 source: 'product input supplied by Jordan and current repository contracts'
 ---
@@ -33,10 +33,13 @@ upgrades o cleanup incidental.
 | Seguimientos E1 | Acciones múltiples, fecha/hora `America/Guayaquil`, postpone, done/ignore, versionado y stale protection. |
 | WhatsApp cliente | Evolution `chat-instance`; inbound, outbound, webhook autenticado, deduplicación y estados. |
 | First Contact | Manual; mensaje antes de recursos; hasta 3 modelos; recursos secuenciales; retry/idempotencia por recurso; operaciones históricas no se expanden. |
+| First Contact por color | Selector opcional por vehículo para los primeros 3 modelos; color específico, default actual, fallback legacy; snapshot persistido para retries. |
 | Recordatorio WhatsApp | Canal compañero de Push mediante instancia separada `leadflow-reminders`; E1 sigue siendo la autoridad; sin fallback a la instancia cliente. |
 | Push | Suscripciones, scheduler/dispatcher, deliveries, acciones desde notificación y Service Worker. |
 | Catálogo | Ruta `/catalogo`, orden comercial, fotos, fichas PDF, colores, visor, descarga y métrica persistida de leads por modelo. |
 | Colores de catálogo | `car_model_colors` y assets por color para consulta; terminología visible normalizada según el catálogo. |
+| Formas de pago | Crédito, Tarjeta de crédito, Contado y Por definir se pueden seleccionar juntos; `Leasing` permanece compatible sólo para datos históricos. Se persiste `payment_methods` y se conserva `payment_method` como alias legacy. |
+| Notificaciones pendientes | Sección completa contraíble, cerrada por defecto, con resumen de cantidad/contexto sin alterar la semántica E1. |
 | Menú de usuario | Catálogo, Push Diagnostics y logout desde header responsive; el acceso también existe en móvil. |
 | Producción | Docker/Caddy/Evolution/Redis en Lightsail 2 GB; imagen inmutable en GHCR; migraciones separadas del deploy. |
 | Backups | Backup lógico de base de datos a bucket R2 privado con retención de dos archivos, según el runbook operativo. |
@@ -44,12 +47,14 @@ upgrades o cleanup incidental.
 
 ## Parcial / siguiente incremento
 
-### Color por vehículo del lead
+### Evolución reciente ya implementada
 
-La consulta de colores y fotos de catálogo existe, pero todavía no se debe
-seleccionar color dentro del lead ni alterar First Contact automáticamente.
+La selección de color para First Contact ya está implementada y no se realiza
+durante la creación del lead. En cada envío nuevo, el asesor puede elegir el
+color por vehículo dentro del flujo actual; el catálogo y el estado persistido
+de la operación conservan la resolución exacta usada para retries.
 
-Implementación definida:
+Contrato de resolución:
 
 ```text
 lead -> vehículo seleccionado -> color seleccionado
@@ -58,14 +63,18 @@ modelo -> color -> PHOTO
 
 El resolver usará, en orden, foto modelo+color, foto genérica del modelo,
 fallback legacy y `NOT_AVAILABLE`. La ficha técnica no depende del color.
-Requiere fotos reales por color y una migración aditiva; no modificar leads ni
-operaciones First Contact históricas por backfill.
+No se modifican leads ni operaciones First Contact históricas por backfill.
+
+Otros cambios recientes relevantes: endurecimiento de RPC/autenticación y
+fallos de consulta de catálogo para no convertir errores técnicos en
+`NOT_AVAILABLE`; preferencia persistida de color default; recuperación de
+recursos faltantes; mejoras de UX del catálogo y del resumen de notificaciones;
+incorporación de `Tarjeta de crédito` y selección múltiple de formas de pago.
 
 ## Pendiente definido
 
 | Incremento | Cómo se hará | Bloqueo o límite |
 | --- | --- | --- |
-| Tarjeta de crédito | Agregar el método en el dominio, formulario, validación, score y persistencia; mantener condiciones fuera del código. | Confirmar si es método distinto de `Crédito` y recibir reglas comerciales. |
 | Cotizador | Parámetros explícitos, cálculo determinista, preview y documento; enviar sólo después de confirmar. | Fórmula, tasas, bancos, plazos, impuestos y formato real. No inferirlos. |
 | Compradores + filtro | Reutilizar `lead_milestones.PURCHASE_DECISION`; agregar indicador y filtros derivados del hito, sin booleano duplicado. | Definir copy final; la decisión manual ya existe. |
 | Purchase Journey | Crear un `purchase_case` y una colección de hitos con tipo, fecha, actor, evidencia y observación; bloqueos como dimensión aparte. | Validar la secuencia real con el negocio antes de automatizarla. |
@@ -83,7 +92,7 @@ operaciones First Contact históricas por backfill.
 
 No implementar por ahora: multi-asesor/SaaS, cotización sin reglas, pagos
 automáticos, matrícula automática, escritura autónoma en sistemas corporativos,
-bot comercial autónomo, colores por lead sin fotos reales, cambios de Evolution,
+bot comercial autónomo, inventario/stock por color, cambios de Evolution,
 rediseños generales o reemplazo de Push por WhatsApp.
 
 ## Contratos que todo futuro incremento debe respetar
@@ -106,13 +115,15 @@ rediseños generales o reemplazo de Push por WhatsApp.
   un rollback de aplicación no revierte la base de datos.
 - Toda modificación se valida primero en Docker local; producción requiere
   autorización explícita.
+- La migración `065_multi_payment_methods.sql` es forward-only: añade y
+  valida el array `payment_methods`, rellena leads existentes desde el valor
+  escalar y mantiene `LEASING` sólo para compatibilidad histórica. Antes del
+  deploy que la consume, el dry-run remoto debe mostrar únicamente esa
+  migración pendiente.
 
 ## Preguntas de producto realmente abiertas
 
-1. ¿`Tarjeta de crédito` será una opción distinta de `Crédito`? El código
-   actual tiene `Crédito` como forma de financiamiento; no conviene mezclar
-   ambos conceptos sin confirmarlo.
-2. ¿La secuencia y los responsables de Purchase Journey son exactamente los
+1. ¿La secuencia y los responsables de Purchase Journey son exactamente los
    descritos en el análisis, o hay pasos/estados corporativos adicionales?
 
 Las demás decisiones técnicas de bajo riesgo quedan definidas en los

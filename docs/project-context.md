@@ -10,6 +10,12 @@ This file is the compact BMAD context for future agents. It records the
 runtime boundaries and the production rules that are easy to miss in a
 brownfield codebase.
 
+The current repository schema reaches migration `065`. The current release
+candidate includes multiple payment intents (`payment_methods`) with legacy
+scalar compatibility, catalog color defaults, and optional per-vehicle color
+selection in the existing First Contact flow. These additions do not change
+the customer/reminder Evolution instances, Push, or lead creation semantics.
+
 ## Runtime topology
 
 ```text
@@ -55,16 +61,19 @@ VPS must not build the application.
    failure, never resource absence.
 6. First Contact sends the message before resources. Resource/model retries
    are independent and model-scoped.
-7. Customer and reminder Evolution instances are distinct. No code path may
+7. A new First Contact color selection affects only the photo snapshot for the
+   selected vehicle; technical sheets remain model-scoped and retries use the
+   persisted snapshot rather than re-resolving changed catalog data.
+8. Customer and reminder Evolution instances are distinct. No code path may
    silently fall back from the reminder instance to the customer instance.
-8. Evolution webhook events are accepted only from the customer instance;
+9. Evolution webhook events are accepted only from the customer instance;
    reminder-instance events must not create lead messages or RESPONSE actions.
-9. `/api/health` proves liveness and `/api/ready` proves dependency readiness;
+10. `/api/health` proves liveness and `/api/ready` proves dependency readiness;
    neither alone proves that a real First Contact provider send succeeded.
-10. Migrations are forward-only and released separately from the application
-    image. An app rollback does not roll back Supabase or Evolution data.
-11. Production changes require explicit operator authorization. Local Docker
-    validation comes before any production deployment.
+11. Migrations are forward-only and released separately from the application
+   image. An app rollback does not roll back Supabase or Evolution data.
+12. Production changes require explicit operator authorization. Local Docker
+   validation comes before any production deployment.
 
 ## Incident lessons encoded here
 
