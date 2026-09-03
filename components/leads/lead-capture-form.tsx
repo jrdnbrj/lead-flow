@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { createLeadAction, findExistingLeadByPhoneAction } from "@/lib/leads/actions";
-import { capitalizeNameWords, carModels, getStatusLabel, leadTimeframes, paymentMethods, type ExistingLeadSummary, type FollowUpAction, type Lead } from "@/lib/domain/lead";
+import { capitalizeNameWords, carModels, getStatusLabel, leadTimeframes, selectablePaymentMethods, type ExistingLeadSummary, type FollowUpAction, type Lead } from "@/lib/domain/lead";
 import { leadSchema, type LeadFormValues } from "@/lib/leads/validation";
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { FirstContactSummary } from "@/components/leads/first-contact-summary";
@@ -38,7 +38,7 @@ export function LeadCaptureForm() {
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadSchema),
     mode: "onChange",
-    defaultValues: { fullName: "", phone: "", nationalId: "", email: "", carModels: [], timeframe: "INMEDIATA", paymentMethod: "CREDITO", tradeInCar: false, notes: "" },
+    defaultValues: { fullName: "", phone: "", nationalId: "", email: "", carModels: [], timeframe: "INMEDIATA", paymentMethods: [], tradeInCar: false, notes: "" },
   });
   const { formState, register, setValue } = form;
   const fullNameField = register("fullName");
@@ -163,7 +163,7 @@ export function LeadCaptureForm() {
             }} />;
           })}
         </div>
-        <p className="mt-2 text-[11px] font-medium text-[var(--muted)]">Puedes elegir uno o varios modelos. El mensaje los mostrará separados por comas y la imagen será la del primero.</p>
+        <p className="mt-2 text-[11px] font-medium text-[var(--muted)]">Puedes elegir uno o varios modelos. El mensaje mencionará todos y los recursos se enviarán para los primeros tres.</p>
         <FieldError message={formState.errors.carModels?.message} />
       </section>
 
@@ -183,8 +183,15 @@ export function LeadCaptureForm() {
           <h2 className="mt-1 text-lg font-black tracking-[-0.03em]">¿Cómo lo imagina?</h2>
         </div>
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          {paymentMethods.map((option) => <ChoiceCard key={option.value} selected={values.paymentMethod === option.value} label={option.label} onClick={() => setValue("paymentMethod", option.value, { shouldValidate: true, shouldDirty: true })} />)}
+          {selectablePaymentMethods.map((option) => <ChoiceCard key={option.value} selected={values.paymentMethods?.includes(option.value) ?? false} label={option.label} onClick={() => {
+            const current = values.paymentMethods ?? [];
+            const selected = current.includes(option.value);
+            const next = selected ? current.filter((value) => value !== option.value) : [...current, option.value];
+            setValue("paymentMethods", next, { shouldValidate: true, shouldDirty: true });
+          }} />)}
         </div>
+        <p className="mt-2 text-[11px] font-medium text-[var(--muted)]">Puedes seleccionar una o varias opciones.</p>
+        <FieldError message={formState.errors.paymentMethods?.message} />
         <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border border-black/[0.08] px-4 py-3.5 transition hover:border-black/20">
           <input {...register("tradeInCar")} type="checkbox" className="size-5 accent-[var(--ink)]" />
           <span><span className="block text-sm font-extrabold">Tiene un vehículo para entregar como parte de pago</span><span className="block text-xs text-[var(--muted)]">Puede reducir el valor que necesita financiar y cambia la propuesta.</span></span>

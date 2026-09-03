@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import type { ConversationState, FollowUpAction, InboundClassification, Lead, LeadStatus, LeadTemperature, WhatsappStatus } from "@/lib/domain/lead";
-import { carModels, formatPhoneForWhatsapp, getConversationStateLabel, getNextActionLabel, getStatusLabel, getTemperatureLabel, leadTimeframes, paymentMethods } from "@/lib/domain/lead";
+import { carModels, formatPhoneForWhatsapp, getConversationStateLabel, getNextActionLabel, getStatusLabel, getTemperatureLabel, leadTimeframes, paymentMethods, selectablePaymentMethods } from "@/lib/domain/lead";
 import { correctInboundResponseAction, deleteLeadAction, recordPurchaseDecisionAction, sendLeadWhatsappAction, updateLeadConversationAction, updateLeadDetailsAction } from "@/lib/leads/actions";
 import { formatElapsedSince, formatScheduledDateTime, getDashboardLeadBucket, isLeadReminderDue, sortLeadsForDashboard } from "@/lib/leads/follow-up";
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
@@ -88,14 +88,14 @@ function getTimeframeLabel(value: Lead["timeframe"]): string {
   return leadTimeframes.find((option) => option.value === value)?.label ?? value;
 }
 
-function getPaymentMethodLabel(value: Lead["paymentMethod"]): string {
-  return paymentMethods.find((option) => option.value === value)?.label ?? value;
+function getPaymentMethodLabels(values: Lead["paymentMethods"]): string {
+  return values.map((value) => paymentMethods.find((option) => option.value === value)?.label ?? value).join(", ");
 }
 
-type LeadDetailsForm = Pick<Lead, "createdAt" | "updatedAt" | "fullName" | "phone" | "nationalId" | "email" | "carModels" | "timeframe" | "paymentMethod" | "tradeInCar" | "notes" | "score" | "temperature" | "status">;
+type LeadDetailsForm = Pick<Lead, "createdAt" | "updatedAt" | "fullName" | "phone" | "nationalId" | "email" | "carModels" | "timeframe" | "paymentMethods" | "tradeInCar" | "notes" | "score" | "temperature" | "status">;
 
 function toLeadDetailsForm(lead: Lead): LeadDetailsForm {
-  return { createdAt: lead.createdAt, updatedAt: lead.updatedAt, fullName: lead.fullName, phone: lead.phone, nationalId: lead.nationalId, email: lead.email, carModels: lead.carModels, timeframe: lead.timeframe, paymentMethod: lead.paymentMethod, tradeInCar: lead.tradeInCar, notes: lead.notes, score: lead.score, temperature: lead.temperature, status: lead.status };
+  return { createdAt: lead.createdAt, updatedAt: lead.updatedAt, fullName: lead.fullName, phone: lead.phone, nationalId: lead.nationalId, email: lead.email, carModels: lead.carModels, timeframe: lead.timeframe, paymentMethods: lead.paymentMethods, tradeInCar: lead.tradeInCar, notes: lead.notes, score: lead.score, temperature: lead.temperature, status: lead.status };
 }
 
 function formatLeadDateTime(value: string): string {
@@ -203,7 +203,7 @@ function refreshAllLeads() {
         Celular: lead.phone,
         Modelo: lead.carModel,
         "Momento de compra": lead.timeframe,
-        "Forma de pago": lead.paymentMethod,
+        "Forma de pago": getPaymentMethodLabels(lead.paymentMethods),
         Retoma: lead.tradeInCar ? "Sí" : "No",
         Puntaje: lead.score,
         Prioridad: getTemperatureLabel(lead.temperature),
@@ -290,10 +290,80 @@ function MetricCard({ icon, label, value, helper, tone }: { icon: React.ReactNod
 }
 */
 
+function PaymentMethodChoices({ values, onChange }: { values: Lead["paymentMethods"]; onChange: (values: Lead["paymentMethods"]) => void }) {
+  const options = values.includes("LEASING") ? [...selectablePaymentMethods, { value: "LEASING" as const, label: "Leasing" }] : selectablePaymentMethods;
+  return <div>
+    <p className="text-xs font-black text-[var(--ink)]">Forma de pago</p>
+    <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+      {options.map((option) => {
+        const selected = values.includes(option.value);
+        return <button key={option.value} type="button" aria-pressed={selected} onClick={() => onChange(selected ? values.filter((value) => value !== option.value) : [...values, option.value])} className={selected ? "rounded-xl border border-[var(--ink)] bg-[var(--ink)] px-2.5 py-2.5 text-left text-[11px] font-bold text-white transition" : "rounded-xl border border-black/[0.08] bg-[#f6f3ed] px-2.5 py-2.5 text-left text-[11px] font-bold text-[var(--ink)] transition"}>
+          <span className="flex items-center justify-between gap-2"><span>{option.label}</span>{selected ? <CheckCircle2 size={14} className="shrink-0 text-[var(--lime)]" /> : null}</span>
+        </button>;
+      })}
+    </div>
+    {values.includes("LEASING") ? <p className="mt-1.5 text-[11px] font-medium text-[var(--muted)]">Leasing se conserva porque pertenece a un registro anterior.</p> : null}
+    {values.length === 0 ? <p className="mt-1.5 text-xs font-semibold text-red-600">Selecciona al menos una forma de pago.</p> : null}
+  </div>;
+}
+
 function LeadDetailsModal({ details, isEditing, isSaving, error, message, onClose, onStartEditing, onCancelEditing, onSave, onChange }: { details: LeadDetailsForm; isEditing: boolean; isSaving: boolean; error: string | null; message: string | null; onClose: () => void; onStartEditing: () => void; onCancelEditing: () => void; onSave: () => void; onChange: (patch: Partial<LeadDetailsForm>) => void }) {
-  return <div role="presentation" onClick={(event) => { event.stopPropagation(); onClose(); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby="lead-details-title" onClick={(event) => event.stopPropagation()} className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_24px_80px_rgba(16,24,40,0.24)] sm:p-5"><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Información del lead</p><h2 id="lead-details-title" className="mt-1 text-lg font-black">{details.fullName || "Lead"}</h2><p className="text-xs font-bold text-[var(--muted)]">{details.phone || "Sin celular"}</p></div><div className="flex items-center gap-1.5"><button type="button" onClick={isEditing ? onCancelEditing : onStartEditing} className="button-secondary min-h-9 px-3 py-2 text-[11px]">{isEditing ? "Cancelar" : "Editar"}</button><button type="button" aria-label="Cerrar información del lead" title="Cerrar" onClick={onClose} className="icon-action"><X size={18} /></button></div></div>
-    {isEditing ? <div className="mt-4 space-y-3"><div className="grid gap-3 sm:grid-cols-2"><label className="block text-xs font-black text-[var(--ink)]">Nombre completo<input value={details.fullName} onChange={(event) => onChange({ fullName: event.target.value })} className="field-input mt-1.5" autoFocus /></label><label className="block text-xs font-black text-[var(--ink)]">Celular<input value={details.phone} onChange={(event) => onChange({ phone: event.target.value })} inputMode="tel" className="field-input mt-1.5" /></label><label className="block text-xs font-black text-[var(--ink)]">Cédula <span className="font-medium text-[var(--muted)]">(opcional)</span><input value={details.nationalId ?? ""} onChange={(event) => onChange({ nationalId: event.target.value })} inputMode="numeric" className="field-input mt-1.5" /></label><label className="block text-xs font-black text-[var(--ink)]">Correo <span className="font-medium text-[var(--muted)]">(opcional)</span><input value={details.email ?? ""} onChange={(event) => onChange({ email: event.target.value })} type="email" inputMode="email" className="field-input mt-1.5" /></label></div><div><p className="text-xs font-black text-[var(--ink)]">Modelos de interés</p><div className="mt-1.5 grid max-h-36 grid-cols-2 gap-1.5 overflow-y-auto rounded-xl border border-black/[0.08] p-1.5">{carModels.map((model) => { const selected = details.carModels.includes(model); return <button key={model} type="button" onClick={() => onChange({ carModels: selected ? details.carModels.filter((value) => value !== model) : [...details.carModels, model] })} className={`rounded-lg px-2 py-2 text-left text-[11px] font-bold ${selected ? "bg-[var(--ink)] text-white" : "bg-[#f6f3ed] text-[var(--ink)]"}`}>{model}</button>; })}</div></div><div className="grid gap-3 sm:grid-cols-2"><label className="block text-xs font-black text-[var(--ink)]">Momento de compra<select value={details.timeframe} onChange={(event) => onChange({ timeframe: event.target.value as Lead["timeframe"] })} className="field-input mt-1.5"><option value="INMEDIATA">Ya</option><option value="1_3_MESES">1–3 meses</option><option value="3_6_MESES">3–6 meses</option><option value="EXPLORANDO">Explorando</option></select></label><label className="block text-xs font-black text-[var(--ink)]">Forma de pago<select value={details.paymentMethod} onChange={(event) => onChange({ paymentMethod: event.target.value as Lead["paymentMethod"] })} className="field-input mt-1.5"><option value="CREDITO">Crédito</option><option value="TARJETA_CREDITO">Tarjeta de crédito</option><option value="CONTADO">Contado</option><option value="LEASING">Leasing</option><option value="POR_DEFINIR">Por definir</option></select></label></div><label className="flex cursor-pointer items-center gap-2 rounded-xl border border-black/[0.08] px-3 py-2.5 text-xs font-bold"><input type="checkbox" checked={details.tradeInCar} onChange={(event) => onChange({ tradeInCar: event.target.checked })} className="size-4 accent-[var(--ink)]" />Tiene vehículo como parte de pago</label><label className="block text-xs font-black text-[var(--ink)]">Nota rápida<textarea value={details.notes ?? ""} onChange={(event) => onChange({ notes: event.target.value })} rows={3} className="field-input mt-1.5 resize-none" /></label>{error ? <p className="rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]" role="alert">{error}</p> : null}<button type="button" disabled={isSaving} onClick={onSave} className="button-primary w-full">{isSaving ? "Guardando…" : "Guardar cambios"}</button></div> : <><dl className="mt-4 grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Interés</dt><dd className="mt-1 font-bold text-[var(--ink)]">{details.carModels.length ? details.carModels.join(", ") : "Sin modelo"}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Momento de compra</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getTimeframeLabel(details.timeframe)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Forma de pago</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getPaymentMethodLabel(details.paymentMethod)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Parte de pago</dt><dd className="mt-1 font-bold text-[var(--ink)]">{details.tradeInCar ? "Sí, tiene vehículo" : "No"}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Cédula</dt><dd className="mt-1 break-words font-bold text-[var(--ink)]">{details.nationalId || "No registrada"}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Correo</dt><dd className="mt-1 break-words font-bold text-[var(--ink)]">{details.email || "No registrado"}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Agregado</dt><dd className="mt-1 font-bold text-[var(--ink)]">{formatLeadDateTime(details.createdAt)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Última edición</dt><dd className="mt-1 font-bold text-[var(--ink)]">{formatLeadDateTime(details.updatedAt)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Estado</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getStatusLabel(details.status)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Prioridad</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getTemperatureLabel(details.temperature)}</dd></div><div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Score</dt><dd className="mt-1 font-bold text-[var(--ink)]">{details.score}/100</dd></div></dl><div className="mt-3 rounded-xl border border-black/[0.06] bg-white p-3"><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Nota rápida</p><p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-[var(--ink)]">{details.notes?.trim() || "Sin nota"}</p></div>{message ? <p className="mt-3 text-xs font-semibold text-emerald-700">{message}</p> : null}</>}
-  </div></div>;
+  return <div role="presentation" onClick={(event) => { event.stopPropagation(); onClose(); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm">
+    <div role="dialog" aria-modal="true" aria-labelledby="lead-details-title" onClick={(event) => event.stopPropagation()} className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_24px_80px_rgba(16,24,40,0.24)] sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="eyebrow">Información del lead</p>
+          <h2 id="lead-details-title" className="mt-1 text-lg font-black">{details.fullName || "Lead"}</h2>
+          <p className="text-xs font-bold text-[var(--muted)]">{details.phone || "Sin celular"}</p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={isEditing ? onCancelEditing : onStartEditing} className="button-secondary min-h-9 px-3 py-2 text-[11px]">{isEditing ? "Cancelar" : "Editar"}</button>
+          <button type="button" aria-label="Cerrar información del lead" title="Cerrar" onClick={onClose} className="icon-action"><X size={18} /></button>
+        </div>
+      </div>
+      {isEditing ? <div className="mt-4 space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs font-black text-[var(--ink)]">Nombre completo<input value={details.fullName} onChange={(event) => onChange({ fullName: event.target.value })} className="field-input mt-1.5" autoFocus /></label>
+          <label className="block text-xs font-black text-[var(--ink)]">Celular<input value={details.phone} onChange={(event) => onChange({ phone: event.target.value })} inputMode="tel" className="field-input mt-1.5" /></label>
+          <label className="block text-xs font-black text-[var(--ink)]">Cédula <span className="font-medium text-[var(--muted)]">(opcional)</span><input value={details.nationalId ?? ""} onChange={(event) => onChange({ nationalId: event.target.value })} inputMode="numeric" className="field-input mt-1.5" /></label>
+          <label className="block text-xs font-black text-[var(--ink)]">Correo <span className="font-medium text-[var(--muted)]">(opcional)</span><input value={details.email ?? ""} onChange={(event) => onChange({ email: event.target.value })} type="email" inputMode="email" className="field-input mt-1.5" /></label>
+        </div>
+        <div>
+          <p className="text-xs font-black text-[var(--ink)]">Modelos de interés</p>
+          <div className="mt-1.5 grid max-h-36 grid-cols-2 gap-1.5 overflow-y-auto rounded-xl border border-black/[0.08] p-1.5">
+            {carModels.map((model) => {
+              const selected = details.carModels.includes(model);
+              return <button key={model} type="button" onClick={() => onChange({ carModels: selected ? details.carModels.filter((value) => value !== model) : [...details.carModels, model] })} className={selected ? "rounded-lg bg-[var(--ink)] px-2 py-2 text-left text-[11px] font-bold text-white" : "rounded-lg bg-[#f6f3ed] px-2 py-2 text-left text-[11px] font-bold text-[var(--ink)]"}>{model}</button>;
+            })}
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs font-black text-[var(--ink)]">Momento de compra<select value={details.timeframe} onChange={(event) => onChange({ timeframe: event.target.value as Lead["timeframe"] })} className="field-input mt-1.5"><option value="INMEDIATA">Ya</option><option value="1_3_MESES">1–3 meses</option><option value="3_6_MESES">3–6 meses</option><option value="EXPLORANDO">Explorando</option></select></label>
+          <PaymentMethodChoices values={details.paymentMethods} onChange={(paymentMethods) => onChange({ paymentMethods })} />
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-black/[0.08] px-3 py-2.5 text-xs font-bold"><input type="checkbox" checked={details.tradeInCar} onChange={(event) => onChange({ tradeInCar: event.target.checked })} className="size-4 accent-[var(--ink)]" />Tiene vehículo como parte de pago</label>
+        <label className="block text-xs font-black text-[var(--ink)]">Nota rápida<textarea value={details.notes ?? ""} onChange={(event) => onChange({ notes: event.target.value })} rows={3} className="field-input mt-1.5 resize-none" /></label>
+        {error ? <p className="rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]" role="alert">{error}</p> : null}
+        <button type="button" disabled={isSaving || details.paymentMethods.length === 0} onClick={onSave} className="button-primary w-full">{isSaving ? "Guardando…" : "Guardar cambios"}</button>
+      </div> : <>
+        <dl className="mt-4 grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Interés</dt><dd className="mt-1 font-bold text-[var(--ink)]">{details.carModels.length ? details.carModels.join(", ") : "Sin modelo"}</dd></div>
+          <div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Momento de compra</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getTimeframeLabel(details.timeframe)}</dd></div>
+          <div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Forma de pago</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getPaymentMethodLabels(details.paymentMethods)}</dd></div>
+          <div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Parte de pago</dt><dd className="mt-1 font-bold text-[var(--ink)]">{details.tradeInCar ? "Sí, tiene vehículo" : "No"}</dd></div>
+          <div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Cédula</dt><dd className="mt-1 break-words font-bold text-[var(--ink)]">{details.nationalId || "No registrada"}</dd></div>
+          <div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Correo</dt><dd className="mt-1 break-words font-bold text-[var(--ink)]">{details.email || "No registrado"}</dd></div>
+          <div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Agregado</dt><dd className="mt-1 font-bold text-[var(--ink)]">{formatLeadDateTime(details.createdAt)}</dd></div>
+          <div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Última edición</dt><dd className="mt-1 font-bold text-[var(--ink)]">{formatLeadDateTime(details.updatedAt)}</dd></div>
+          <div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Estado</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getStatusLabel(details.status)}</dd></div>
+          <div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Prioridad</dt><dd className="mt-1 font-bold text-[var(--ink)]">{getTemperatureLabel(details.temperature)}</dd></div>
+          <div className="rounded-xl bg-[#f6f3ed] p-2.5"><dt className="font-black text-[var(--muted)]">Score</dt><dd className="mt-1 font-bold text-[var(--ink)]">{details.score}/100</dd></div>
+        </dl>
+        <div className="mt-3 rounded-xl border border-black/[0.06] bg-white p-3"><p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">Nota rápida</p><p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-[var(--ink)]">{details.notes?.trim() || "Sin nota"}</p></div>
+        {message ? <p className="mt-3 text-xs font-semibold text-emerald-700">{message}</p> : null}
+      </>}
+    </div>
+  </div>;
 }
 
 function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lead; isExpanded: boolean; onExpandedChange: (expanded: boolean) => void; onDeleted?: (leadId: string) => void }) {
@@ -370,7 +440,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
     setIsSavingDetails(true);
     setDetailsError(null);
     setDetailsMessage(null);
-    const response = await updateLeadDetailsAction({ leadId: lead.id, fullName: details.fullName, phone: details.phone, nationalId: details.nationalId ?? "", email: details.email ?? "", carModels: details.carModels, timeframe: details.timeframe, paymentMethod: details.paymentMethod, tradeInCar: details.tradeInCar, notes: details.notes ?? "" });
+    const response = await updateLeadDetailsAction({ leadId: lead.id, fullName: details.fullName, phone: details.phone, nationalId: details.nationalId ?? "", email: details.email ?? "", carModels: details.carModels, timeframe: details.timeframe, paymentMethods: details.paymentMethods, tradeInCar: details.tradeInCar, notes: details.notes ?? "" });
     if (response.success && response.data) {
       setDetails(toLeadDetailsForm(response.data));
       setIsEditingDetails(false);

@@ -1029,6 +1029,7 @@ export type Database = {
             | Database["public"]["Enums"]["next_action_type"]
             | null
           notes: string | null
+          payment_methods: string[]
           payment_method: string
           phone: string
           score: number
@@ -1063,6 +1064,7 @@ export type Database = {
             | Database["public"]["Enums"]["next_action_type"]
             | null
           notes?: string | null
+          payment_methods?: string[]
           payment_method: string
           phone: string
           score?: number
@@ -1097,6 +1099,7 @@ export type Database = {
             | Database["public"]["Enums"]["next_action_type"]
             | null
           notes?: string | null
+          payment_methods?: string[]
           payment_method?: string
           phone?: string
           score?: number

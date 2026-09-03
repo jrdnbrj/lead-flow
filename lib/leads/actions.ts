@@ -61,6 +61,7 @@ export async function updateLeadDetailsAction(input: UpdateLeadInput): Promise<A
     return lead ? { success: true, data: lead, message: "Información actualizada." } : { success: false, error: "No pudimos actualizar la información. Puedes reintentarlo." };
   } catch (error) {
     logActionFailure("updateLeadDetails", error);
+    if (error instanceof Error && error.message === "PAYMENT_METHODS_MIGRATION_REQUIRED") return { success: false, error: "La selección múltiple todavía no está habilitada en la base de datos. No se guardaron cambios." };
     return { success: false, error: "No pudimos actualizar la información. Puedes reintentarlo." };
   }
 }
@@ -84,6 +85,7 @@ export async function createLeadAction(input: CreateLeadInput, options?: { allow
     return { success: true, data: result.lead, warning: result.warning };
   } catch (error) {
     logActionFailure("createLead", error);
+    if (error instanceof Error && error.message === "PAYMENT_METHODS_MIGRATION_REQUIRED") return { success: false, error: "La selección múltiple todavía no está habilitada en la base de datos. No se creó el lead." };
     return { success: false, error: "No pudimos guardar el lead. Revisa tu conexión e inténtalo de nuevo." };
   }
 }

@@ -12,16 +12,16 @@ assert.equal(leadSchema.safeParse({
   phone: "0999999999",
   carModels: ["CS15"],
   timeframe: "INMEDIATA",
-  paymentMethod: "TARJETA_CREDITO",
+  paymentMethods: ["TARJETA_CREDITO"],
   tradeInCar: false,
 }).success, true);
 
 const base = { carModels: ["CS15"], timeframe: "INMEDIATA", tradeInCar: false };
-assert.equal(calculateLeadScore({ ...base, paymentMethod: "TARJETA_CREDITO" }).score, 68);
-assert.equal(calculateLeadScore({ ...base, paymentMethod: "CREDITO" }).score, 88);
-assert.equal(calculateLeadScore({ ...base, paymentMethod: "CONTADO" }).score, 83);
-assert.equal(calculateLeadScore({ ...base, paymentMethod: "LEASING" }).score, 86);
-assert.equal(calculateLeadScore({ ...base, paymentMethod: "POR_DEFINIR" }).score, 73);
+assert.equal(calculateLeadScore({ ...base, paymentMethods: ["TARJETA_CREDITO"] }).score, 68);
+assert.equal(calculateLeadScore({ ...base, paymentMethods: ["CREDITO"] }).score, 88);
+assert.equal(calculateLeadScore({ ...base, paymentMethods: ["CONTADO"] }).score, 83);
+assert.equal(calculateLeadScore({ ...base, paymentMethods: ["LEASING"] }).score, 86);
+assert.equal(calculateLeadScore({ ...base, paymentMethods: ["POR_DEFINIR"] }).score, 73);
 
 for (const required of [
   "'TARJETA_CREDITO'",

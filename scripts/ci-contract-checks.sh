@@ -45,5 +45,6 @@ done
 node --experimental-strip-types scripts/e3-multi-vehicle-runtime-check.mjs
 node --experimental-strip-types scripts/e3-color-selection-runtime-check.mjs
 node --experimental-strip-types scripts/credit-card-payment-method-contract-check.mjs
+node --experimental-strip-types scripts/multi-payment-method-contract-check.mjs
 
 printf '%s\n' 'CI contract checks: PASS'

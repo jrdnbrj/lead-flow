@@ -24,6 +24,7 @@ type LeadRow = {
   car_model: Lead["carModel"];
   car_models: string[];
   timeframe: Lead["timeframe"];
+  payment_methods?: Lead["paymentMethods"] | null;
   payment_method: Lead["paymentMethod"];
   trade_in_car: boolean;
   score: number;
@@ -40,6 +41,11 @@ type LeadRow = {
   deleted_at: string | null;
   status: Lead["status"];
 };
+
+function isMissingPaymentMethodsColumn(error: { message?: string } | null): boolean {
+  const message = error?.message ?? "";
+  return /payment_methods|column .* does not exist|PGRST204/i.test(message);
+}
 
 type FollowUpActionRow = Database["public"]["Tables"]["lead_follow_up_actions"]["Row"];
 type LeadflowDbClient = NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>;
@@ -218,6 +224,7 @@ function toDomainActionRpc(data: Record<string, unknown> | null): FollowUpAction
 }
 
 function toDomainLead(row: LeadRow, followUpActions: FollowUpAction[] = []): Lead {
+  const paymentMethods = row.payment_methods?.length ? row.payment_methods : [row.payment_method];
   return {
     id: row.id,
     userId: row.user_id,
@@ -231,7 +238,8 @@ function toDomainLead(row: LeadRow, followUpActions: FollowUpAction[] = []): Lea
     carModel: row.car_model,
     carModels: row.car_models?.length ? row.car_models : row.car_model.split(",").map((model) => model.trim()).filter(Boolean),
     timeframe: row.timeframe,
-    paymentMethod: row.payment_method,
+    paymentMethods,
+    paymentMethod: paymentMethods[0] ?? row.payment_method,
     tradeInCar: row.trade_in_car,
     score: row.score,
     temperature: row.temperature,
@@ -257,6 +265,22 @@ function toDomainLead(row: LeadRow, followUpActions: FollowUpAction[] = []): Lea
     followUpActions,
     firstContact: null,
   };
+}
+
+async function attachPaymentMethods(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
+  if (leads.length === 0) return leads;
+  const { data, error } = await supabase.from("leads").select("id,payment_methods").in("id", leads.map((lead) => lead.id));
+  if (error) {
+    // Keep the application readable while the forward migration is pending.
+    // Once present, the array becomes the canonical source automatically.
+    if (!isMissingPaymentMethodsColumn(error)) console.error("[leadflow][leads] payment methods lookup failed", { message: error.message });
+    return leads;
+  }
+  const methodsByLead = new Map((data ?? []).map((row) => [row.id, row.payment_methods as Lead["paymentMethods"] | null]));
+  return leads.map((lead) => {
+    const paymentMethods = methodsByLead.get(lead.id);
+    return paymentMethods?.length ? { ...lead, paymentMethods, paymentMethod: paymentMethods[0] } : lead;
+  });
 }
 
 async function attachFirstContact(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
@@ -345,7 +369,7 @@ export async function getLeads(advisorUserId: string): Promise<Lead[]> {
   const { data, error } = await query.eq("user_id", advisorUserId);
 
   if (error || !data) throw new Error("No pudimos cargar los contactos.");
-  return attachLeadRelations(supabase, data.map((row) => toDomainLead(row as unknown as LeadRow)));
+  return attachLeadRelations(supabase, await attachPaymentMethods(supabase, data.map((row) => toDomainLead(row as unknown as LeadRow))));
 }
 
 export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; warning?: string }> {
@@ -363,7 +387,8 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
     carModel: input.carModels.join(", "),
     carModels: input.carModels,
     timeframe: input.timeframe,
-    paymentMethod: input.paymentMethod,
+    paymentMethods: input.paymentMethods,
+    paymentMethod: input.paymentMethods[0],
     tradeInCar: input.tradeInCar,
     score: score.score,
     temperature: score.temperature,
@@ -394,30 +419,39 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
 
   const ownerId = await getInstallationAdvisorUserId();
   if (!ownerId) throw new Error("La identidad de instalación no está configurada; el lead no fue guardado.");
-  const { data, error } = await supabase
-    .from("leads")
-    .insert({
-      user_id: ownerId,
-      full_name: localLead.fullName,
-      phone: localLead.phone,
-      national_id: localLead.nationalId,
-      email: localLead.email,
-      car_model: localLead.carModel,
-      car_models: localLead.carModels,
-      timeframe: localLead.timeframe,
-      payment_method: localLead.paymentMethod,
-      trade_in_car: localLead.tradeInCar,
-      notes: localLead.notes,
-      status: localLead.status,
-    })
-    .select(leadSelect)
-    .single();
+  const baseInsert: Database["public"]["Tables"]["leads"]["Insert"] = {
+    user_id: ownerId,
+    full_name: localLead.fullName,
+    phone: localLead.phone,
+    national_id: localLead.nationalId,
+    email: localLead.email,
+    car_model: localLead.carModel,
+    car_models: localLead.carModels,
+    timeframe: localLead.timeframe,
+    payment_method: localLead.paymentMethod,
+    payment_methods: localLead.paymentMethods,
+    trade_in_car: localLead.tradeInCar,
+    notes: localLead.notes,
+    status: localLead.status,
+  };
+  let { data, error } = await supabase.from("leads").insert(baseInsert).select(leadSelect).single();
+  let usedLegacyPaymentStorage = false;
+  if (error && isMissingPaymentMethodsColumn(error) && localLead.paymentMethods.length === 1) {
+    const legacyInsert = { ...baseInsert };
+    delete legacyInsert.payment_methods;
+    ({ data, error } = await supabase.from("leads").insert(legacyInsert).select(leadSelect).single());
+    usedLegacyPaymentStorage = !error;
+  }
+  if (error && isMissingPaymentMethodsColumn(error) && localLead.paymentMethods.length > 1) {
+    throw new Error("PAYMENT_METHODS_MIGRATION_REQUIRED");
+  }
 
   if (error || !data) {
     throw new Error("No pudimos guardar el contacto. Revisa tu conexión e inténtalo de nuevo.");
   }
 
-  return { lead: toDomainLead(data as unknown as LeadRow), warning: "Lead guardado. Envíalo desde el dashboard cuando estés listo." };
+  const storedRow = { ...(data as unknown as LeadRow), payment_methods: usedLegacyPaymentStorage ? [localLead.paymentMethod] : localLead.paymentMethods };
+  return { lead: toDomainLead(storedRow), warning: usedLegacyPaymentStorage ? "Lead guardado con una forma de pago. La selección múltiple estará disponible al aplicar la migración pendiente." : "Lead guardado. Envíalo desde el dashboard cuando estés listo." };
 }
 
 export async function updateLeadDetails(input: UpdateLeadInput): Promise<Lead | null> {
@@ -430,18 +464,26 @@ export async function updateLeadDetails(input: UpdateLeadInput): Promise<Lead | 
     car_model: input.carModels.join(", "),
     car_models: input.carModels,
     timeframe: input.timeframe,
-    payment_method: input.paymentMethod,
+    payment_method: input.paymentMethods[0],
+    payment_methods: input.paymentMethods,
     trade_in_car: input.tradeInCar,
     notes: input.notes?.trim() || null,
   };
-  const query = supabase.from("leads").update(payload).eq("id", input.leadId).eq("user_id", ownerId).is("deleted_at", null);
-  const { data, error } = await query.select(leadSelect).maybeSingle();
+  let query = supabase.from("leads").update(payload).eq("id", input.leadId).eq("user_id", ownerId).is("deleted_at", null);
+  let { data, error } = await query.select(leadSelect).maybeSingle();
+  if (error && isMissingPaymentMethodsColumn(error) && input.paymentMethods.length === 1) {
+    const legacyPayload = { ...payload };
+    delete legacyPayload.payment_methods;
+    query = supabase.from("leads").update(legacyPayload).eq("id", input.leadId).eq("user_id", ownerId).is("deleted_at", null);
+    ({ data, error } = await query.select(leadSelect).maybeSingle());
+  }
+  if (error && isMissingPaymentMethodsColumn(error) && input.paymentMethods.length > 1) throw new Error("PAYMENT_METHODS_MIGRATION_REQUIRED");
   if (error) {
     console.error("[leadflow][leads] lead update failed", { leadId: input.leadId, message: error.message });
     throw new Error("LEAD_UPDATE_FAILED");
   }
   if (!data) return null;
-  const [lead] = await attachLeadRelations(supabase, [toDomainLead(data as unknown as LeadRow)]);
+  const [lead] = await attachLeadRelations(supabase, await attachPaymentMethods(supabase, [toDomainLead(data as unknown as LeadRow)]));
   return lead ?? null;
 }
 
@@ -467,7 +509,7 @@ export async function getLeadById(id: string): Promise<Lead | null> {
     throw new Error("LEAD_LOOKUP_FAILED");
   }
   if (!data) return null;
-  const [lead] = await attachLeadRelations(supabase, [toDomainLead(data as unknown as LeadRow)]);
+  const [lead] = await attachLeadRelations(supabase, await attachPaymentMethods(supabase, [toDomainLead(data as unknown as LeadRow)]));
   return lead ?? null;
 }
 

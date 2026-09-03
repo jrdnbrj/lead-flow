@@ -16,6 +16,15 @@ export const paymentMethods = [
   { value: "POR_DEFINIR", label: "Por definir" },
 ] as const;
 
+// Leasing remains readable/editable only for historical leads. New leads use
+// the current selectable set below, with no visual default preselected.
+export const selectablePaymentMethods = [
+  { value: "CREDITO", label: "Crédito" },
+  { value: "TARJETA_CREDITO", label: "Tarjeta de crédito" },
+  { value: "CONTADO", label: "Contado" },
+  { value: "POR_DEFINIR", label: "Por definir" },
+] as const;
+
 export const carModels = [
   "Alsvin V3",
   "Alsvin Plus",
@@ -84,6 +93,8 @@ export interface Lead {
   carModel: string;
   carModels: string[];
   timeframe: LeadTimeframe;
+  paymentMethods: PaymentMethod[];
+  /** First selected value kept for compatibility with existing consumers. */
   paymentMethod: PaymentMethod;
   tradeInCar: boolean;
   score: number;
@@ -118,12 +129,12 @@ export interface CreateLeadInput {
   email?: string;
   carModels: string[];
   timeframe: LeadTimeframe;
-  paymentMethod: PaymentMethod;
+  paymentMethods: PaymentMethod[];
   tradeInCar: boolean;
   notes?: string;
 }
 
-export type UpdateLeadInput = Pick<CreateLeadInput, "fullName" | "phone" | "nationalId" | "email" | "carModels" | "timeframe" | "paymentMethod" | "tradeInCar" | "notes"> & { leadId: string };
+export type UpdateLeadInput = Pick<CreateLeadInput, "fullName" | "phone" | "nationalId" | "email" | "carModels" | "timeframe" | "paymentMethods" | "tradeInCar" | "notes"> & { leadId: string };
 
 export interface SendLeadInput {
   leadId: string;
@@ -241,10 +252,13 @@ const paymentPoints: Record<PaymentMethod, number> = {
   POR_DEFINIR: 5,
 };
 
-export function calculateLeadScore(input: Pick<CreateLeadInput, "carModels" | "timeframe" | "paymentMethod" | "tradeInCar">): LeadScore {
+export function calculateLeadScore(input: Pick<CreateLeadInput, "carModels" | "timeframe" | "paymentMethods" | "tradeInCar">): LeadScore {
   const modelPoints = input.carModels.length > 0 ? 20 : 0;
   const tradeInPoints = input.tradeInCar ? 20 : 8;
-  const score = Math.min(100, modelPoints + timeframePoints[input.timeframe] + paymentPoints[input.paymentMethod] + tradeInPoints);
+  // Multiple methods express alternatives. Keep the historical score scale by
+  // using the strongest applicable existing payment signal, never a sum.
+  const paymentScore = input.paymentMethods.reduce((highest, method) => Math.max(highest, paymentPoints[method]), 0);
+  const score = Math.min(100, modelPoints + timeframePoints[input.timeframe] + paymentScore + tradeInPoints);
 
   return {
     score,

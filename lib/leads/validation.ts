@@ -72,6 +72,13 @@ export const correctInboundResponseSchema = z.object({
 
 const optionalNationalId = z.string().trim().max(30, "La cédula no puede superar 30 caracteres").regex(/^[0-9A-Za-z-]*$/, "La cédula no es válida").optional();
 const optionalEmail = z.string().trim().max(150, "El correo no puede superar 150 caracteres").email("El correo no es válido").or(z.literal("")).optional();
+const paymentMethodValueSchema = z.enum(["CREDITO", "TARJETA_CREDITO", "CONTADO", "LEASING", "POR_DEFINIR"]);
+const paymentMethodsSchema = z.array(paymentMethodValueSchema)
+  .min(1, "Selecciona al menos una forma de pago")
+  .max(5, "Puedes seleccionar hasta cinco formas de pago")
+  .superRefine((values, context) => {
+    if (new Set(values).size !== values.length) context.addIssue({ code: z.ZodIssueCode.custom, message: "No puedes repetir una forma de pago." });
+  });
 
 export const purchaseDecisionSchema = z.object({
   leadId: z.string().trim().min(1),
@@ -86,7 +93,9 @@ export const leadSchema = z.object({
   email: optionalEmail,
   carModels: z.array(z.string().trim().min(2).max(100)).min(1, "Selecciona al menos un modelo").max(10, "Puedes seleccionar hasta 10 modelos"),
   timeframe: z.enum(["INMEDIATA", "1_3_MESES", "3_6_MESES", "EXPLORANDO"]),
-  paymentMethod: z.enum(["CREDITO", "TARJETA_CREDITO", "CONTADO", "LEASING", "POR_DEFINIR"]),
+  // LEASING remains valid only so historical leads can be read and preserved;
+  // the new-lead UI intentionally does not offer it.
+  paymentMethods: paymentMethodsSchema,
   tradeInCar: z.boolean(),
   notes: z.string().trim().max(500, "Máximo 500 caracteres").optional(),
 });
