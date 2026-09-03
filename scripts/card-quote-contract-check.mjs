@@ -44,7 +44,14 @@ assert.equal(calculateCardQuote({ modality: "NORMAL", term: 3, amount: 2000 })?.
 
 const dashboard = fs.readFileSync("components/dashboard/dashboard-client.tsx", "utf8");
 const tool = fs.readFileSync("components/leads/card-quote-tool.tsx", "utf8");
+const calculator = fs.readFileSync("components/quotes/card-quote-calculator.tsx", "utf8");
+const shell = fs.readFileSync("components/layout/app-shell.tsx", "utf8");
+const globalPage = fs.readFileSync("app/cotizacion/page.tsx", "utf8");
 for (const required of ["lead.paymentMethods.includes(\"TARJETA_CREDITO\")", "CardQuoteTool"]) assert.ok(dashboard.includes(required), `dashboard missing ${required}`);
-for (const required of ["Cotizador de tarjeta", "Cuota mensual", "informativa", "aria-pressed"]) assert.ok(tool.includes(required), `card quote UI missing ${required}`);
+for (const required of ["CardQuoteCalculator", "onClose", "description"]) assert.ok(tool.includes(required), `contextual card quote wrapper missing ${required}`);
+for (const required of ["Cotización", "Cuota mensual", "referencial", "aria-pressed", "parseCardAmount"]) assert.ok(calculator.includes(required), `global card quote UI missing ${required}`);
+assert.ok(!calculator.includes("Vehículo a cotizar"), "global card quote must not require a vehicle");
+for (const required of ["/cotizacion", "label: \"Cotización\"", "href=\"/whatsapp\"", "<MessageCircle"]) assert.ok(shell.includes(required), `navigation shell missing ${required}`);
+assert.ok(globalPage.includes("requireAdvisorOrRedirect(\"/cotizacion\")"), "global quotation route must require advisor session");
 
 console.log("Card quote contract checks: PASS");

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, CarFront, Globe2, LayoutDashboard, LogOut, MessageCircle, Plus, QrCode, Sparkles, UserRound, WifiOff, X } from "lucide-react";
+import { Activity, Calculator, CarFront, Globe2, LayoutDashboard, LogOut, MessageCircle, Plus, QrCode, Sparkles, UserRound, WifiOff, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { logoutAction } from "@/app/login/actions";
@@ -11,7 +11,7 @@ const navigation = [
   { href: "/dashboard", label: "Resumen", icon: LayoutDashboard },
   { href: "/nuevo", label: "Nuevo lead", icon: Plus },
   { href: "/qr", label: "Mi QR", icon: QrCode },
-  { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { href: "/cotizacion", label: "Cotización", icon: Calculator },
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -81,6 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {isUserMenuOpen ? <div role="menu" aria-label="Menú de usuario" className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-56 rounded-2xl border border-black/[0.08] bg-white p-2 shadow-[0_18px_50px_rgba(16,24,40,0.16)]">
                 <Link role="menuitem" href="/catalogo" onClick={closeUserMenu} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-black text-[var(--ink)] transition hover:bg-[#f6f3ed]"><CarFront size={16} />Catálogo de autos</Link>
                 <Link role="menuitem" href="/push-diagnostics" onClick={closeUserMenu} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-black text-[var(--ink)] transition hover:bg-[#f6f3ed]"><Activity size={16} />Push Diagnostics</Link>
+                <Link role="menuitem" href="/whatsapp" onClick={closeUserMenu} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-black text-[var(--ink)] transition hover:bg-[#f6f3ed]"><MessageCircle size={16} />WhatsApp</Link>
                 <div className="my-1 border-t border-black/[0.06]" />
                 <form action={logoutAction}>
                   <button role="menuitem" type="submit" className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-black text-[var(--ink)] transition hover:bg-[#f6f3ed]"><LogOut size={16} />Cerrar sesión</button>
