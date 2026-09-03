@@ -10,6 +10,7 @@ export const leadTimeframes = [
 
 export const paymentMethods = [
   { value: "CREDITO", label: "Crédito" },
+  { value: "TARJETA_CREDITO", label: "Tarjeta de crédito" },
   { value: "CONTADO", label: "Contado" },
   { value: "LEASING", label: "Leasing" },
   { value: "POR_DEFINIR", label: "Por definir" },
@@ -234,6 +235,7 @@ const timeframePoints: Record<LeadTimeframe, number> = {
 
 const paymentPoints: Record<PaymentMethod, number> = {
   CREDITO: 20,
+  TARJETA_CREDITO: 0,
   CONTADO: 15,
   LEASING: 18,
   POR_DEFINIR: 5,

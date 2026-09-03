@@ -86,7 +86,7 @@ export const leadSchema = z.object({
   email: optionalEmail,
   carModels: z.array(z.string().trim().min(2).max(100)).min(1, "Selecciona al menos un modelo").max(10, "Puedes seleccionar hasta 10 modelos"),
   timeframe: z.enum(["INMEDIATA", "1_3_MESES", "3_6_MESES", "EXPLORANDO"]),
-  paymentMethod: z.enum(["CREDITO", "CONTADO", "LEASING", "POR_DEFINIR"]),
+  paymentMethod: z.enum(["CREDITO", "TARJETA_CREDITO", "CONTADO", "LEASING", "POR_DEFINIR"]),
   tradeInCar: z.boolean(),
   notes: z.string().trim().max(500, "Máximo 500 caracteres").optional(),
 });
