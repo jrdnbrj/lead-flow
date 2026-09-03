@@ -25,6 +25,7 @@ assert(command.includes("retryFirstContactResourceFromRecovery"), "independent r
 assert(repository.includes("createSupabaseAdminClient() ?? await createSupabaseServerClient()"), "catalog lookup does not prefer the server-only client");
 assert(repository.includes('throw new Error("FIRST_CONTACT_CATALOG_LOOKUP_FAILED")'), "catalog query errors can regress to false availability");
 assert(repository.includes("export async function hydrateFirstContactResource"), "server-only resource hydration boundary is missing");
+assert(repository.includes('"request_first_contact_v2"'), "color-aware First Contact RPC is not included in the server-authenticated fallback allowlist");
 
 assert(webhook.includes("belongsToCustomerInstance"), "Evolution webhook instance isolation is missing");
 assert(webhook.includes("if (!belongsToCustomerInstance"), "webhook does not reject non-customer instances before persistence");

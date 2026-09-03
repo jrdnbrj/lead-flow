@@ -1,7 +1,7 @@
 import type { Database } from "@/lib/supabase/database";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
-export type CatalogColor = Pick<Database["public"]["Tables"]["car_model_colors"]["Row"], "id" | "name" | "slug" | "sort_order"> & { imageUrl?: string | null; imageFileName?: string | null };
+export type CatalogColor = Pick<Database["public"]["Tables"]["car_model_colors"]["Row"], "id" | "name" | "slug" | "sort_order" | "is_default"> & { imageUrl?: string | null; imageFileName?: string | null };
 
 export type CatalogModel = {
   id: string;
@@ -11,6 +11,7 @@ export type CatalogModel = {
   imageUrl: string | null;
   imageAlt: string;
   imageFileName: string | null;
+  defaultColorId: string | null;
   technicalSheetUrl: string | null;
   technicalSheetViewerUrl: string;
   technicalSheetFileName: string | null;
@@ -84,7 +85,7 @@ export async function getCatalogModels(): Promise<CatalogModel[]> {
   const modelIds = models.map((model) => model.id);
   const [{ data: assets, error: assetsError }, { data: colors, error: colorsError }] = await Promise.all([
     supabase.from("car_model_assets").select("car_model_id,asset_kind,storage_path,file_name,sort_order").eq("active", true).eq("asset_kind", "TECHNICAL_SHEET").in("car_model_id", modelIds).order("sort_order", { ascending: true }),
-    supabase.from("car_model_colors").select("id,car_model_id,name,slug,sort_order").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }).order("name", { ascending: true }),
+    supabase.from("car_model_colors").select("id,car_model_id,name,slug,sort_order,is_default").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }).order("name", { ascending: true }),
   ]);
   if (assetsError || colorsError) {
     console.error("[leadflow][catalog] asset metadata lookup failed", { assetsMessage: assetsError?.message ?? null, colorsMessage: colorsError?.message ?? null });
@@ -117,7 +118,9 @@ export async function getCatalogModels(): Promise<CatalogModel[]> {
 
   return models.map((model) => {
     const modelColors = colorsByModel.get(model.id) ?? [];
+    const defaultColor = modelColors.find((color) => color.is_default) ?? null;
     const firstColorWithPhoto = modelColors.find((color) => color.imageUrl);
+    const imageColor = defaultColor?.imageUrl ? defaultColor : firstColorWithPhoto;
     const sheet = sheetByModel.get(model.id);
     const displayName = presentCatalogModelName(model.id, model.name);
     return {
@@ -125,13 +128,25 @@ export async function getCatalogModels(): Promise<CatalogModel[]> {
       name: displayName,
       sortOrder: model.sort_order,
       leadRegistrationCount: metricAvailable && typeof model.lead_registration_count === "number" ? model.lead_registration_count : null,
-      imageUrl: firstColorWithPhoto?.imageUrl ?? null,
-      imageAlt: firstColorWithPhoto ? `${displayName} en color ${firstColorWithPhoto.name}` : `Foto de ${displayName}`,
-      imageFileName: firstColorWithPhoto ? `${displayName} - ${firstColorWithPhoto.name}.jpg` : null,
+      defaultColorId: defaultColor?.id ?? null,
+      imageUrl: imageColor?.imageUrl ?? null,
+      imageAlt: imageColor ? `${displayName} en color ${imageColor.name}` : `Foto de ${displayName}`,
+      imageFileName: imageColor ? `${displayName} - ${imageColor.name}.jpg` : null,
       technicalSheetUrl: sheet ? publicVehicleUrl(sheet.storage_path) : null,
       technicalSheetViewerUrl: `/api/catalog/technical-sheet/${encodeURIComponent(model.id)}`,
       technicalSheetFileName: sheet?.file_name ?? null,
       colors: modelColors,
     };
   });
+}
+
+export async function setCatalogModelDefaultColor(modelId: string, colorId: string): Promise<boolean> {
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) return false;
+  const { data, error } = await supabase.rpc("set_car_model_default_color_v1", { p_model_id: modelId, p_color_id: colorId });
+  if (error || !data) {
+    console.error("[leadflow][catalog] default color update failed", { modelId, colorId, message: error?.message ?? "NO_DATA" });
+    return false;
+  }
+  return true;
 }

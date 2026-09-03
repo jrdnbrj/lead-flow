@@ -12,6 +12,7 @@ const terminologyMigration = read("supabase/migrations/055_catalog_rename_plomo_
 const colorAssetMigration = read("supabase/migrations/056_catalog_color_photos.sql");
 const metricsMigration = read("supabase/migrations/057_catalog_lead_registration_metrics.sql");
 const photoRoute = read("app/api/catalog/photo/[colorId]/route.ts");
+const catalogActions = read("lib/catalog/actions.ts");
 
 for (const required of ["/catalogo", "/push-diagnostics", "logoutAction", "aria-haspopup=\"menu\"", "Catálogo de autos", "Push Diagnostics", "Cerrar sesión"]) {
   if (!shell.includes(required)) throw new Error(`user menu missing: ${required}`);
@@ -20,7 +21,7 @@ if (shell.includes('href="/whatsapp" aria-label="Configurar vendedor y WhatsApp"
 for (const required of ["requireAdvisorOrRedirect(\"/catalogo\")", "getCatalogModels", "Catálogo de autos"]) {
   if (!page.includes(required)) throw new Error(`catalog page missing: ${required}`);
 }
-for (const required of ["from(\"car_models\")", "order(\"sort_order\"", "lead_registration_count", "car_model_assets", "car_model_colors", "car_model_color_assets", "storage/v1/object/public/vehiculos"]) {
+for (const required of ["from(\"car_models\")", "order(\"sort_order\"", "lead_registration_count", "car_model_assets", "car_model_colors", "car_model_color_assets", "is_default", "defaultColorId", "storage/v1/object/public/vehiculos"]) {
   if (!repo.includes(required)) throw new Error(`catalog repository missing: ${required}`);
 }
 for (const required of ["role=\"dialog\"", "onTouchStart", "onTouchEnd", "no disponible todavía", "Foto anterior", "Foto siguiente", "Abrir ficha completa", "Descargar foto", "Descargar ficha", "Fotos por color", "aria-pressed", "leadRegistrationCount", "history.pushState", "technicalSheetViewerUrl", "object-cover"]) {
@@ -31,6 +32,9 @@ for (const required of ["pdfjs-dist", "GlobalWorkerOptions.workerSrc", "Cargando
 }
 for (const required of ["requireAdvisor", "car_model_color_assets", "content-disposition", "attachment", "PHOTO_NOT_FOUND"]) {
   if (!photoRoute.includes(required)) throw new Error(`catalog photo route missing: ${required}`);
+}
+for (const required of ["requireAdvisor", "setCatalogModelDefaultColor", "set_car_model_default_color_v1"]) {
+  if (!catalogActions.includes(required) && !repo.includes(required)) throw new Error(`catalog default color action missing: ${required}`);
 }
 if (catalog.includes(">Colores disponibles</div>")) throw new Error("catalog must not show the redundant colors heading");
 if (/<button[^>]*>Foto<\/button>/.test(catalog)) throw new Error("catalog must open photos by clicking the image, without a Foto button");

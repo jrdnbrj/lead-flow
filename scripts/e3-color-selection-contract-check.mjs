@@ -37,7 +37,7 @@ for (const required of [
 for (const required of ["colorSelections", "getFirstContactColorOptionsAction"]) assert(actions.includes(required), `color-aware actions missing ${required}`);
 assert(validation.includes("firstContactColorSelectionSchema"), "color selection validation missing");
 
-for (const required of ["Predeterminada", "getFirstContactColorOptionsAction", "colorId", "miniatura"]) assert(selector.includes(required), `color selector missing ${required}`);
+for (const required of ["getFirstContactColorOptionsAction", "defaultColorId", "isDefault", "miniatura", "fetchPriority=\"high\""]) assert(selector.includes(required), `color selector missing ${required}`);
 for (const required of ["FirstContactColorSelector", "onConfirm", "startFirstContactAction"]) assert(summary.includes(required), `First Contact selector integration missing ${required}`);
 
 for (const required of [

@@ -18,8 +18,9 @@ export type Database = {
         Row: {
           active: boolean
           car_model_id: string
-          created_at: string
-          id: string
+        created_at: string
+        id: string
+          is_default: boolean
           name: string
           slug: string
           sort_order: number
@@ -27,8 +28,9 @@ export type Database = {
         Insert: {
           active?: boolean
           car_model_id: string
-          created_at?: string
-          id: string
+        created_at?: string
+        id: string
+          is_default?: boolean
           name: string
           slug: string
           sort_order?: number
@@ -36,8 +38,9 @@ export type Database = {
         Update: {
           active?: boolean
           car_model_id?: string
-          created_at?: string
-          id?: string
+        created_at?: string
+        id?: string
+          is_default?: boolean
           name?: string
           slug?: string
           sort_order?: number
@@ -1277,6 +1280,13 @@ export type Database = {
           p_idempotency_key: string
           p_items: Json
           p_lead_id: string
+        }
+        Returns: Json
+      }
+      set_car_model_default_color_v1: {
+        Args: {
+          p_color_id: string
+          p_model_id: string
         }
         Returns: Json
       }

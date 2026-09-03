@@ -6,6 +6,7 @@ export type FirstContactColorOption = {
   id: string;
   name: string;
   slug: string;
+  isDefault: boolean;
   imageUrl: string | null;
   imageFileName: string | null;
 };
@@ -15,6 +16,7 @@ export type FirstContactColorModelOption = {
   modelId: string | null;
   modelName: string;
   defaultImageUrl: string | null;
+  defaultColorId: string | null;
   colors: FirstContactColorOption[];
 };
 

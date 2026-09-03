@@ -46,6 +46,7 @@ type LeadflowDbClient = NonNullable<Awaited<ReturnType<typeof createSupabaseServ
 type RpcResult = { data: Record<string, unknown> | null; error: { message?: string } | null };
 const serverRpcFallbackFunctions = new Set([
   "request_first_contact_v1",
+  "request_first_contact_v2",
   "claim_first_contact_effect_v1",
   "begin_first_contact_effect_io_v1",
   "record_first_contact_effect_result_v1",
@@ -135,7 +136,16 @@ async function invokeAuthenticatedRpc(client: LeadflowDbClient, functionName: st
   }
 
   let result = await invokeWithToken(accessToken);
-  if (result.error?.message === "JWT issued at future") {
+  if (result.error?.message === "JWT issued at future" && canUseServerFallback) {
+    // The Server Action has already authorized the advisor. These allowlisted
+    // RPCs re-check ownership and are also explicitly granted to service_role,
+    // so do not make the user wait through retries that cannot change the
+    // remote validator clock.
+    console.error("[leadflow][rpc] using server-authenticated fallback", { functionName });
+    result = await invokeRpcWithToken(supabaseUrl, serviceRoleKey as string, serviceRoleKey as string, functionName, args);
+    if (!result.error) serverRpcFallbackActive = true;
+  }
+  if (result.error?.message === "JWT issued at future" && !canUseServerFallback) {
     // A browser can retain a token minted just ahead of the API validator's
     // clock. Refresh once before failing the action; never retry provider IO.
     const { data: refreshedSession, error: refreshError } = await client.auth.refreshSession();
@@ -538,7 +548,7 @@ export async function getCarModelContactAssetsForModels(modelNames: string[], co
 
   const [{ data: assetRows, error: assetError }, { data: colors, error: colorError }, { data: whiteColors, error: whiteColorError }] = await Promise.all([
     supabase.from("car_model_assets").select("id,car_model_id,asset_kind,storage_path,file_name").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }),
-    supabase.from("car_model_colors").select("id,car_model_id,name,slug").eq("active", true).in("car_model_id", modelIds),
+    supabase.from("car_model_colors").select("id,car_model_id,name,slug,is_default").eq("active", true).in("car_model_id", modelIds),
     supabase.from("car_model_colors").select("id,car_model_id").eq("active", true).eq("slug", "blanco").in("car_model_id", modelIds),
   ]);
   if (assetError || colorError || whiteColorError) {
@@ -551,6 +561,7 @@ export async function getCarModelContactAssetsForModels(modelNames: string[], co
   const colorRows = colors ?? [];
   const colorById = new Map(colorRows.map((color) => [color.id, color]));
   const colorIds = colorRows.map((color) => color.id);
+  const defaultColorByModel = new Map(colorRows.filter((color) => color.is_default).map((color) => [color.car_model_id, color.id]));
   const { data: colorPhotoAssets, error: colorPhotoError } = colorIds.length > 0
     ? await supabase.from("car_model_color_assets").select("id,car_model_color_id,storage_path,file_name").eq("active", true).eq("asset_kind", "PHOTO").in("car_model_color_id", colorIds).order("sort_order", { ascending: true })
     : { data: [] as Array<{ id: string; car_model_color_id: string; storage_path: string; file_name: string | null }> };
@@ -578,7 +589,7 @@ export async function getCarModelContactAssetsForModels(modelNames: string[], co
     if (!model) return;
     const assets = assetsByModel.get(model.id) ?? [];
     const whitePhoto = whitePhotoByModel.get(model.id);
-    const requestedColorId = selectionByIndex.get(vehicleIndex) ?? null;
+    const requestedColorId = selectionByIndex.get(vehicleIndex) ?? defaultColorByModel.get(model.id) ?? null;
     const requestedColor = requestedColorId ? colorById.get(requestedColorId) : undefined;
     const requestedColorBelongsToModel = requestedColor?.car_model_id === model.id;
     const selectedPhoto = requestedColorBelongsToModel ? colorPhotoById.get(requestedColorId as string) : undefined;
@@ -616,8 +627,8 @@ export async function getFirstContactColorOptionsForLead(leadId: string): Promis
   const modelNames = (lead.car_models ?? []).slice(0, 3);
   const defaults = await getCarModelContactAssetsForModels(modelNames);
   const modelIds = [...defaults.values()].map((asset) => asset.modelId).filter((id): id is string => Boolean(id));
-  if (modelIds.length === 0) return modelNames.map((modelName, vehicleIndex) => ({ vehicleIndex, modelId: null, modelName, defaultImageUrl: null, colors: [] }));
-  const { data: colors, error: colorError } = await supabase.from("car_model_colors").select("id,car_model_id,name,slug,sort_order").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }).order("name", { ascending: true });
+  if (modelIds.length === 0) return modelNames.map((modelName, vehicleIndex) => ({ vehicleIndex, modelId: null, modelName, defaultImageUrl: null, defaultColorId: null, colors: [] }));
+  const { data: colors, error: colorError } = await supabase.from("car_model_colors").select("id,car_model_id,name,slug,sort_order,is_default").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }).order("name", { ascending: true });
   if (colorError) throw new Error("FIRST_CONTACT_COLOR_LOOKUP_FAILED");
   const colorIds = (colors ?? []).map((color) => color.id);
   const { data: colorAssets, error: colorAssetError } = colorIds.length > 0
@@ -629,11 +640,12 @@ export async function getFirstContactColorOptionsForLead(leadId: string): Promis
   const colorsByModel = new Map<string, FirstContactColorModelOption["colors"]>();
   colors?.forEach((color) => {
     const asset = firstAssetByColor.get(color.id);
-    colorsByModel.set(color.car_model_id, [...(colorsByModel.get(color.car_model_id) ?? []), { id: color.id, name: color.name, slug: color.slug, imageUrl: asset ? getPublicVehicleAssetUrl(asset.storage_path) : null, imageFileName: asset?.file_name ?? null }]);
+    colorsByModel.set(color.car_model_id, [...(colorsByModel.get(color.car_model_id) ?? []), { id: color.id, name: color.name, slug: color.slug, isDefault: color.is_default, imageUrl: asset ? getPublicVehicleAssetUrl(asset.storage_path) : null, imageFileName: asset?.file_name ?? null }]);
   });
   return modelNames.map((modelName, vehicleIndex) => {
     const asset = defaults.get(modelName) ?? emptyCarModelContactAssets(modelName);
-    return { vehicleIndex, modelId: asset.modelId, modelName, defaultImageUrl: asset.imageUrl, colors: asset.modelId ? colorsByModel.get(asset.modelId) ?? [] : [] };
+    const modelColors = asset.modelId ? colorsByModel.get(asset.modelId) ?? [] : [];
+    return { vehicleIndex, modelId: asset.modelId, modelName, defaultImageUrl: asset.imageUrl, defaultColorId: modelColors.find((color) => color.isDefault)?.id ?? null, colors: modelColors };
   });
 }
 

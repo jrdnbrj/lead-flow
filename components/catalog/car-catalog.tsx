@@ -5,6 +5,7 @@ import Image, { type ImageLoaderProps } from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 
 import { PdfViewer } from "@/components/catalog/pdf-viewer";
+import { setCatalogModelDefaultColorAction } from "@/lib/catalog/actions";
 import type { CatalogColor, CatalogModel } from "@/lib/catalog/repository";
 
 const directImageLoader = ({ src }: ImageLoaderProps) => src;
@@ -59,7 +60,7 @@ function photoSlidesFor(model: CatalogModel): CatalogPhotoSlide[] {
 
 function firstColorId(model: CatalogModel): string | null {
   const colors = orderedColors(model);
-  return colors.find((color) => color.imageUrl)?.id ?? colors[0]?.id ?? null;
+  return model.defaultColorId ?? colors.find((color) => color.imageUrl)?.id ?? colors[0]?.id ?? null;
 }
 
 function colorFor(model: CatalogModel, colorId: string | undefined): CatalogColor | null {
@@ -92,6 +93,7 @@ export function CarCatalog({ models }: { models: CatalogModel[] }) {
   const modalHistoryEntry = useRef(false);
   const preloadedPhotoUrls = useRef(new Set<string>());
   const downloadResetTimer = useRef<number | null>(null);
+  const defaultColorSaveQueues = useRef(new Map<string, Promise<void>>());
   const photoSlides = useMemo(() => photoModel ? photoSlidesFor(photoModel) : [], [photoModel]);
   const activePhoto = photoSlides[photoIndex] ?? photoSlides[0] ?? null;
 
@@ -194,8 +196,23 @@ export function CarCatalog({ models }: { models: CatalogModel[] }) {
   }, [downloadState.status]);
 
   const selectColor = (model: CatalogModel, color: CatalogColor) => {
+    const previousColorId = selectedColorByModel[model.id] ?? firstColorId(model) ?? "";
     setSelectedColorByModel((current) => ({ ...current, [model.id]: color.id }));
     preloadModelPhotos(model);
+    const previousQueue = defaultColorSaveQueues.current.get(model.id) ?? Promise.resolve();
+    const nextQueue = previousQueue.then(async () => {
+      const response = await setCatalogModelDefaultColorAction({ modelId: model.id, colorId: color.id });
+      if (!response.success) {
+        setSelectedColorByModel((current) => current[model.id] === color.id ? { ...current, [model.id]: previousColorId } : current);
+        console.error("[leadflow][catalog] default color was not persisted", { modelId: model.id, colorId: color.id });
+      }
+    }).catch(() => {
+      setSelectedColorByModel((current) => current[model.id] === color.id ? { ...current, [model.id]: previousColorId } : current);
+    });
+    defaultColorSaveQueues.current.set(model.id, nextQueue);
+    void nextQueue.finally(() => {
+      if (defaultColorSaveQueues.current.get(model.id) === nextQueue) defaultColorSaveQueues.current.delete(model.id);
+    });
   };
 
   const movePhoto = (direction: 1 | -1) => {
