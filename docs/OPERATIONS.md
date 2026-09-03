@@ -7,8 +7,10 @@ and for releases use [`production-release-checklist.md`](./production-release-ch
 
 ## Current environment model
 
-LeadFlow currently uses one environment: `development`. The project identity is
-`SUPABASE_PROJECT_REF`; there is no separate integration project variable.
+LeadFlow has local Docker development and one production environment. Local
+can point to the same Supabase project only when intentionally configured; it
+does not create a local data source. The project identity is
+`SUPABASE_PROJECT_REF`; there is no separate staging project configured today.
 
 ## Configuration
 

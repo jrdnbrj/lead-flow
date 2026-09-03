@@ -1,8 +1,8 @@
 ---
 project_name: 'lead-flow'
 user_name: 'Jordan'
-date: '2026-08-05'
-sections_completed: ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns']
+date: '2026-09-02'
+sections_completed: ['technology_stack', 'language_rules', 'framework_rules', 'testing_rules', 'quality_rules', 'workflow_rules', 'anti_patterns', 'current_state_roadmap', 'production_safety']
 status: 'complete'
 existing_patterns_found: 12
 rule_count: 72
@@ -12,6 +12,13 @@ optimized_for_llm: true
 # Project Context for AI Agents
 
 _Este archivo contiene reglas y patrones críticos que los agentes de IA deben seguir al implementar código en LeadFlow. Se enfoca en detalles específicos del proyecto que podrían pasarse por alto._
+
+La referencia compacta de producto —qué está hecho y qué sigue— está en
+[`planning-artifacts/leadflow-current-state-roadmap-2026-09-02.md`](./planning-artifacts/leadflow-current-state-roadmap-2026-09-02.md).
+Las reglas operativas de incidentes están en
+[`docs/project-context.md`](../docs/project-context.md). Si una regla de este
+documento contradice código, migraciones o runtime actual, verifícala y
+actualízala antes de implementar.
 
 ---
 
@@ -24,7 +31,7 @@ _Este archivo contiene reglas y patrones críticos que los agentes de IA deben s
 - Tailwind CSS `^4`, Lucide React, React Hook Form, Zod `^4.4.3`, `qrcode.react` y `xlsx`.
 - Node.js `22-alpine` en Docker; Next.js usa `output: "standalone"` y arranca con `node server.js` dentro del runner.
 - ESLint `9` con `eslint-config-next` `16.2.12`; validaciones base: `npm run lint`, `npm run typecheck` y `npm run build`.
-- Las migraciones Supabase se aplican en orden `001` a `009`; la configuración de pruebas TEA está instalada, pero el repositorio aún no contiene una suite propia.
+- Las migraciones Supabase están versionadas y actualmente llegan hasta `059`; se aplican en orden y el estado remoto se verifica antes de afirmar que están desplegadas. La configuración TEA está instalada y el repositorio usa contratos estáticos dirigidos; no existe todavía una suite general de tests en `package.json`.
 
 ## Critical Implementation Rules
 
@@ -56,7 +63,7 @@ _Este archivo contiene reglas y patrones críticos que los agentes de IA deben s
 
 ### Testing Rules
 
-- El repositorio no contiene actualmente una suite propia ni scripts `test` en `package.json`; no afirmar que existen tests automatizados o que pasaron.
+- El repositorio no contiene una suite general ni script `test` en `package.json`; sí contiene contratos estáticos por épica y el gate `scripts/ci-contract-checks.sh`. No afirmar que una validación está cubierta si no se ejecutó el contrato correspondiente.
 - Antes de entregar cambios, ejecutar como mínimo `npm run lint`, `npm run typecheck`, `npm run build`, `docker compose config --quiet` y `git diff --check`.
 - Para cambios en scoring, normalización de teléfonos, plantillas o fechas, priorizar pruebas unitarias de la lógica pura en `lib/domain` y módulos independientes.
 - Para cambios en el webhook, cubrir payload JSON inválido, token ausente/incorrecto, mensajes duplicados, mensajes entrantes, mensajes salientes y estados recibidos fuera de orden.
@@ -127,4 +134,4 @@ _Este archivo contiene reglas y patrones críticos que los agentes de IA deben s
 - Actualizarlo cuando cambien el stack, la arquitectura, los flujos de integración o el despliegue.
 - Revisar periódicamente las reglas y eliminar las que ya no aporten valor.
 
-Última actualización: 2026-08-05
+Última actualización: 2026-09-02

@@ -2,6 +2,9 @@
 
 LeadFlow es una aplicación móvil-first para capturar prospectos automotrices durante eventos, calificarlos en el momento y llevarlos al siguiente contacto con contexto.
 
+Para continuar el proyecto con BMAD, consulta el [índice de documentación](docs/index.md)
+y el [estado/roadmap compacto](_bmad-output/planning-artifacts/leadflow-current-state-roadmap-2026-09-02.md).
+
 ## Inicio rápido
 
 ```bash
@@ -37,7 +40,7 @@ Para activar el guardado compartido del perfil y la plantilla: en Supabase abre 
 
 ## Supabase
 
-Aplica en orden las migraciones `001` a `009` con `supabase db push --linked`. Los leads se guardan en `public.leads`, los mensajes en `public.lead_messages`, los seguimientos múltiples en `public.lead_follow_up_actions`, la configuración persistente en `public.leadflow_settings`, y el catálogo en `public.car_models`/`public.car_model_images`. El dashboard anónimo solo trabaja con filas cuyo `user_id is null`, que es el modo vendedor único actual. El borrado lógico usa la función remota `soft_delete_lead` para que la operación también funcione con el rol anónimo y cancele los recordatorios pendientes en una sola transacción.
+Aplica en orden las migraciones versionadas del repositorio —actualmente `001` a `059`— con el procedimiento aprobado. Los leads se guardan en `public.leads`, los mensajes en `public.lead_messages`, los seguimientos múltiples en `public.lead_follow_up_actions`, la configuración persistente en `public.leadflow_settings`, y el catálogo en `public.car_models`, `public.car_model_assets`, `public.car_model_colors` y sus tablas relacionadas. El acceso privado actual requiere la sesión del asesor y las reglas de ownership/RLS; no tratar el modo anónimo histórico como comportamiento vigente. El borrado lógico usa el RPC autorizado para excluir leads, cancelar recordatorios pendientes y evitar nuevas asociaciones del webhook.
 
 Con la CLI autenticada, el despliegue completo es:
 
@@ -47,7 +50,7 @@ SUPABASE_TELEMETRY_DISABLED=1 npx supabase db push --linked
 SUPABASE_TELEMETRY_DISABLED=1 npx supabase functions deploy send-whatsapp-welcome --project-ref <project-ref>
 ```
 
-El botón **Enviar** del dashboard llama una Server Action de Next.js que envía el mensaje directamente a Evolution API desde el servidor. Antes de enviar asegura el webhook de la instancia, registra el mensaje en `lead_messages` y actualiza el lead. El icono de WhatsApp conserva un fallback manual con `wa.me`.
+El botón **Enviar** del dashboard llama una Server Action de Next.js que envía el mensaje directamente a Evolution API desde el servidor. Antes de enviar asegura el webhook de la instancia, registra el mensaje en `lead_messages` y actualiza el lead. First Contact es manual y usa E3 para claims, fences, resultados e idempotencia; las fotos/fichas multi-vehículo se procesan de forma secuencial y con retry por recurso. El icono de WhatsApp conserva un fallback manual con `wa.me`.
 
 Evolution entrega a Next los eventos `MESSAGES_UPSERT`, `MESSAGES_UPDATE` y `SEND_MESSAGE`. Una respuesta entrante marca la conversación como `ACTIVE`, guarda una vista previa y cancela las acciones pendientes porque la conversación retomó prioridad. Un envío nuevo deja la conversación en `WAITING_CUSTOMER`; los estados posteriores pueden avanzar por `SERVER_ACK`, `DELIVERY_ACK`, `READ`, `PLAYED` o `FAILED`.
 
@@ -71,7 +74,7 @@ Los celulares locales de Ecuador se normalizan automáticamente: `0984790449` se
 
 En `/whatsapp`, cuando la instancia está conectada aparecen primero el perfil y la plantilla, y la vinculación/QR queda al final. Mientras WhatsApp no esté conectado no se muestran esos formularios. El perfil y la plantilla no se guardan en cookies ni en `localStorage`: deben persistir en `leadflow_settings` de Supabase. Para habilitar la escritura del servidor configura `SUPABASE_SERVICE_ROLE_KEY` en `.env` usando la clave `service_role` del proyecto; es un secreto, no debe empezar por `NEXT_PUBLIC_`, no se debe subir a git y hay que reiniciar Docker/Next después de cambiarlo. Si falta, la aplicación lo informa y no finge haber guardado una copia temporal. Los campos vacíos vuelven a usar el valor correspondiente del `.env`. El QR es una vCard que se regenera al abrir o recargar `/qr`.
 
-La plantilla acepta estas variables: `{{nombre}}`, `{{numero}}` y `{{carro}}` para el cliente; `{{nombre_vendedor}}`, `{{correo_vendedor}}`, `{{empresa_vendedor}}` y `{{numero_vendedor}}` para el vendedor. Las variables se validan y se reemplazan antes de enviar. Un lead puede elegir uno o varios modelos Changan; `{{carro}}` los lista separados por comas y el primer modelo puede adjuntar su imagen desde `car_model_images`.
+La plantilla acepta estas variables: `{{nombre}}`, `{{numero}}` y `{{carro}}` para el cliente; `{{nombre_vendedor}}`, `{{correo_vendedor}}`, `{{empresa_vendedor}}` y `{{numero_vendedor}}` para el vendedor. Las variables se validan y se reemplazan antes de enviar. Un lead puede elegir uno o varios modelos Changan; `{{carro}}` los lista separados por comas y First Contact limita los recursos visuales a los primeros tres modelos según el orden del lead. Las operaciones antiguas conservan su plan.
 
 La cuenta conectada debe ser un número dedicado del vendedor. Evolution API no permite enviar desde un número que no haya sido previamente vinculado a su instancia.
 
