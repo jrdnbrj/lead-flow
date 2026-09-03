@@ -16,7 +16,7 @@ const eventCategoriesFixMigration = read("supabase/migrations/062_first_contact_
 const eventCategoriesQualificationMigration = read("supabase/migrations/063_first_contact_event_resource_categories_qualification.sql");
 
 for (const token of [
-  "lead.carModels.slice(0, 3)",
+  "firstContactResourceModelEntries(lead.carModels)",
   "lead.carModels.join(\", \"",
   "getCarModelContactAssetsForModels",
   "resourcesByItemKey",

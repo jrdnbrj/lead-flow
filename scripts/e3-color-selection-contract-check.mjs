@@ -15,11 +15,16 @@ const colorOrder = read("lib/catalog/color-order.ts");
 const migration = read("supabase/migrations/060_first_contact_color_selection_snapshot.sql");
 
 for (const required of [
-  "lead.carModels.slice(0, 3)",
+  "firstContactResourceModelEntries(lead.carModels)",
+  "isOtherModelName",
   "FirstContactColorSelection",
   "applyPersistedFirstContactSnapshots",
   "for (const item of orderedItems.filter((candidate) => candidate.resourceKind !== \"MESSAGE\"))",
 ]) assert(command.includes(required), `color-aware command missing ${required}`);
+assert(resourcePlan.includes("firstContactResourceModelEntries"), "resource scope helper is missing");
+assert(command.includes('carro: messageModelLabel'), "message template input does not preserve the Other model wording rule");
+assert(command.includes('caption: resources.modelName'), "photo caption must be only the model name");
+assert(command.includes('caption: ""'), "technical sheet must not add a caption");
 
 for (const required of [
   "selectedColorId",

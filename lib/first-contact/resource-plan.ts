@@ -22,6 +22,7 @@ export type FirstContactColorModelOption = {
 };
 
 export type FirstContactModelResources = {
+  vehicleIndex?: number;
   modelName: string;
   modelId: string | null;
   imageUrl: string | null;
@@ -38,6 +39,17 @@ export type FirstContactModelResources = {
 };
 
 export type FirstContactRequestItem = Pick<FirstContactItem, "resourceKind" | "itemKey" | "resourceVersion" | "availability"> & { resourceSnapshot?: FirstContactResourceSnapshot };
+
+export function isOtherModelName(modelName: string): boolean {
+  return modelName.trim().toLocaleLowerCase("es-EC") === "otro modelo";
+}
+
+export function firstContactResourceModelEntries(modelNames: string[]): Array<{ modelName: string; vehicleIndex: number }> {
+  return modelNames
+    .map((modelName, vehicleIndex) => ({ modelName: modelName.trim(), vehicleIndex }))
+    .filter(({ modelName }) => Boolean(modelName) && !isOtherModelName(modelName))
+    .slice(0, 3);
+}
 
 export function modelSlug(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "modelo";
@@ -62,7 +74,7 @@ export function planFirstContactResourceItems(modelResources: FirstContactModelR
     const photoSnapshot: FirstContactResourceSnapshot = {
       schema: 1,
       resource: "PHOTO",
-      vehicleIndex: index,
+      vehicleIndex: model.vehicleIndex ?? index,
       modelId: model.modelId,
       modelName: model.modelName,
       selectedColorId: model.selectedColorId,
@@ -76,7 +88,7 @@ export function planFirstContactResourceItems(modelResources: FirstContactModelR
     const sheetSnapshot: FirstContactResourceSnapshot = {
       schema: 1,
       resource: "TECHNICAL_SHEET",
-      vehicleIndex: index,
+      vehicleIndex: model.vehicleIndex ?? index,
       modelId: model.modelId,
       modelName: model.modelName,
       selectedColorId: null,

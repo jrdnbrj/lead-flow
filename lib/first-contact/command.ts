@@ -6,7 +6,7 @@ import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { claimFirstContactEffect, beginFirstContactEffect, getCarModelContactAssetsForModels, hydrateFirstContactResource, recordFirstContactEffectResult, requestFirstContact, retryFirstContactEffect } from "@/lib/leads/repository";
 import type { Lead } from "@/lib/domain/lead";
 import { orderFirstContactItems } from "@/lib/first-contact/order";
-import { getResourcesForItem, modelSlug, planFirstContactResourceItems, type FirstContactColorSelection, type FirstContactModelResources, type FirstContactRequestItem } from "@/lib/first-contact/resource-plan";
+import { firstContactResourceModelEntries, getResourcesForItem, isOtherModelName, modelSlug, planFirstContactResourceItems, type FirstContactColorSelection, type FirstContactModelResources, type FirstContactRequestItem } from "@/lib/first-contact/resource-plan";
 import type { FirstContactItem, FirstContactOperationResult, FirstContactProvider, ProviderOutcome, FirstContactResource, FirstContactResourceSnapshot } from "@/lib/first-contact/types";
 import { ensureEvolutionWebhook } from "@/lib/whatsapp/service";
 
@@ -58,8 +58,8 @@ function resourcesForRequestItem(item: Pick<FirstContactItem, "resourceKind" | "
 
 function messageBodyForResource(resource: FirstContactItem["resourceKind"], text: string, modelName?: string): string {
   if (resource === "MESSAGE") return text;
-  if (resource === "PHOTOS") return modelName ? `Foto de ${modelName} enviada` : "Foto del vehículo enviada";
-  return modelName ? `Ficha técnica de ${modelName} enviada` : "Ficha técnica enviada";
+  if (resource === "PHOTOS") return modelName ?? "Foto del vehículo enviada";
+  return "Ficha técnica enviada";
 }
 
 async function prepareFirstContactItem(input: {
@@ -173,21 +173,23 @@ async function sendFirstContactItem(item: Pick<FirstContactItem, "resourceKind" 
   if (!resources) throw new Error("FIRST_CONTACT_RESOURCE_NOT_RESOLVED");
   if (item.resourceKind === "PHOTOS") {
     if (!resources.imageUrl) throw new Error("FIRST_CONTACT_PHOTO_NOT_AVAILABLE");
-    return provider.sendPhoto({ phone: lead.phone, imageUrl: resources.imageUrl, caption: `Información de ${resources.modelName}`, fileName: resources.imageFileName ?? `leadflow-${modelSlug(resources.modelName)}.jpg` });
+    return provider.sendPhoto({ phone: lead.phone, imageUrl: resources.imageUrl, caption: resources.modelName, fileName: resources.imageFileName ?? `leadflow-${modelSlug(resources.modelName)}.jpg` });
   }
   if (!resources.technicalSheetUrl) throw new Error("FIRST_CONTACT_SHEET_NOT_AVAILABLE");
-  return provider.sendDocument({ phone: lead.phone, documentUrl: resources.technicalSheetUrl, caption: `Ficha técnica de ${resources.modelName}`, fileName: resources.technicalSheetFileName ?? `Ficha técnica - ${resources.modelName}.pdf` });
+  return provider.sendDocument({ phone: lead.phone, documentUrl: resources.technicalSheetUrl, caption: "", fileName: resources.technicalSheetFileName ?? `Ficha técnica - ${resources.modelName}.pdf` });
 }
 
 export async function buildFirstContactRequest(lead: FirstContactLead, colorSelections: FirstContactColorSelection[] = []): Promise<FirstContactRequest> {
   const template = await getEffectiveWhatsappMessageTemplate();
   const seller = await getEffectiveSellerProfile();
-  const text = renderWhatsappMessageTemplate(template, { nombre: lead.fullName.trim().split(/\s+/)[0] || "cliente", numero: lead.phone, carro: lead.carModels.join(", "), nombre_vendedor: seller.name, correo_vendedor: seller.email, empresa_vendedor: seller.company, numero_vendedor: seller.phone });
-  const selectedModels = lead.carModels.slice(0, 3);
-  const assetsByModel = await getCarModelContactAssetsForModels(selectedModels, colorSelections);
-  const modelResources = selectedModels.map((modelName) => {
+  const messageModelLabel = lead.carModels.length > 0 && lead.carModels.every(isOtherModelName) ? "nuevo auto" : lead.carModels.join(", ");
+  const text = renderWhatsappMessageTemplate(template, { nombre: lead.fullName.trim().split(/\s+/)[0] || "cliente", numero: lead.phone, carro: messageModelLabel, nombre_vendedor: seller.name, correo_vendedor: seller.email, empresa_vendedor: seller.company, numero_vendedor: seller.phone });
+  const resourceModelEntries = firstContactResourceModelEntries(lead.carModels);
+  const selectedModels = resourceModelEntries.map(({ modelName }) => modelName);
+  const assetsByModel = await getCarModelContactAssetsForModels(selectedModels, colorSelections, resourceModelEntries.map(({ vehicleIndex }) => vehicleIndex));
+  const modelResources = resourceModelEntries.map(({ modelName, vehicleIndex }) => {
     const assets = assetsByModel.get(modelName) ?? { modelId: null, modelName, imageUrl: null, imageFileName: null, imageSource: "NONE" as const, imageAssetId: null, imageStoragePath: null, selectedColorId: null, selectedColorName: null, technicalSheetUrl: null, technicalSheetFileName: null, technicalSheetAssetId: null, technicalSheetStoragePath: null };
-    return assets;
+    return { ...assets, vehicleIndex };
   });
   const resourcePlan = planFirstContactResourceItems(modelResources);
   const resourcesByItemKey = resourcePlan.resourcesByItemKey;

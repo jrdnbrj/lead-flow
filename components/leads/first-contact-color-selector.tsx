@@ -13,10 +13,14 @@ const directImageLoader = ({ src }: { src: string }) => src;
 
 type ColorSelectorLead = Pick<Lead, "id" | "fullName" | "carModels">;
 
-export function FirstContactColorSelector({ lead, open, onCancel, onConfirm }: { lead: ColorSelectorLead; open: boolean; onCancel: () => void; onConfirm: (selections: FirstContactColorSelection[]) => void }) {
-  const [models, setModels] = useState<FirstContactColorModelOption[]>([]);
-  const [selected, setSelected] = useState<Record<number, string | null>>({});
-  const [loading, setLoading] = useState(true);
+function initialSelections(models: FirstContactColorModelOption[]): Record<number, string | null> {
+  return Object.fromEntries(models.map((model) => [model.vehicleIndex, model.defaultColorId ?? model.colors.find((color) => color.isDefault)?.id ?? model.colors.find((color) => color.imageUrl)?.id ?? model.colors[0]?.id ?? null]));
+}
+
+export function FirstContactColorSelector({ lead, open = true, initialModels, onCancel, onConfirm }: { lead: ColorSelectorLead; open?: boolean; initialModels?: FirstContactColorModelOption[]; onCancel: () => void; onConfirm: (selections: FirstContactColorSelection[]) => void }) {
+  const [models, setModels] = useState<FirstContactColorModelOption[]>(initialModels ?? []);
+  const [selected, setSelected] = useState<Record<number, string | null>>(() => initialSelections(initialModels ?? []));
+  const [loading, setLoading] = useState(initialModels === undefined);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const preloadedUrls = useRef(new Set<string>());
@@ -34,13 +38,13 @@ export function FirstContactColorSelector({ lead, open, onCancel, onConfirm }: {
   }, [preloadPhoto]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || initialModels !== undefined) return;
     let cancelled = false;
     void getFirstContactColorOptionsAction(lead.id).then((response) => {
       if (cancelled) return;
       if (response.success && response.data) {
         setModels(response.data);
-        setSelected(Object.fromEntries(response.data.map((model) => [model.vehicleIndex, model.defaultColorId ?? model.colors.find((color) => color.isDefault)?.id ?? model.colors.find((color) => color.imageUrl)?.id ?? model.colors[0]?.id ?? null])));
+        setSelected(initialSelections(response.data));
       }
       else setError(response.error || "No pudimos cargar los colores.");
       setLoading(false);
@@ -50,7 +54,7 @@ export function FirstContactColorSelector({ lead, open, onCancel, onConfirm }: {
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [lead.id, open]);
+  }, [initialModels, lead.id, open]);
 
   useEffect(() => {
     if (!open || models.length === 0) return;
@@ -78,6 +82,7 @@ export function FirstContactColorSelector({ lead, open, onCancel, onConfirm }: {
 function ColorModelCard({ model, value, onChange, onDefaultImageLoad }: { model: FirstContactColorModelOption; value: string | null; onChange: (colorId: string | null) => void; onDefaultImageLoad: () => void }) {
   const selectedColor = model.colors.find((color) => color.id === value);
   const previewUrl = selectedColor?.imageUrl ?? model.defaultImageUrl;
+  const hasMultipleColors = model.colors.length > 1;
   return <section className="rounded-xl border border-black/[0.07] bg-[#fbfaf7] p-2.5">
     <div className="flex items-center gap-2.5">
       <div aria-label="Vista previa de miniatura" className="relative h-16 w-24 shrink-0 overflow-hidden rounded-lg bg-[#f0eee8]">
@@ -86,11 +91,11 @@ function ColorModelCard({ model, value, onChange, onDefaultImageLoad }: { model:
       <div className="min-w-0"><p className="truncate text-sm font-black">{model.modelName}</p><p className="mt-0.5 text-[10px] font-semibold text-[var(--muted)]">{selectedColor ? selectedColor.imageUrl ? `Foto: ${selectedColor.name}` : `${selectedColor.name} · usa la foto predeterminada` : "Foto predeterminada"}</p></div>
     </div>
     <div className="mt-2 flex flex-wrap gap-1.5">
-      {orderCatalogColors(model.colors).map((color) => <ColorChoice key={color.id} label={color.name} selected={value === color.id} onClick={() => onChange(color.id)} />)}
+      {model.colors.length > 0 ? orderCatalogColors(model.colors).map((color) => <ColorChoice key={color.id} label={color.name} selected={value === color.id} disabled={!hasMultipleColors} onClick={() => onChange(color.id)} />) : <p className="text-[10px] font-semibold text-[var(--muted)]">Sin colores para elegir · usa la foto predeterminada</p>}
     </div>
   </section>;
 }
 
-function ColorChoice({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
-  return <button type="button" aria-pressed={selected} onClick={onClick} className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-black transition ${selected ? "border-[var(--ink)] bg-[var(--ink)] text-white" : "border-black/[0.08] bg-white text-[var(--ink)] hover:border-black/25"}`}>{selected ? <Check size={12} strokeWidth={3} /> : null}{label}</button>;
+function ColorChoice({ label, selected, disabled, onClick }: { label: string; selected: boolean; disabled?: boolean; onClick: () => void }) {
+  return <button type="button" aria-pressed={selected} disabled={disabled} aria-disabled={disabled || undefined} onClick={onClick} className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-black transition ${selected ? "border-[var(--ink)] bg-[var(--ink)] text-white" : "border-black/[0.08] bg-white text-[var(--ink)] hover:border-black/25"} ${disabled ? "cursor-default opacity-90" : ""}`}>{selected ? <Check size={12} strokeWidth={3} /> : null}{label}</button>;
 }

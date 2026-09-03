@@ -7,6 +7,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient, hasSupabaseConfig } from "@/lib/supabase/server";
 import { resolveInboundLeadMatch, type InboundLeadMatch } from "@/lib/leads/inbound-matching";
 import type { FirstContactItem, FirstContactOperation, FirstContactOperationResult, FirstContactResource, FirstContactResult, ProviderOutcome, FirstContactResourceSnapshot } from "@/lib/first-contact/types";
+import { firstContactResourceModelEntries } from "@/lib/first-contact/resource-plan";
 import type { FirstContactColorModelOption, FirstContactColorSelection } from "@/lib/first-contact/resource-plan";
 
 const leadSelect = "id,user_id,tenant_id,created_at,updated_at,full_name,phone,national_id,email,car_model,car_models,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,conversation_state,next_action_at,next_action_type,last_activity_at,last_customer_message_at,last_agent_message_at,last_customer_message_preview,deleted_at,status";
@@ -551,7 +552,7 @@ function emptyCarModelContactAssets(modelName: string): CarModelContactAssets {
   return { modelId: null, modelName, imageUrl: null, imageFileName: null, imageSource: "NONE", imageAssetId: null, imageStoragePath: null, selectedColorId: null, selectedColorName: null, technicalSheetUrl: null, technicalSheetFileName: null, technicalSheetAssetId: null, technicalSheetStoragePath: null };
 }
 
-export async function getCarModelContactAssetsForModels(modelNames: string[], colorSelections: FirstContactColorSelection[] = []): Promise<Map<string, CarModelContactAssets>> {
+export async function getCarModelContactAssetsForModels(modelNames: string[], colorSelections: FirstContactColorSelection[] = [], vehicleIndices?: number[]): Promise<Map<string, CarModelContactAssets>> {
   // First Contact is already authorized against the lead before this lookup.
   // Resolve public catalog metadata with the server-only client so a stale or
   // timing-invalid browser JWT cannot turn existing assets into false
@@ -626,7 +627,8 @@ export async function getCarModelContactAssetsForModels(modelNames: string[], co
   legacyImages?.forEach((image) => { if (!legacyImageByModel.has(image.car_model_id)) legacyImageByModel.set(image.car_model_id, image.image_url); });
 
   const selectionByIndex = new Map(colorSelections.filter((selection) => selection.vehicleIndex >= 0 && selection.vehicleIndex < 3 && selection.colorId).map((selection) => [selection.vehicleIndex, selection.colorId as string]));
-  normalizedNames.forEach((name, vehicleIndex) => {
+  normalizedNames.forEach((name, index) => {
+    const vehicleIndex = vehicleIndices?.[index] ?? index;
     const model = modelsByInput.get(name);
     if (!model) return;
     const assets = assetsByModel.get(model.id) ?? [];
@@ -666,10 +668,12 @@ export async function getFirstContactColorOptionsForLead(leadId: string): Promis
     throw new Error("FIRST_CONTACT_COLOR_LOOKUP_FAILED");
   }
   if (!lead) return [];
-  const modelNames = (lead.car_models ?? []).slice(0, 3);
-  const defaults = await getCarModelContactAssetsForModels(modelNames);
+  const modelEntries = firstContactResourceModelEntries(lead.car_models ?? []);
+  const modelNames = modelEntries.map(({ modelName }) => modelName);
+  const vehicleIndices = modelEntries.map(({ vehicleIndex }) => vehicleIndex);
+  const defaults = await getCarModelContactAssetsForModels(modelNames, [], vehicleIndices);
   const modelIds = [...defaults.values()].map((asset) => asset.modelId).filter((id): id is string => Boolean(id));
-  if (modelIds.length === 0) return modelNames.map((modelName, vehicleIndex) => ({ vehicleIndex, modelId: null, modelName, defaultImageUrl: null, defaultColorId: null, colors: [] }));
+  if (modelIds.length === 0) return modelEntries.map(({ modelName, vehicleIndex }) => ({ vehicleIndex, modelId: null, modelName, defaultImageUrl: null, defaultColorId: null, colors: [] }));
   const { data: colors, error: colorError } = await supabase.from("car_model_colors").select("id,car_model_id,name,slug,sort_order,is_default").eq("active", true).in("car_model_id", modelIds).order("sort_order", { ascending: true }).order("name", { ascending: true });
   if (colorError) throw new Error("FIRST_CONTACT_COLOR_LOOKUP_FAILED");
   const colorIds = (colors ?? []).map((color) => color.id);
@@ -684,7 +688,7 @@ export async function getFirstContactColorOptionsForLead(leadId: string): Promis
     const asset = firstAssetByColor.get(color.id);
     colorsByModel.set(color.car_model_id, [...(colorsByModel.get(color.car_model_id) ?? []), { id: color.id, name: color.name, slug: color.slug, sort_order: color.sort_order, isDefault: color.is_default, imageUrl: asset ? getPublicVehicleAssetUrl(asset.storage_path) : null, imageFileName: asset?.file_name ?? null }]);
   });
-  return modelNames.map((modelName, vehicleIndex) => {
+  return modelEntries.map(({ modelName, vehicleIndex }) => {
     const asset = defaults.get(modelName) ?? emptyCarModelContactAssets(modelName);
     const modelColors = asset.modelId ? colorsByModel.get(asset.modelId) ?? [] : [];
     return { vehicleIndex, modelId: asset.modelId, modelName, defaultImageUrl: asset.imageUrl, defaultColorId: modelColors.find((color) => color.isDefault)?.id ?? null, colors: modelColors };
