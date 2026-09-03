@@ -17,6 +17,7 @@ export function FirstContactColorSelector({ lead, open, onCancel, onConfirm }: {
   const [selected, setSelected] = useState<Record<number, string | null>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const preloadedUrls = useRef(new Set<string>());
 
   const preloadPhoto = useCallback((url: string | null | undefined) => {
@@ -58,12 +59,18 @@ export function FirstContactColorSelector({ lead, open, onCancel, onConfirm }: {
 
   const selections = useMemo(() => Object.entries(selected).flatMap(([vehicleIndex, colorId]) => colorId ? [{ vehicleIndex: Number(vehicleIndex), colorId }] : []), [selected]);
 
+  function confirmSelection() {
+    if (loading || error || confirming) return;
+    setConfirming(true);
+    onConfirm(selections);
+  }
+
   if (!open) return null;
 
   return <div role="presentation" onClick={onCancel} className="fixed inset-0 z-[80] grid place-items-center bg-[#101828]/55 p-3 backdrop-blur-sm sm:p-5"><div role="dialog" aria-modal="true" aria-labelledby="first-contact-colors-title" onClick={(event) => event.stopPropagation()} className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-[24px] border border-black/[0.08] bg-white p-4 shadow-[0_24px_80px_rgba(16,24,40,0.24)] sm:p-5">
     <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Primer contacto</p><h2 id="first-contact-colors-title" className="mt-1 text-lg font-black">Elige la foto de cada vehículo</h2><p className="mt-1 text-xs leading-5 text-[var(--muted)]">El color seleccionado define la foto que se enviará.</p></div><button type="button" onClick={onCancel} aria-label="Cerrar selección de colores" className="icon-action shrink-0"><X size={18} /></button></div>
     {loading ? <div className="flex min-h-32 items-center justify-center gap-2 text-sm font-bold text-[var(--muted)]"><LoaderCircle size={18} className="animate-spin" />Cargando opciones…</div> : error ? <div className="mt-4 rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]" role="alert">{error}</div> : <div className="mt-4 space-y-3">{models.map((model) => <ColorModelCard key={model.vehicleIndex} model={model} value={selected[model.vehicleIndex] ?? null} onChange={(colorId) => setSelected((current) => ({ ...current, [model.vehicleIndex]: colorId }))} onDefaultImageLoad={() => preloadModelPhotos(model)} />)}</div>}
-    <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={onCancel} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cancelar</button><button type="button" disabled={loading || Boolean(error)} onClick={() => onConfirm(selections)} className="button-primary min-h-9 px-3 py-2 text-[11px]">Continuar</button></div>
+    <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={onCancel} disabled={confirming} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cancelar</button><button type="button" disabled={loading || Boolean(error) || confirming} aria-busy={confirming} onClick={confirmSelection} className="button-primary min-h-9 px-3 py-2 text-[11px]">{confirming ? <LoaderCircle size={14} className="animate-spin" /> : null}{confirming ? "Preparando…" : "Continuar"}</button></div>
   </div></div>;
 }
 
