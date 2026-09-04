@@ -14,6 +14,73 @@ export type Database = {
   }
   public: {
     Tables: {
+      quote_files: {
+        Row: {
+          id: string
+          lead_id: string
+          generated_by: string
+          quote_type: string
+          model_id: string
+          model_name_snapshot: string
+          storage_path: string
+          file_name: string
+          mime_type: string
+          snapshot: Json
+          rules_version: string
+          generated_at: string
+        }
+        Insert: {
+          id?: string
+          lead_id: string
+          generated_by: string
+          quote_type: string
+          model_id: string
+          model_name_snapshot: string
+          storage_path: string
+          file_name: string
+          mime_type?: string
+          snapshot: Json
+          rules_version: string
+          generated_at?: string
+        }
+        Update: {
+          id?: string
+          lead_id?: string
+          generated_by?: string
+          quote_type?: string
+          model_id?: string
+          model_name_snapshot?: string
+          storage_path?: string
+          file_name?: string
+          mime_type?: string
+          snapshot?: Json
+          rules_version?: string
+          generated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_files_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_files_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_files_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "car_models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       car_model_colors: {
         Row: {
           active: boolean

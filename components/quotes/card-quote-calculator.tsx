@@ -2,16 +2,19 @@
 
 import { CheckCircle2, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { useEffect } from "react";
 
 import { cardModalities, calculateCardQuote, formatCardCurrency, formatCardFactor, getCardTerms, parseCardAmount, validateCardQuote, type CardModality } from "@/lib/financial/card-quote";
+import type { CardQuoteDraft } from "@/lib/financial/card-quote";
 
 type CardQuoteCalculatorProps = {
   description?: ReactNode;
   embedded?: boolean;
   onClose?: () => void;
+  onDraftChange?: (draft: CardQuoteDraft) => void;
 };
 
-export function CardQuoteCalculator({ description = "Calcula una cuota sin guardar cambios.", embedded = false, onClose }: CardQuoteCalculatorProps) {
+export function CardQuoteCalculator({ description = "Calcula una cuota sin guardar cambios.", embedded = false, onClose, onDraftChange }: CardQuoteCalculatorProps) {
   const [modality, setModality] = useState<CardModality>("NORMAL");
   const [term, setTerm] = useState<number | null>(null);
   const [amountText, setAmountText] = useState("");
@@ -21,6 +24,9 @@ export function CardQuoteCalculator({ description = "Calcula una cuota sin guard
   const terms = getCardTerms(modality);
   const waitingForInput = amountText.trim() === "" && term === null;
 
+  useEffect(() => {
+    onDraftChange?.({ modality, term, amount });
+  }, [amount, modality, onDraftChange, term]);
   function changeModality(nextModality: CardModality) {
     setModality(nextModality);
     if (term !== null && !getCardTerms(nextModality).includes(term)) setTerm(null);
