@@ -106,7 +106,7 @@ type CurrentNovaCreditQuoteContext = {
 
 function parseNovaMoney(value: string, optional = false): number | null {
   if (!value.trim()) return optional ? null : null;
-  return parseCardAmount(value);
+  return parseCardAmount(value) ?? Number.NaN;
 }
 
 async function resolveCurrentNovaCreditQuoteContext(advisorUserId: string, input: NovaCreditQuotePdfInput): Promise<{ context: CurrentNovaCreditQuoteContext } | { error: string }> {
