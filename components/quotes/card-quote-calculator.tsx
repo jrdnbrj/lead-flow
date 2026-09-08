@@ -66,7 +66,7 @@ export function CardQuoteCalculator({ description = "Calcula una cuota sin guard
           <p className="mt-1 text-[10px] font-semibold text-[var(--muted)]">Sólo se muestran los plazos válidos para esta modalidad.</p>
         </fieldset>
 
-        <label className="block text-xs font-black text-[var(--ink)]">Monto a financiar<span className="relative mt-1.5 block"><span aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg bg-[#f6f3ed] text-[#8a5b00]"><DollarSign size={15} strokeWidth={2.5} /></span><input value={amountText} onChange={(event) => changeAmount(event.target.value)} inputMode="decimal" placeholder="Ej. 3.000" className="field-input pl-12" /></span></label>
+        <label className="block text-xs font-black text-[var(--ink)]">Monto a financiar<span className="relative mt-1.5 block"><span aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg bg-[#f6f3ed] text-[#8a5b00]"><DollarSign size={15} strokeWidth={2.5} /></span><input value={amountText} onChange={(event) => changeAmount(event.target.value)} inputMode="decimal" placeholder="Ej. 3.000" className="field-input pl-12" style={{ paddingLeft: "3.5rem" }} /></span></label>
       </div>
 
       <div className="mt-4 rounded-xl border border-black/[0.06] bg-[#f8fbff] p-3">
