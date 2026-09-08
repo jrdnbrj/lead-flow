@@ -1,5 +1,6 @@
 import type { CardQuote } from "../financial/card-quote";
-import type { QuoteSnapshot } from "./types";
+import type { NovaCreditQuote } from "../financial/novacredit";
+import type { CardQuoteSnapshot, NovaCreditQuoteSnapshot, QuoteSnapshot } from "./types";
 
 const CARD_QUOTE_RULES_VERSION = "card-credit-v1" as const;
 
@@ -17,7 +18,7 @@ type SnapshotInput = {
   sellerCompany?: string;
 };
 
-export function createCardQuoteSnapshot(input: SnapshotInput): QuoteSnapshot {
+export function createCardQuoteSnapshot(input: SnapshotInput): CardQuoteSnapshot {
   return {
     quoteType: "TARJETA_CREDITO",
     leadId: input.leadId.trim(),
@@ -41,30 +42,60 @@ export function createCardQuoteSnapshot(input: SnapshotInput): QuoteSnapshot {
   };
 }
 
+type NovaCreditSnapshotInput = {
+  leadId: string;
+  clientName: string;
+  clientPhone: string;
+  modelId: string;
+  modelName: string;
+  quote: NovaCreditQuote;
+  documentDate?: string;
+  sellerName?: string;
+  sellerPhone?: string;
+  sellerEmail?: string;
+  sellerCompany?: string;
+};
+
+export function createNovaCreditSnapshot(input: NovaCreditSnapshotInput): NovaCreditQuoteSnapshot {
+  return {
+    quoteType: "NOVACREDIT",
+    leadId: input.leadId.trim(),
+    clientName: input.clientName.trim(),
+    clientPhone: input.clientPhone.trim(),
+    modelId: input.modelId.trim(),
+    modelName: input.modelName.trim(),
+    vehicleAmount: input.quote.vehicleValue,
+    accessories: input.quote.accessories,
+    downPayment: input.quote.downPayment,
+    termMonths: input.quote.term,
+    deviceAmount: input.quote.device,
+    totalVehicleValue: input.quote.totalVehicleValue,
+    minimumDownPayment: input.quote.minimumDownPayment,
+    downPaymentPercentage: input.quote.downPaymentPercentage,
+    legalExpenses: input.quote.legalExpenses,
+    vehicleInsurance: input.quote.vehicleInsurance,
+    lifeInsurance: input.quote.lifeInsurance,
+    financedWithoutLifeInsurance: input.quote.financedWithoutLifeInsurance,
+    internalLifeCalculationBalance: input.quote.internalLifeCalculationBalance,
+    financedValue: input.quote.financedValue,
+    monthlyInstallment: input.quote.monthlyInstallment,
+    finalInstallment: input.quote.finalInstallment,
+    fixedFinancingChargeApplied: input.quote.fixedFinancingChargeApplied,
+    rulesVersion: input.quote.rulesVersion,
+    documentDate: input.documentDate ?? new Date().toISOString(),
+    ...(input.sellerName ? { sellerName: input.sellerName.trim() } : {}),
+    ...(input.sellerPhone ? { sellerPhone: input.sellerPhone.trim() } : {}),
+    ...(input.sellerEmail ? { sellerEmail: input.sellerEmail.trim() } : {}),
+    ...(input.sellerCompany ? { sellerCompany: input.sellerCompany.trim() } : {}),
+  };
+}
+
 function snapshotIdentity(snapshot: QuoteSnapshot): Omit<QuoteSnapshot, "documentDate"> {
   // The generation date is printed for the customer's reference, but it is
   // not a form-controlled input. Excluding it prevents an otherwise identical
   // cotización from becoming stale merely because time passed.
-  return {
-    quoteType: snapshot.quoteType,
-    leadId: snapshot.leadId,
-    clientName: snapshot.clientName,
-    clientPhone: snapshot.clientPhone,
-    modelId: snapshot.modelId,
-    modelName: snapshot.modelName,
-    amount: snapshot.amount,
-    modality: snapshot.modality,
-    term: snapshot.term,
-    factor: snapshot.factor,
-    interest: snapshot.interest,
-    total: snapshot.total,
-    installment: snapshot.installment,
-    rulesVersion: snapshot.rulesVersion,
-    sellerName: snapshot.sellerName,
-    sellerPhone: snapshot.sellerPhone,
-    sellerEmail: snapshot.sellerEmail,
-    sellerCompany: snapshot.sellerCompany,
-  };
+  const identity = Object.fromEntries(Object.entries(snapshot).filter(([key]) => key !== "documentDate"));
+  return identity as Omit<QuoteSnapshot, "documentDate">;
 }
 
 export function quoteSnapshotsEquivalent(left: QuoteSnapshot, right: QuoteSnapshot): boolean {

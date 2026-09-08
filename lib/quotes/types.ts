@@ -1,16 +1,25 @@
 import type { CardModality, CardQuote } from "@/lib/financial/card-quote";
+import type { NovaCreditQuote, NovaCreditTerm } from "@/lib/financial/novacredit";
 
 export const CARD_QUOTE_RULES_VERSION = "card-credit-v1" as const;
 
-export type QuoteType = "TARJETA_CREDITO";
+export type QuoteType = "TARJETA_CREDITO" | "NOVACREDIT";
 
-export type QuoteSnapshot = {
-  quoteType: QuoteType;
+type QuoteSnapshotContext = {
   leadId: string;
   clientName: string;
   clientPhone: string;
   modelId: string;
   modelName: string;
+  documentDate: string;
+  sellerName?: string;
+  sellerPhone?: string;
+  sellerEmail?: string;
+  sellerCompany?: string;
+};
+
+export type CardQuoteSnapshot = QuoteSnapshotContext & {
+  quoteType: "TARJETA_CREDITO";
   amount: number;
   modality: CardModality;
   term: number;
@@ -19,12 +28,31 @@ export type QuoteSnapshot = {
   total: number;
   installment: number;
   rulesVersion: typeof CARD_QUOTE_RULES_VERSION;
-  documentDate: string;
-  sellerName?: string;
-  sellerPhone?: string;
-  sellerEmail?: string;
-  sellerCompany?: string;
 };
+
+export type NovaCreditQuoteSnapshot = QuoteSnapshotContext & {
+  quoteType: "NOVACREDIT";
+  vehicleAmount: number;
+  accessories: number;
+  downPayment: number;
+  termMonths: NovaCreditTerm;
+  deviceAmount: number;
+  totalVehicleValue: number;
+  minimumDownPayment: number;
+  downPaymentPercentage: number;
+  legalExpenses: number;
+  vehicleInsurance: number;
+  lifeInsurance: number;
+  financedWithoutLifeInsurance: number;
+  internalLifeCalculationBalance: number;
+  financedValue: number;
+  monthlyInstallment: number;
+  finalInstallment: number;
+  fixedFinancingChargeApplied: number;
+  rulesVersion: NovaCreditQuote["rulesVersion"];
+};
+
+export type QuoteSnapshot = CardQuoteSnapshot | NovaCreditQuoteSnapshot;
 
 export type QuoteLeadOption = {
   id: string;
@@ -35,22 +63,26 @@ export type QuoteLeadOption = {
 
 export type QuoteCatalogModel = { id: string; name: string };
 
-export type QuoteFileSummary = {
+type QuoteFileSummaryBase = {
   id: string;
   fileName: string;
   quoteType: QuoteType;
   modelName: string;
   amount: number;
-  modality: CardModality;
   term: number;
+  installment: number;
   generatedAt: string;
   sendStatus: QuoteFileSendStatus | null;
   sentAt: string | null;
 };
 
-export type GeneratedQuoteFile = QuoteFileSummary & {
-  snapshot: QuoteSnapshot;
-};
+export type CardQuoteFileSummary = QuoteFileSummaryBase & { quoteType: "TARJETA_CREDITO"; modality: CardModality };
+export type NovaCreditQuoteFileSummary = QuoteFileSummaryBase & { quoteType: "NOVACREDIT" };
+export type QuoteFileSummary = CardQuoteFileSummary | NovaCreditQuoteFileSummary;
+
+export type GeneratedCardQuoteFile = CardQuoteFileSummary & { snapshot: CardQuoteSnapshot };
+export type GeneratedNovaCreditQuoteFile = NovaCreditQuoteFileSummary & { snapshot: NovaCreditQuoteSnapshot };
+export type GeneratedQuoteFile = GeneratedCardQuoteFile | GeneratedNovaCreditQuoteFile;
 
 export type CardQuotePdfInput = {
   leadId: string;
@@ -60,9 +92,19 @@ export type CardQuotePdfInput = {
   term: number | null;
 };
 
+export type NovaCreditQuotePdfInput = {
+  leadId: string;
+  modelId: string;
+  vehicleValue: string;
+  accessories: string;
+  downPayment: string;
+  term: number | null;
+  device: string;
+};
+
 export type QuoteDocumentData = {
   snapshot: QuoteSnapshot;
-  quote: CardQuote;
+  quote: CardQuote | NovaCreditQuote;
 };
 
 export type QuoteFileSendStatus = "CLAIMED" | "ACCEPTED" | "FAILED" | "UNKNOWN";

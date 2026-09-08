@@ -2,7 +2,7 @@ import "server-only";
 
 import type { Database, Json } from "@/lib/supabase/database";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { GeneratedQuoteFile, QuoteCatalogModel, QuoteFileSendClaim, QuoteFileSendStatus, QuoteFileSummary, QuoteLeadOption, QuoteSnapshot } from "@/lib/quotes/types";
+import type { GeneratedCardQuoteFile, GeneratedNovaCreditQuoteFile, GeneratedQuoteFile, QuoteCatalogModel, QuoteFileSendClaim, QuoteFileSendStatus, QuoteFileSummary, QuoteLeadOption, QuoteSnapshot } from "@/lib/quotes/types";
 
 type QuoteFileRow = Database["public"]["Tables"]["quote_files"]["Row"];
 type QuoteFileSendRow = Database["public"]["Tables"]["quote_file_sends"]["Row"];
@@ -28,22 +28,37 @@ function toQuoteFileSendStatus(value: string | null): QuoteFileSendStatus | null
 
 function snapshotToSummary(row: QuoteFileRow, send?: QuoteFileSendHistoryRow | null): QuoteFileSummary {
   const snapshot = row.snapshot as QuoteSnapshot;
-  return {
+  const base = {
     id: row.id,
     fileName: row.file_name,
-    quoteType: "TARJETA_CREDITO",
     modelName: row.model_name_snapshot,
-    amount: snapshot.amount,
-    modality: snapshot.modality,
-    term: snapshot.term,
     generatedAt: row.generated_at,
     sendStatus: toQuoteFileSendStatus(send?.status ?? null),
     sentAt: send?.status === "ACCEPTED" ? send.completed_at : null,
   };
+  if (snapshot.quoteType === "NOVACREDIT") {
+    return {
+      ...base,
+      quoteType: "NOVACREDIT",
+      amount: snapshot.vehicleAmount,
+      term: snapshot.termMonths,
+      installment: snapshot.monthlyInstallment,
+    };
+  }
+  return {
+    ...base,
+    quoteType: "TARJETA_CREDITO",
+    amount: snapshot.amount,
+    modality: snapshot.modality,
+    term: snapshot.term,
+    installment: snapshot.installment,
+  };
 }
 
 export function quoteFileToGeneratedFile(row: QuoteFileRow): GeneratedQuoteFile {
-  return { ...snapshotToSummary(row), snapshot: row.snapshot as QuoteSnapshot };
+  const snapshot = row.snapshot as QuoteSnapshot;
+  if (snapshot.quoteType === "NOVACREDIT") return { ...snapshotToSummary(row), snapshot } as GeneratedNovaCreditQuoteFile;
+  return { ...snapshotToSummary(row), snapshot } as GeneratedCardQuoteFile;
 }
 
 function asJsonRecord(value: unknown): Record<string, unknown> | null {
@@ -197,7 +212,7 @@ export async function insertQuoteFile(input: {
     id: input.id,
     lead_id: input.leadId,
     generated_by: input.generatedBy,
-    quote_type: "TARJETA_CREDITO",
+    quote_type: input.snapshot.quoteType,
     model_id: input.modelId,
     model_name_snapshot: input.modelName,
     storage_path: input.storagePath,

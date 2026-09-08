@@ -64,6 +64,9 @@ assert.match(workspace, /Enviar cotización/);
 assert.match(workspace, /sendQuote/);
 assert.match(workspace, /prepareCardQuoteSendAction/);
 assert.match(workspace, /sendCardQuoteAction/);
-assert.doesNotMatch(workspace, /Confirmar envío|Ver PDF que se enviará|sendConfirmation/);
+assert.match(workspace, /prepareNovaCreditQuoteSendAction/);
+assert.match(workspace, /sendNovaCreditQuoteAction/);
+assert.match(workspace, /Ver PDF que se enviará/);
+assert.match(workspace, /pendingNovaSend/);
 
 console.log("Quote send contract checks: PASS");

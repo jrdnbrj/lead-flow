@@ -7,10 +7,11 @@ import { PdfViewer } from "@/components/catalog/pdf-viewer";
 import { CardQuoteCalculator } from "@/components/quotes/card-quote-calculator";
 import { NovaCreditCalculator } from "@/components/quotes/novacredit-calculator";
 import { calculateCardQuote, formatCardCurrency, validateCardQuote, type CardQuoteDraft } from "@/lib/financial/card-quote";
-import { generateCardQuotePdfAction, getQuoteFilesAction, prepareCardQuoteSendAction, sendCardQuoteAction } from "@/lib/quotes/actions";
-import { createCardQuoteSnapshot, quoteSnapshotsEquivalent } from "@/lib/quotes/snapshot";
+import { calculateNovaCreditQuote, novaCreditRules, validateNovaCreditQuote, type NovaCreditDraft } from "@/lib/financial/novacredit";
+import { generateCardQuotePdfAction, generateNovaCreditQuotePdfAction, getQuoteFilesAction, prepareCardQuoteSendAction, prepareNovaCreditQuoteSendAction, sendCardQuoteAction, sendNovaCreditQuoteAction } from "@/lib/quotes/actions";
+import { createCardQuoteSnapshot, createNovaCreditSnapshot, quoteSnapshotsEquivalent } from "@/lib/quotes/snapshot";
 import type { SellerProfile } from "@/lib/domain/lead";
-import type { GeneratedQuoteFile, QuoteCatalogModel, QuoteFileSummary, QuoteLeadOption } from "@/lib/quotes/types";
+import type { GeneratedQuoteFile, PreparedQuoteForSend, QuoteCatalogModel, QuoteFileSummary, QuoteLeadOption } from "@/lib/quotes/types";
 
 type QuoteWorkspaceProps = {
   leadOptions: QuoteLeadOption[];
@@ -41,6 +42,7 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
   const [isLeadPickerOpen, setIsLeadPickerOpen] = useState(false);
   const [selectedModelId, setSelectedModelId] = useState(initialLead?.models.length === 1 ? initialLead.models[0].id : "");
   const [draft, setDraft] = useState<CardQuoteDraft>({ modality: "NORMAL", term: null, amount: null });
+  const [novaDraft, setNovaDraft] = useState<NovaCreditDraft>({ vehicleValue: null, accessories: null, downPayment: null, term: null, device: novaCreditRules.defaultDevice });
   const [history, setHistory] = useState<QuoteFileSummary[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -51,6 +53,7 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendInfo, setSendInfo] = useState<string | null>(null);
   const [generated, setGenerated] = useState<GeneratedQuoteFile | null>(null);
+  const [pendingNovaSend, setPendingNovaSend] = useState<PreparedQuoteForSend | null>(null);
   const [previewFile, setPreviewFile] = useState<QuoteFileSummary | GeneratedQuoteFile | null>(null);
   const leadPickerRef = useRef<HTMLDivElement>(null);
 
@@ -61,16 +64,31 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
     if (!query) return leadOptions.slice(0, 8);
     return leadOptions.filter((lead) => normalizeSearch(`${lead.fullName} ${lead.phone}`).includes(query)).slice(0, 8);
   }, [leadOptions, leadSearch]);
-  const quote = calculateCardQuote(draft);
-  const validation = validateCardQuote(draft);
-  const currentSnapshot = quote && selectedLead && selectedModel
+  const cardQuote = calculateCardQuote(draft);
+  const cardValidation = validateCardQuote(draft);
+  const novaQuote = calculateNovaCreditQuote(novaDraft);
+  const novaValidation = validateNovaCreditQuote(novaDraft);
+  const quote = quoteMode === "CARD" ? cardQuote : novaQuote;
+  const validation = quoteMode === "CARD" ? cardValidation : novaValidation;
+  const currentSnapshot = quoteMode === "CARD" && cardQuote && selectedLead && selectedModel
     ? createCardQuoteSnapshot({
         leadId: selectedLead.id,
         clientName: selectedLead.fullName,
         clientPhone: selectedLead.phone,
         modelId: selectedModel.id,
         modelName: selectedModel.name,
-        quote,
+        quote: cardQuote,
+        sellerName: sellerProfile.name,
+        sellerPhone: sellerProfile.phone,
+        sellerEmail: sellerProfile.email,
+        sellerCompany: sellerProfile.company,
+      }) : quoteMode === "NOVACREDIT" && novaQuote && selectedLead && selectedModel ? createNovaCreditSnapshot({
+        leadId: selectedLead.id,
+        clientName: selectedLead.fullName,
+        clientPhone: selectedLead.phone,
+        modelId: selectedModel.id,
+        modelName: selectedModel.name,
+        quote: novaQuote,
         sellerName: sellerProfile.name,
         sellerPhone: sellerProfile.phone,
         sellerEmail: sellerProfile.email,
@@ -78,6 +96,7 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
       })
     : null;
   const generatedIsCurrent = Boolean(generated && currentSnapshot && quoteSnapshotsEquivalent(generated.snapshot, currentSnapshot));
+  const pendingNovaSnapshot = pendingNovaSend?.quoteFile.snapshot.quoteType === "NOVACREDIT" ? pendingNovaSend.quoteFile.snapshot : null;
 
   useEffect(() => {
     if (!isLeadPickerOpen) return;
@@ -113,6 +132,7 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
     setHistoryError(null);
     setIsLoadingHistory(Boolean(nextLeadId));
     setGenerated(null);
+    setPendingNovaSend(null);
     setSendError(null);
     setSendInfo(null);
   }
@@ -124,6 +144,7 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
     setHistory([]);
     setHistoryError(null);
     setGenerated(null);
+    setPendingNovaSend(null);
     setSendError(null);
     setSendInfo(null);
   }
@@ -135,6 +156,7 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
       setSelectedModelId("");
       setHistory([]);
       setGenerated(null);
+      setPendingNovaSend(null);
     }
     setSendError(null);
     setSendInfo(null);
@@ -148,12 +170,21 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
     setSendInfo(null);
   }
 
+  function handleNovaDraftChange(nextDraft: NovaCreditDraft) {
+    setNovaDraft(nextDraft);
+    setGenerationError(null);
+    setSendError(null);
+    setSendInfo(null);
+  }
+
   async function generatePdf() {
     if (!selectedLead || !selectedModel || !quote || isGenerating) return;
     setIsGenerating(true);
     setGenerationError(null);
     try {
-      const result = await generateCardQuotePdfAction({ leadId: selectedLead.id, modelId: selectedModel.id, amount: String(draft.amount ?? ""), modality: draft.modality, term: draft.term });
+      const result = quoteMode === "CARD"
+        ? await generateCardQuotePdfAction({ leadId: selectedLead.id, modelId: selectedModel.id, amount: String(draft.amount ?? ""), modality: draft.modality, term: draft.term })
+        : await generateNovaCreditQuotePdfAction({ leadId: selectedLead.id, modelId: selectedModel.id, vehicleValue: String(novaDraft.vehicleValue ?? ""), accessories: String(novaDraft.accessories ?? ""), downPayment: String(novaDraft.downPayment ?? ""), term: novaDraft.term, device: String(novaDraft.device ?? "") });
       if (result.success && result.data) {
         const generatedFile = result.data;
         setGenerated(generatedFile);
@@ -175,11 +206,22 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
     setSendError(null);
     setSendInfo(null);
     try {
+      if (quoteMode === "NOVACREDIT") {
+        const result = await prepareNovaCreditQuoteSendAction({ leadId: selectedLead.id, modelId: selectedModel.id, vehicleValue: String(novaDraft.vehicleValue ?? ""), accessories: String(novaDraft.accessories ?? ""), downPayment: String(novaDraft.downPayment ?? ""), term: novaDraft.term, device: String(novaDraft.device ?? ""), generatedQuoteFileId: generated?.id ?? null });
+        if (result.success && result.data) {
+          setGenerated(result.data.quoteFile);
+          setHistory((current) => [result.data!.quoteFile, ...current.filter((file) => file.id !== result.data!.quoteFile.id)]);
+          setPendingNovaSend(result.data);
+        } else {
+          setSendError(result.error ?? "No pudimos preparar la cotización para enviar.");
+        }
+        return;
+      }
+
       const result = await prepareCardQuoteSendAction({ leadId: selectedLead.id, modelId: selectedModel.id, amount: String(draft.amount ?? ""), modality: draft.modality, term: draft.term, generatedQuoteFileId: generated?.id ?? null });
       if (result.success && result.data) {
         setGenerated(result.data.quoteFile);
         setHistory((current) => [result.data!.quoteFile, ...current.filter((file) => file.id !== result.data!.quoteFile.id)]);
-        setIsPreparingSend(false);
         setIsSending(true);
         const sendResult = await sendCardQuoteAction({ leadId: selectedLead.id, modelId: selectedModel.id, amount: String(draft.amount ?? ""), modality: draft.modality, term: draft.term, preparedQuoteFileId: result.data.quoteFile.id });
         if (sendResult.success && sendResult.data) {
@@ -187,16 +229,32 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
           setHistory((current) => [sendResult.data!.quoteFile, ...current.filter((file) => file.id !== sendResult.data!.quoteFile.id)]);
           if (sendResult.data.status === "ACCEPTED") setSendInfo(sendResult.message ?? "Cotización enviada por WhatsApp.");
           else setSendError(sendResult.message ?? "No pudimos confirmar el envío. Verifica WhatsApp antes de intentar otro.");
-        } else {
-          setSendError(sendResult.error ?? "No pudimos enviar la cotización. Verifica WhatsApp antes de intentar otro.");
-        }
-      } else {
-        setSendError(result.error ?? "No pudimos preparar la cotización para enviar.");
-      }
+        } else setSendError(sendResult.error ?? "No pudimos enviar la cotización. Verifica WhatsApp antes de intentar otro.");
+      } else setSendError(result.error ?? "No pudimos preparar la cotización para enviar.");
     } catch {
       setSendError("No pudimos enviar la cotización. Verifica WhatsApp e intenta de nuevo.");
     } finally {
       setIsPreparingSend(false);
+      setIsSending(false);
+    }
+  }
+
+  async function confirmNovaCreditSend() {
+    if (!pendingNovaSend || !selectedLead || !selectedModel || isSending) return;
+    setIsSending(true);
+    setSendError(null);
+    setSendInfo(null);
+    try {
+      const result = await sendNovaCreditQuoteAction({ leadId: selectedLead.id, modelId: selectedModel.id, vehicleValue: String(novaDraft.vehicleValue ?? ""), accessories: String(novaDraft.accessories ?? ""), downPayment: String(novaDraft.downPayment ?? ""), term: novaDraft.term, device: String(novaDraft.device ?? ""), preparedQuoteFileId: pendingNovaSend.quoteFile.id });
+      if (result.success && result.data) {
+        setGenerated(result.data.quoteFile);
+        setHistory((current) => [result.data!.quoteFile, ...current.filter((file) => file.id !== result.data!.quoteFile.id)]);
+        setPendingNovaSend(null);
+        setSendInfo(result.message ?? "Cotización preparada en modo local; no se envió por WhatsApp.");
+      } else setSendError(result.error ?? "No pudimos preparar la cotización. Revisa los datos e intenta de nuevo.");
+    } catch {
+      setSendError("No pudimos preparar la cotización. Intenta de nuevo.");
+    } finally {
       setIsSending(false);
     }
   }
@@ -211,9 +269,9 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
       </div>
     </section>
 
-    {quoteMode === "NOVACREDIT" ? <NovaCreditCalculator /> : <CardQuoteCalculator description="Calcula una cuota de Tarjeta de crédito sin lead, cliente ni vehículo." onDraftChange={handleDraftChange} />}
+    {quoteMode === "NOVACREDIT" ? <NovaCreditCalculator onDraftChange={handleNovaDraftChange} /> : <CardQuoteCalculator description="Calcula una cuota de Tarjeta de crédito sin lead, cliente ni vehículo." onDraftChange={handleDraftChange} />}
 
-    {quoteMode === "CARD" ? <section className="rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_18px_50px_rgba(16,24,40,0.06)] sm:p-5" aria-labelledby="quote-document-title">
+    <section className="rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_18px_50px_rgba(16,24,40,0.06)] sm:p-5" aria-labelledby="quote-document-title">
       <div>
         <p className="eyebrow">Documento para cliente</p>
         <h2 id="quote-document-title" className="mt-1 text-lg font-black">Generar cotización</h2>
@@ -245,7 +303,7 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
       {sendInfo ? <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-800" role="status">{sendInfo}</p> : null}
 
       <div className="mt-4 flex flex-col gap-2 border-t border-black/[0.06] pt-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-[11px] text-[var(--muted)]">{quote ? <span>{formatCardCurrency(quote.amount)} · {quote.term} meses · {formatCardCurrency(quote.installment)}/mes</span> : <span>{validation.valid ? "Completa la cotización." : validation.message}</span>}</div>
+        <div className="text-[11px] text-[var(--muted)]">{quoteMode === "CARD" && cardQuote ? <span>{formatCardCurrency(cardQuote.amount)} · {cardQuote.term} meses · {formatCardCurrency(cardQuote.installment)}/mes</span> : quoteMode === "NOVACREDIT" && novaQuote ? <span>{formatCardCurrency(novaQuote.totalVehicleValue)} · {novaQuote.term} meses · {formatCardCurrency(novaQuote.monthlyInstallment)}/mes</span> : <span>{validation.valid ? "Completa la cotización." : validation.message}</span>}</div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <button type="button" onClick={() => void generatePdf()} disabled={isGenerating || isPreparingSend || isSending || !quote || !selectedLead || !selectedModel} className="button-secondary min-h-10 justify-center px-4 text-xs disabled:cursor-not-allowed disabled:opacity-55">
             {isGenerating ? <LoaderCircle size={15} className="animate-spin" /> : <FileText size={15} />}
@@ -264,14 +322,16 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
         <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setPreviewFile(generated)} className="button-secondary min-h-9 px-3 py-1.5 text-[11px]"><ExternalLink size={14} />Ver PDF</button><a href={quoteFileUrl(generated.id, true)} className="button-secondary min-h-9 px-3 py-1.5 text-[11px]"><Download size={14} />Descargar</a></div>
         {generated.sendStatus === "ACCEPTED" ? <p className="mt-2 text-[11px] font-semibold text-emerald-800">Enviada por WhatsApp.</p> : null}
       </div> : null}
-    </section> : <section className="rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_18px_50px_rgba(16,24,40,0.06)] sm:p-5"><p className="text-xs leading-5 text-[var(--muted)]">El cálculo de NovaCredit es transitorio en esta versión. La generación de documentos se habilitará posteriormente.</p></section>}
+    </section>
 
     {selectedLead ? <section className="rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_18px_50px_rgba(16,24,40,0.06)] sm:p-5" aria-labelledby="quote-history-title">
       <div className="flex items-center justify-between gap-3"><div><p className="eyebrow">Histórico</p><h2 id="quote-history-title" className="mt-1 text-lg font-black">Cotizaciones anteriores</h2></div>{isLoadingHistory ? <LoaderCircle size={17} className="animate-spin text-[var(--muted)]" /> : null}</div>
       {historyError ? <p className="mt-3 text-xs font-semibold text-[#b33a2c]" role="alert">{historyError}</p> : null}
       {!isLoadingHistory && !historyError && history.length === 0 ? <p className="mt-3 text-xs text-[var(--muted)]">Todavía no hay PDFs generados para este cliente.</p> : null}
-      {history.length > 0 ? <div className="mt-3 divide-y divide-black/[0.06]">{history.map((file) => <div key={file.id} className="flex flex-col gap-2 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate text-xs font-black text-[var(--ink)]">{file.modelName}</p><p className="mt-1 text-[11px] text-[var(--muted)]">{formatGeneratedDate(file.generatedAt)} · {formatCardCurrency(file.amount)} · {file.term} meses</p>{file.sendStatus === "ACCEPTED" ? <p className="mt-1 text-[10px] font-semibold text-emerald-700">Enviada por WhatsApp</p> : file.sendStatus === "UNKNOWN" ? <p className="mt-1 text-[10px] font-semibold text-[#8a5b00]">Envío por confirmar</p> : null}</div><div className="flex shrink-0 gap-2"><button type="button" onClick={() => setPreviewFile(file)} className="button-secondary min-h-8 px-2.5 py-1 text-[10px]"><ExternalLink size={13} />Ver PDF</button><a href={quoteFileUrl(file.id, true)} className="button-secondary min-h-8 px-2.5 py-1 text-[10px]" aria-label={`Descargar cotización de ${file.modelName}`}><Download size={13} />Descargar</a></div></div>)}</div> : null}
+      {history.length > 0 ? <div className="mt-3 divide-y divide-black/[0.06]">{history.map((file) => <div key={file.id} className="flex flex-col gap-2 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate text-xs font-black text-[var(--ink)]">{file.modelName}</p><p className="mt-1 text-[11px] text-[var(--muted)]">{file.quoteType === "NOVACREDIT" ? "Crédito vehicular" : "Tarjeta de crédito"} · {formatGeneratedDate(file.generatedAt)} · {formatCardCurrency(file.amount)} · {file.term} meses</p>{file.sendStatus === "ACCEPTED" ? <p className="mt-1 text-[10px] font-semibold text-emerald-700">{file.quoteType === "NOVACREDIT" ? "Preparada en modo local" : "Enviada por WhatsApp"}</p> : file.sendStatus === "UNKNOWN" ? <p className="mt-1 text-[10px] font-semibold text-[#8a5b00]">Envío por confirmar</p> : null}</div><div className="flex shrink-0 gap-2"><button type="button" onClick={() => setPreviewFile(file)} className="button-secondary min-h-8 px-2.5 py-1 text-[10px]"><ExternalLink size={13} />Ver PDF</button><a href={quoteFileUrl(file.id, true)} className="button-secondary min-h-8 px-2.5 py-1 text-[10px]" aria-label={`Descargar cotización de ${file.modelName}`}><Download size={13} />Descargar</a></div></div>)}</div> : null}
     </section> : null}
+
+    {pendingNovaSend && pendingNovaSnapshot ? <div role="presentation" onClick={() => setPendingNovaSend(null)} className="fixed inset-0 z-[80] grid place-items-center bg-[#101828]/70 p-3 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby="nova-send-confirm-title" onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-[24px] bg-white p-5 shadow-[0_24px_80px_rgba(16,24,40,0.28)]"><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Preparación local</p><h2 id="nova-send-confirm-title" className="mt-1 text-lg font-black">Enviar cotización</h2></div><button type="button" onClick={() => setPendingNovaSend(null)} className="grid size-8 place-items-center rounded-full bg-[#f6f3ed] text-[var(--ink)]" aria-label="Cancelar preparación"><X size={17} /></button></div><div className="mt-4 space-y-2 rounded-xl bg-[#f8fbff] p-3 text-xs"><p><span className="font-semibold text-[var(--muted)]">Cliente:</span> <span className="font-black text-[var(--ink)]">{pendingNovaSend.clientName}</span></p><p><span className="font-semibold text-[var(--muted)]">Teléfono:</span> <span className="font-black text-[var(--ink)]">{pendingNovaSend.clientPhone}</span></p><p><span className="font-semibold text-[var(--muted)]">Modelo:</span> <span className="font-black text-[var(--ink)]">{pendingNovaSend.modelName}</span></p><div className="border-t border-black/[0.06] pt-2"><p className="font-black text-[var(--ink)]">Resumen</p><p className="mt-1 text-[var(--muted)]">{formatCardCurrency(pendingNovaSnapshot.totalVehicleValue)} · {pendingNovaSnapshot.termMonths} meses · {formatCardCurrency(pendingNovaSnapshot.monthlyInstallment)}/mes</p></div></div>{sendError ? <p className="mt-3 rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]" role="alert">{sendError}</p> : null}<div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setPreviewFile(pendingNovaSend.quoteFile)} className="button-secondary min-h-10 justify-center px-4 text-xs"><ExternalLink size={15} />Ver PDF que se enviará</button><button type="button" onClick={() => void confirmNovaCreditSend()} disabled={isSending} className="button-primary min-h-10 justify-center px-4 text-xs disabled:cursor-not-allowed disabled:opacity-55">{isSending ? <LoaderCircle size={15} className="animate-spin" /> : <Send size={15} />}{isSending ? "Preparando…" : "Confirmar"}</button></div></div></div> : null}
 
     {previewFile ? <div role="presentation" onClick={() => setPreviewFile(null)} className="fixed inset-0 z-[90] grid place-items-center bg-[#101828]/70 p-2 backdrop-blur-sm sm:p-5"><div role="dialog" aria-modal="true" aria-labelledby="quote-preview-title" onClick={(event) => event.stopPropagation()} className="relative flex h-[96vh] w-full min-w-0 max-w-4xl flex-col rounded-[24px] bg-white p-3 shadow-[0_24px_80px_rgba(16,24,40,0.28)] sm:h-[92vh] sm:p-5"><div className="flex shrink-0 items-center justify-between gap-3 px-1 pb-3"><div className="min-w-0"><p className="eyebrow">Cotización</p><h2 id="quote-preview-title" className="truncate text-sm font-black">{previewFile.modelName}</h2></div><div className="flex shrink-0 items-center gap-2"><a href={quoteFileUrl(previewFile.id, true)} className="grid size-8 place-items-center rounded-lg bg-[#f6f3ed] text-[var(--ink)]" aria-label="Descargar cotización" title="Descargar"><Download size={15} /></a><button type="button" onClick={() => setPreviewFile(null)} className="grid size-8 place-items-center rounded-full bg-[#f6f3ed] text-[var(--ink)]" aria-label="Cerrar PDF"><X size={17} /></button></div></div><PdfViewer url={quoteFileUrl(previewFile.id)} title={`Cotización de ${previewFile.modelName}`} /></div></div> : null}
   </div>;

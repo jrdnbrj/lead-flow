@@ -6,11 +6,13 @@ import { authRequiredResult } from "@/lib/auth/auth-required";
 import { requireAdvisor } from "@/lib/auth/advisor";
 import { getEffectiveSellerProfile } from "@/lib/config/seller";
 import { calculateCardQuote, parseCardAmount, validateCardQuote } from "@/lib/financial/card-quote";
-import { createCardQuoteSnapshot, quoteSnapshotsEquivalent } from "@/lib/quotes/snapshot";
+import { calculateNovaCreditQuote, validateNovaCreditQuote } from "@/lib/financial/novacredit";
+import { createCardQuoteSnapshot, createNovaCreditSnapshot, quoteSnapshotsEquivalent } from "@/lib/quotes/snapshot";
 import { buildQuoteSendIdempotencyKey, executeQuoteSendAttempt, QuoteProviderRejectedError } from "@/lib/quotes/send";
+import { sendNovaCreditDocumentMock } from "@/lib/quotes/mock-provider";
 import { beginQuoteFileSendIo, claimQuoteFileSend, createQuotePdfSignedUrl, downloadVehiclePhoto, getActiveCatalogModel, getOwnedLeadForQuote, getQuoteFileForAdvisor, insertQuoteFile, listQuoteFilesForLead, quoteFileToGeneratedFile, recordQuoteFileSendResult, removeQuotePdf, uploadQuotePdf } from "@/lib/quotes/repository";
-import type { CardQuotePdfInput, GeneratedQuoteFile, PreparedQuoteForSend, QuoteFileSummary, QuoteSendActionData } from "@/lib/quotes/types";
-import { renderCardQuotePdf } from "@/lib/quotes/pdf";
+import type { CardQuotePdfInput, GeneratedQuoteFile, NovaCreditQuotePdfInput, PreparedQuoteForSend, QuoteFileSummary, QuoteSendActionData } from "@/lib/quotes/types";
+import { renderCardQuotePdf, renderNovaCreditPdf } from "@/lib/quotes/pdf";
 import type { ActionResponse } from "@/lib/domain/lead";
 import { createLeadMessage } from "@/lib/leads/repository";
 import { getWhatsappPhoneError, normalizeWhatsappNumber } from "@/lib/domain/lead";
@@ -27,6 +29,16 @@ const cardQuotePdfSchema = z.object({
 
 const quoteHistorySchema = z.object({ leadId: z.string().trim().uuid() });
 const cardQuoteSendSchema = cardQuotePdfSchema.extend({ generatedQuoteFileId: z.string().trim().uuid().nullable().optional() });
+const novaCreditQuotePdfSchema = z.object({
+  leadId: z.string().trim().uuid(),
+  modelId: z.string().trim().min(1).max(100),
+  vehicleValue: z.string().trim().max(40),
+  accessories: z.string().trim().max(40),
+  downPayment: z.string().trim().max(40),
+  term: z.number().int().positive().nullable(),
+  device: z.string().trim().max(40),
+});
+const novaCreditQuoteSendSchema = novaCreditQuotePdfSchema.extend({ generatedQuoteFileId: z.string().trim().uuid().nullable().optional() });
 
 function safeFileSlug(value: string): string {
   return value
@@ -85,6 +97,60 @@ async function resolveCurrentQuoteContext(advisorUserId: string, input: CardQuot
   };
 }
 
+type CurrentNovaCreditQuoteContext = {
+  lead: { id: string; full_name: string; phone: string };
+  model: NonNullable<Awaited<ReturnType<typeof getActiveCatalogModel>>>;
+  quote: NonNullable<ReturnType<typeof calculateNovaCreditQuote>>;
+  snapshot: ReturnType<typeof createNovaCreditSnapshot>;
+};
+
+function parseNovaMoney(value: string, optional = false): number | null {
+  if (!value.trim()) return optional ? null : null;
+  return parseCardAmount(value);
+}
+
+async function resolveCurrentNovaCreditQuoteContext(advisorUserId: string, input: NovaCreditQuotePdfInput): Promise<{ context: CurrentNovaCreditQuoteContext } | { error: string }> {
+  const [lead, model] = await Promise.all([
+    getOwnedLeadForQuote(advisorUserId, input.leadId),
+    getActiveCatalogModel(input.modelId),
+  ]);
+  if (!lead) return { error: "No encontramos ese cliente para generar la cotización." };
+  if (!model) return { error: "Selecciona un modelo válido del catálogo." };
+
+  const draft = {
+    vehicleValue: parseNovaMoney(input.vehicleValue),
+    accessories: parseNovaMoney(input.accessories, true),
+    downPayment: parseNovaMoney(input.downPayment),
+    term: input.term,
+    device: parseNovaMoney(input.device),
+  };
+  const validation = validateNovaCreditQuote(draft);
+  if (!validation.valid) return { error: validation.message };
+  const quote = calculateNovaCreditQuote(draft);
+  if (!quote) return { error: "No pudimos calcular esta cotización." };
+
+  const sellerProfile = await getEffectiveSellerProfile();
+  return {
+    context: {
+      lead: { id: lead.id, full_name: lead.full_name, phone: lead.phone },
+      model,
+      quote,
+      snapshot: createNovaCreditSnapshot({
+        leadId: lead.id,
+        clientName: lead.full_name,
+        clientPhone: lead.phone,
+        modelId: model.id,
+        modelName: model.name,
+        quote,
+        sellerName: sellerProfile.name,
+        sellerPhone: sellerProfile.phone,
+        sellerEmail: sellerProfile.email,
+        sellerCompany: sellerProfile.company,
+      }),
+    },
+  };
+}
+
 async function persistQuoteFile(advisorUserId: string, context: CurrentQuoteContext): Promise<GeneratedQuoteFile> {
   const quoteFileId = crypto.randomUUID();
   const dateSlug = context.snapshot.documentDate.slice(0, 10);
@@ -92,6 +158,26 @@ async function persistQuoteFile(advisorUserId: string, context: CurrentQuoteCont
   const storagePath = `${context.lead.id}/${quoteFileId}.pdf`;
   const photoBytes = context.model.photoStoragePath ? await downloadVehiclePhoto(context.model.photoStoragePath) : null;
   const bytes = await renderCardQuotePdf(context.snapshot, photoBytes, context.model.photoMimeType);
+  if (bytes.length === 0) throw new Error("QUOTE_PDF_EMPTY");
+
+  await uploadQuotePdf(storagePath, bytes);
+  let row;
+  try {
+    row = await insertQuoteFile({ id: quoteFileId, leadId: context.lead.id, generatedBy: advisorUserId, modelId: context.model.id, modelName: context.model.name, storagePath, fileName, snapshot: context.snapshot });
+  } catch (error) {
+    await removeQuotePdf(storagePath);
+    throw error;
+  }
+  return quoteFileToGeneratedFile(row);
+}
+
+async function persistNovaCreditQuoteFile(advisorUserId: string, context: CurrentNovaCreditQuoteContext): Promise<GeneratedQuoteFile> {
+  const quoteFileId = crypto.randomUUID();
+  const dateSlug = context.snapshot.documentDate.slice(0, 10);
+  const fileName = `cotizacion-${safeFileSlug(context.model.name)}-novacredit-${dateSlug}.pdf`;
+  const storagePath = `${context.lead.id}/${quoteFileId}.pdf`;
+  const photoBytes = context.model.photoStoragePath ? await downloadVehiclePhoto(context.model.photoStoragePath) : null;
+  const bytes = await renderNovaCreditPdf(context.snapshot, photoBytes, context.model.photoMimeType);
   if (bytes.length === 0) throw new Error("QUOTE_PDF_EMPTY");
 
   await uploadQuotePdf(storagePath, bytes);
@@ -140,6 +226,23 @@ export async function generateCardQuotePdfAction(input: CardQuotePdfInput): Prom
   }
 }
 
+export async function generateNovaCreditQuotePdfAction(input: NovaCreditQuotePdfInput): Promise<ActionResponse<GeneratedQuoteFile>> {
+  const parsed = novaCreditQuotePdfSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "Completa el cliente, el modelo y una cotización válida." };
+
+  const authorization = await requireAdvisor();
+  if (authorization.status !== "AUTHORIZED") return authRequiredResult();
+
+  try {
+    const resolved = await resolveCurrentNovaCreditQuoteContext(authorization.advisorUserId, parsed.data);
+    if ("error" in resolved) return { success: false, error: resolved.error };
+    return { success: true, data: await persistNovaCreditQuoteFile(authorization.advisorUserId, resolved.context), message: "Cotización generada." };
+  } catch (error) {
+    logQuoteFailure("generateNovaCreditQuotePdf", error);
+    return { success: false, error: "No pudimos generar la cotización. Intenta de nuevo y avísame si continúa." };
+  }
+}
+
 export async function prepareCardQuoteSendAction(input: CardQuotePdfInput & { generatedQuoteFileId?: string | null }): Promise<ActionResponse<PreparedQuoteForSend>> {
   const parsed = cardQuoteSendSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Completa el cliente, el modelo y una cotización válida." };
@@ -167,6 +270,37 @@ export async function prepareCardQuoteSendAction(input: CardQuotePdfInput & { ge
     };
   } catch (error) {
     logQuoteFailure("prepareCardQuoteSend", error);
+    return { success: false, error: "No pudimos preparar la cotización para enviar. Intenta de nuevo." };
+  }
+}
+
+export async function prepareNovaCreditQuoteSendAction(input: NovaCreditQuotePdfInput & { generatedQuoteFileId?: string | null }): Promise<ActionResponse<PreparedQuoteForSend>> {
+  const parsed = novaCreditQuoteSendSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "Completa el cliente, el modelo y una cotización válida." };
+
+  const authorization = await requireAdvisor();
+  if (authorization.status !== "AUTHORIZED") return authRequiredResult();
+
+  try {
+    const resolved = await resolveCurrentNovaCreditQuoteContext(authorization.advisorUserId, parsed.data);
+    if ("error" in resolved) return { success: false, error: resolved.error };
+    const phoneError = getWhatsappPhoneError(resolved.context.lead.phone);
+    if (phoneError) return { success: false, error: phoneError };
+
+    let quoteFile: GeneratedQuoteFile | null = null;
+    if (parsed.data.generatedQuoteFileId) {
+      const existing = await getQuoteFileForAdvisor(authorization.advisorUserId, parsed.data.generatedQuoteFileId);
+      if (existing && existing.quote_type === "NOVACREDIT" && quoteSnapshotsEquivalent(existing.snapshot as typeof resolved.context.snapshot, resolved.context.snapshot)) quoteFile = quoteFileToGeneratedFile(existing);
+    }
+    if (!quoteFile) quoteFile = await persistNovaCreditQuoteFile(authorization.advisorUserId, resolved.context);
+
+    return {
+      success: true,
+      data: { quoteFile, clientName: resolved.context.lead.full_name, clientPhone: resolved.context.lead.phone, modelName: resolved.context.model.name },
+      message: "Cotización lista para confirmar.",
+    };
+  } catch (error) {
+    logQuoteFailure("prepareNovaCreditQuoteSend", error);
     return { success: false, error: "No pudimos preparar la cotización para enviar. Intenta de nuevo." };
   }
 }
@@ -252,6 +386,72 @@ export async function sendCardQuoteAction(input: CardQuotePdfInput & { preparedQ
       await recordQuoteFileSendResult({ sendId: claim.sendId, attemptNo: claim.attemptNo, claimTokenDigest: claimToken, resultKind: "UNKNOWN", errorCode: "SEND_FLOW_UNKNOWN", errorMessage: "No pudimos confirmar el resultado del envío." });
     }
     return { success: false, error: "No pudimos confirmar el envío de la cotización. Verifica WhatsApp antes de intentar otro." };
+  }
+}
+
+export async function sendNovaCreditQuoteAction(input: NovaCreditQuotePdfInput & { preparedQuoteFileId: string }): Promise<ActionResponse<QuoteSendActionData>> {
+  const parsed = novaCreditQuoteSendSchema.extend({ preparedQuoteFileId: z.string().trim().uuid() }).safeParse(input);
+  if (!parsed.success) return { success: false, error: "La confirmación de la cotización ya no es válida. Revísala y vuelve a intentarlo." };
+
+  const authorization = await requireAdvisor();
+  if (authorization.status !== "AUTHORIZED") return authRequiredResult();
+
+  let claim: Awaited<ReturnType<typeof claimQuoteFileSend>> = null;
+  let claimToken = "";
+  try {
+    const resolved = await resolveCurrentNovaCreditQuoteContext(authorization.advisorUserId, parsed.data);
+    if ("error" in resolved) return { success: false, error: resolved.error };
+    const phoneError = getWhatsappPhoneError(resolved.context.lead.phone);
+    if (phoneError) return { success: false, error: phoneError };
+
+    const quoteFileRow = await getQuoteFileForAdvisor(authorization.advisorUserId, parsed.data.preparedQuoteFileId);
+    if (!quoteFileRow || quoteFileRow.quote_type !== "NOVACREDIT" || quoteFileRow.lead_id !== resolved.context.lead.id || quoteFileRow.model_id !== resolved.context.model.id) {
+      return { success: false, error: "No encontramos el PDF preparado. Genera una cotización actualizada." };
+    }
+    const quoteFile = quoteFileToGeneratedFile(quoteFileRow);
+    if (quoteFile.snapshot.quoteType !== "NOVACREDIT" || !quoteSnapshotsEquivalent(quoteFile.snapshot, resolved.context.snapshot)) {
+      return { success: false, error: "Cambiaste la cotización. Revísala y vuelve a confirmar el envío." };
+    }
+
+    const normalizedPhone = normalizeWhatsappNumber(resolved.context.lead.phone);
+    if (!normalizedPhone) return { success: false, error: "El número de WhatsApp del cliente no es válido." };
+    const idempotencyKey = buildQuoteSendIdempotencyKey(quoteFile.id, normalizedPhone);
+    claimToken = claimTokenDigest();
+    claim = await claimQuoteFileSend({ quoteFileId: quoteFile.id, leadId: resolved.context.lead.id, generatedBy: authorization.advisorUserId, recipientPhone: normalizedPhone, evolutionInstance: "local-novacredit-mock", idempotencyKey, claimTokenDigest: claimToken });
+    if (!claim) return { success: false, error: "No pudimos reservar la preparación del envío. Intenta de nuevo." };
+    if (claim.claimAction === "REPLAYED") return { success: true, data: { status: "ACCEPTED", quoteFile: quoteFileWithSendStatus(quoteFile, "ACCEPTED", null), providerMessageId: claim.providerMessageId, replayed: true }, message: "La cotización ya estaba preparada; no se duplicó." };
+    if (claim.claimAction === "BLOCKED_UNKNOWN") return { success: false, error: "La preparación anterior quedó pendiente de confirmación. Revísala antes de intentar otra." };
+    if (claim.claimAction === "IN_PROGRESS") return { success: false, error: "Esta preparación ya está en proceso. Espera un momento y actualiza el estado." };
+
+    const latest = await resolveCurrentNovaCreditQuoteContext(authorization.advisorUserId, parsed.data);
+    if ("error" in latest || !quoteSnapshotsEquivalent(quoteFile.snapshot, latest.context.snapshot)) {
+      await recordQuoteFileSendResult({ sendId: claim.sendId, attemptNo: claim.attemptNo, claimTokenDigest: claimToken, resultKind: "FAILED", errorCode: "FRESHNESS_REJECTED", errorMessage: "La cotización cambió antes de preparar el envío." });
+      return { success: false, error: "Cambiaste la cotización o los datos del cliente. Revísala y vuelve a confirmar." };
+    }
+
+    const documentUrl = await createQuotePdfSignedUrl(quoteFileRow.storage_path);
+    if (!documentUrl) {
+      await recordQuoteFileSendResult({ sendId: claim.sendId, attemptNo: claim.attemptNo, claimTokenDigest: claimToken, resultKind: "FAILED", errorCode: "SIGNED_URL_FAILED", errorMessage: "No pudimos preparar el PDF privado." });
+      return { success: false, error: "No pudimos preparar el PDF para enviar. Intenta de nuevo." };
+    }
+    if (!await beginQuoteFileSendIo({ sendId: claim.sendId, attemptNo: claim.attemptNo, claimTokenDigest: claimToken })) {
+      return { success: false, error: "No pudimos iniciar la preparación de forma segura. Intenta de nuevo." };
+    }
+
+    const outcome = await executeQuoteSendAttempt({
+      send: async () => sendNovaCreditDocumentMock({ quoteFileId: quoteFile.id, recipientPhone: normalizedPhone, documentUrl, fileName: quoteFile.fileName }),
+    });
+    await recordQuoteFileSendResult({ sendId: claim.sendId, attemptNo: claim.attemptNo, claimTokenDigest: claimToken, resultKind: outcome.result, providerMessageId: outcome.providerMessageId, providerStatus: outcome.providerStatus ?? "LOCAL_MOCK", errorCode: outcome.errorCode ?? (outcome.result === "UNKNOWN" ? "MOCK_RESPONSE_UNKNOWN" : null), errorMessage: outcome.result === "ACCEPTED" ? null : outcome.result === "UNKNOWN" ? "No pudimos confirmar la preparación local." : "El proveedor local rechazó la preparación.", resultPayload: { provider: "LOCAL_MOCK", quote_type: "NOVACREDIT" } });
+
+    const completedAt = new Date().toISOString();
+    const responseData: QuoteSendActionData = { status: outcome.result, quoteFile: quoteFileWithSendStatus(quoteFile, outcome.result, completedAt), providerMessageId: outcome.providerMessageId, replayed: false };
+    return { success: true, data: responseData, message: outcome.result === "ACCEPTED" ? "Cotización lista en modo local; no se envió por WhatsApp." : outcome.result === "UNKNOWN" ? "No pudimos confirmar la preparación local." : "No pudimos preparar la cotización." };
+  } catch (error) {
+    logQuoteFailure("sendNovaCreditQuote", error);
+    if (claim && claim.claimAction !== "REPLAYED" && claim.claimAction !== "BLOCKED_UNKNOWN" && claim.claimAction !== "IN_PROGRESS") {
+      await recordQuoteFileSendResult({ sendId: claim.sendId, attemptNo: claim.attemptNo, claimTokenDigest: claimToken, resultKind: "UNKNOWN", errorCode: "MOCK_SEND_FLOW_UNKNOWN", errorMessage: "No pudimos confirmar la preparación local." });
+    }
+    return { success: false, error: "No pudimos confirmar la preparación de la cotización. Intenta de nuevo." };
   }
 }
 

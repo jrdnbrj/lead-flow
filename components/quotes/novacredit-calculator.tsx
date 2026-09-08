@@ -1,14 +1,14 @@
 "use client";
 
 import { CheckCircle2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { formatCardAmountInput, formatCardCurrency, parseCardAmount } from "@/lib/financial/card-quote";
 import { calculateNovaCreditQuote, getNovaCreditTerms, novaCreditRules, validateNovaCreditQuote, type NovaCreditDraft } from "@/lib/financial/novacredit";
 
 const percentageFormatter = new Intl.NumberFormat("es-EC", { style: "percent", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function NovaCreditCalculator() {
+export function NovaCreditCalculator({ onDraftChange }: { onDraftChange?: (draft: NovaCreditDraft) => void }) {
   const [vehicleValueText, setVehicleValueText] = useState("");
   const [accessoriesText, setAccessoriesText] = useState("");
   const [downPaymentText, setDownPaymentText] = useState("");
@@ -24,6 +24,10 @@ export function NovaCreditCalculator() {
   }), [accessoriesText, deviceText, downPaymentText, term, vehicleValueText]);
   const validation = validateNovaCreditQuote(draft);
   const quote = calculateNovaCreditQuote(draft);
+
+  useEffect(() => {
+    onDraftChange?.(draft);
+  }, [draft, onDraftChange]);
 
   return (
     <section className="rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_18px_50px_rgba(16,24,40,0.08)] sm:p-5" aria-labelledby="novacredit-title">

@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 
-import type { QuoteSnapshot } from "./types";
+import type { CardQuoteSnapshot, NovaCreditQuoteSnapshot } from "./types";
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -60,7 +60,7 @@ async function embedVehiclePhoto(document: PDFDocument, bytes: Uint8Array | null
   return null;
 }
 
-export async function renderCardQuotePdf(snapshot: QuoteSnapshot, photoBytes: Uint8Array | null = null, photoMimeType: string | null = null): Promise<Uint8Array> {
+export async function renderCardQuotePdf(snapshot: CardQuoteSnapshot, photoBytes: Uint8Array | null = null, photoMimeType: string | null = null): Promise<Uint8Array> {
   const document = await PDFDocument.create();
   const regular = await document.embedFont(StandardFonts.Helvetica);
   const bold = await document.embedFont(StandardFonts.HelveticaBold);
@@ -113,6 +113,70 @@ export async function renderCardQuotePdf(snapshot: QuoteSnapshot, photoBytes: Ui
   drawText(page, `Factor aplicado: ${formatFactorPercentage(snapshot.factor)}`, MARGIN, 145, regular, 8.5, MUTED, 220);
   const disclaimer = "Esta cotización es referencial y no constituye aprobación crediticia. Las condiciones finales dependen de la evaluación de la entidad financiera.";
   drawText(page, disclaimer, MARGIN, 121, regular, 8, MUTED, PAGE_WIDTH - MARGIN * 2);
+  page.drawLine({ start: { x: MARGIN, y: 94 }, end: { x: PAGE_WIDTH - MARGIN, y: 94 }, thickness: 0.8, color: LINE });
+  drawText(page, shorten(snapshot.sellerName || "Tu asesor", 36), MARGIN, 72, bold, 9.5, INK, 220);
+  drawText(page, [snapshot.sellerPhone, snapshot.sellerEmail].filter(Boolean).join("  ·  "), MARGIN, 56, regular, 8, MUTED, 300);
+  drawText(page, shorten(snapshot.sellerCompany || "", 38), PAGE_WIDTH - 190, 72, bold, 8.5, MUTED, 148);
+
+  return document.save();
+}
+
+export async function renderNovaCreditPdf(snapshot: NovaCreditQuoteSnapshot, photoBytes: Uint8Array | null = null, photoMimeType: string | null = null): Promise<Uint8Array> {
+  const document = await PDFDocument.create();
+  const regular = await document.embedFont(StandardFonts.Helvetica);
+  const bold = await document.embedFont(StandardFonts.HelveticaBold);
+  const page = document.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  const photo = await embedVehiclePhoto(document, photoBytes, photoMimeType);
+
+  page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT, color: PAPER });
+  page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 8, width: PAGE_WIDTH, height: 8, color: ACCENT });
+
+  drawText(page, shorten(snapshot.sellerCompany || "Cotización", 42), MARGIN, PAGE_HEIGHT - 52, bold, 10, MUTED, 300);
+  drawText(page, "Cotización", MARGIN, PAGE_HEIGHT - 91, bold, 30, INK, 300);
+  drawText(page, "Simulación de financiamiento referencial", MARGIN, PAGE_HEIGHT - 111, regular, 10, MUTED, 300);
+  drawText(page, "Crédito vehicular / NovaCredit", MARGIN, PAGE_HEIGHT - 130, bold, 9, ACCENT, 300);
+  drawText(page, formatDate(snapshot.documentDate), PAGE_WIDTH - 180, PAGE_HEIGHT - 52, regular, 8.5, MUTED, 138);
+
+  const photoX = MARGIN;
+  const photoY = PAGE_HEIGHT - 345;
+  const photoWidth = PAGE_WIDTH - MARGIN * 2;
+  const photoHeight = 180;
+  page.drawRectangle({ x: photoX, y: photoY, width: photoWidth, height: photoHeight, color: PANEL, borderColor: LINE, borderWidth: 0.8 });
+  if (photo) drawFitImage(page, photo, photoX + 4, photoY + 4, photoWidth - 8, photoHeight - 8);
+  else drawText(page, "Imagen del vehículo no disponible", photoX + 18, photoY + photoHeight / 2, regular, 11, MUTED, photoWidth - 36);
+
+  page.drawRectangle({ x: photoX + 14, y: photoY + 14, width: 210, height: 30, color: INK });
+  drawText(page, shorten(snapshot.modelName, 31), photoX + 25, photoY + 25, bold, 10, WHITE, 188);
+
+  drawText(page, "Preparada para", MARGIN, PAGE_HEIGHT - 374, bold, 8, MUTED);
+  drawText(page, shorten(snapshot.clientName, 42), MARGIN, PAGE_HEIGHT - 394, bold, 15, INK, 300);
+  drawText(page, snapshot.clientPhone, PAGE_WIDTH - 180, PAGE_HEIGHT - 394, regular, 9, MUTED, 138);
+  page.drawLine({ start: { x: MARGIN, y: PAGE_HEIGHT - 412 }, end: { x: PAGE_WIDTH - MARGIN, y: PAGE_HEIGHT - 412 }, thickness: 0.8, color: LINE });
+
+  drawText(page, "Detalle de la propuesta", MARGIN, PAGE_HEIGHT - 441, bold, 11, INK);
+  drawLabelValue(page, "Valor del vehículo", formatCurrency(snapshot.vehicleAmount), MARGIN, PAGE_HEIGHT - 465, 145, regular, bold);
+  drawLabelValue(page, "Entrada", `${formatCurrency(snapshot.downPayment)} · ${formatFactorPercentage(snapshot.downPaymentPercentage)}`, MARGIN + 165, PAGE_HEIGHT - 465, 175, regular, bold);
+  drawLabelValue(page, "Plazo", `${snapshot.termMonths} meses`, MARGIN + 360, PAGE_HEIGHT - 465, 145, regular, bold);
+
+  drawLabelValue(page, "Accesorios", formatCurrency(snapshot.accessories), MARGIN, PAGE_HEIGHT - 519, 145, regular, bold);
+  drawLabelValue(page, "Dispositivo", formatCurrency(snapshot.deviceAmount), MARGIN + 165, PAGE_HEIGHT - 519, 175, regular, bold);
+  drawLabelValue(page, "Valor financiado", formatCurrency(snapshot.financedValue), MARGIN + 360, PAGE_HEIGHT - 519, 145, regular, bold);
+
+  const resultX = MARGIN;
+  const resultY = 164;
+  const resultWidth = PAGE_WIDTH - MARGIN * 2;
+  const resultHeight = 104;
+  page.drawRectangle({ x: resultX, y: resultY, width: resultWidth, height: resultHeight, color: INK });
+  drawText(page, "CUOTA MENSUAL REFERENCIAL", resultX + 20, resultY + resultHeight - 25, bold, 8, rgb(0.78, 0.79, 0.81), 220);
+  drawText(page, formatCurrency(snapshot.monthlyInstallment), resultX + 20, resultY + 31, bold, 28, WHITE, 250);
+  drawText(page, "Cuota final", resultX + 315, resultY + 63, regular, 8, rgb(0.78, 0.79, 0.81), 150);
+  drawText(page, formatCurrency(snapshot.finalInstallment), resultX + 315, resultY + 46, bold, 11, WHITE, 150);
+  drawText(page, "Gastos y seguros", resultX + 315, resultY + 23, regular, 8, rgb(0.78, 0.79, 0.81), 150);
+  drawText(page, formatCurrency(snapshot.legalExpenses + snapshot.vehicleInsurance + snapshot.lifeInsurance), resultX + 315, resultY + 6, bold, 11, WHITE, 150);
+
+  drawText(page, `Gastos legales ${formatCurrency(snapshot.legalExpenses)}  ·  Seguro vehicular ${formatCurrency(snapshot.vehicleInsurance)}  ·  Seguro de vida ${formatCurrency(snapshot.lifeInsurance)}`, MARGIN, 142, regular, 7.5, MUTED, PAGE_WIDTH - MARGIN * 2);
+  const disclaimer = "Esta cotización es referencial y no constituye aprobación crediticia. Las condiciones finales dependen de la evaluación del financiador.";
+  drawText(page, disclaimer, MARGIN, 119, regular, 8, MUTED, PAGE_WIDTH - MARGIN * 2);
   page.drawLine({ start: { x: MARGIN, y: 94 }, end: { x: PAGE_WIDTH - MARGIN, y: 94 }, thickness: 0.8, color: LINE });
   drawText(page, shorten(snapshot.sellerName || "Tu asesor", 36), MARGIN, 72, bold, 9.5, INK, 220);
   drawText(page, [snapshot.sellerPhone, snapshot.sellerEmail].filter(Boolean).join("  ·  "), MARGIN, 56, regular, 8, MUTED, 300);

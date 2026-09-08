@@ -1,3 +1,3 @@
 import "server-only";
 
-export { renderCardQuotePdf } from "./pdf-renderer";
+export { renderCardQuotePdf, renderNovaCreditPdf } from "./pdf-renderer";

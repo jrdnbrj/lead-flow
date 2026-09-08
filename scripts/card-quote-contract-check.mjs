@@ -76,8 +76,8 @@ for (const required of ["<CardQuoteTool lead={lead} compact />", "CardQuoteTool"
 assert.ok(!dashboard.includes('lead.paymentMethods.includes("TARJETA_CREDITO") ? <CardQuoteTool'), "quote entry must be available for every lead");
 for (const required of ["useRouter", "/cotizacion?leadId=", "Cotizar", "compact = false", "inline = false"]) assert.ok(tool.includes(required), `lead card quote entry missing ${required}`);
 assert.ok(leadCapture.includes("<CardQuoteTool lead={savedLead} inline />"), "saved lead must expose quote action");
-assert.ok(!workspace.includes("sendConfirmation"), "quote send must not require confirmation modal");
 assert.ok(workspace.includes("sendCardQuoteAction"), "quote send must execute after preparation");
+assert.ok(workspace.includes("prepareNovaCreditQuoteSendAction"), "NovaCredit send preparation must be isolated from card send");
 assert.match(workspace, /if \(!isLeadPickerOpen\) return;/, "lead picker listener must not run while closed");
 for (const required of ["Cotización", "Cuota mensual", "referencial", "aria-pressed", "parseCardAmount", "formatCardAmountInput", "formatCardFactorPercentage", "DollarSign", "pl-12"]) assert.ok(calculator.includes(required), `global card quote UI missing ${required}`);
 assert.ok(!calculator.includes("Vehículo a cotizar"), "global card quote must not require a vehicle");
