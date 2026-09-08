@@ -9,7 +9,7 @@ import { calculateCardQuote, formatCardCurrency, validateCardQuote, type CardQuo
 import { generateCardQuotePdfAction, getQuoteFilesAction, prepareCardQuoteSendAction, sendCardQuoteAction } from "@/lib/quotes/actions";
 import { createCardQuoteSnapshot, quoteSnapshotsEquivalent } from "@/lib/quotes/snapshot";
 import type { SellerProfile } from "@/lib/domain/lead";
-import type { GeneratedQuoteFile, PreparedQuoteForSend, QuoteCatalogModel, QuoteFileSummary, QuoteLeadOption } from "@/lib/quotes/types";
+import type { GeneratedQuoteFile, QuoteCatalogModel, QuoteFileSummary, QuoteLeadOption } from "@/lib/quotes/types";
 
 type QuoteWorkspaceProps = {
   leadOptions: QuoteLeadOption[];
@@ -46,7 +46,6 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendInfo, setSendInfo] = useState<string | null>(null);
-  const [sendConfirmation, setSendConfirmation] = useState<PreparedQuoteForSend | null>(null);
   const [generated, setGenerated] = useState<GeneratedQuoteFile | null>(null);
   const [previewFile, setPreviewFile] = useState<QuoteFileSummary | GeneratedQuoteFile | null>(null);
   const leadPickerRef = useRef<HTMLDivElement>(null);
@@ -109,7 +108,6 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
     setHistoryError(null);
     setIsLoadingHistory(Boolean(nextLeadId));
     setGenerated(null);
-    setSendConfirmation(null);
     setSendError(null);
     setSendInfo(null);
   }
@@ -121,7 +119,6 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
     setHistory([]);
     setHistoryError(null);
     setGenerated(null);
-    setSendConfirmation(null);
     setSendError(null);
     setSendInfo(null);
   }
@@ -133,7 +130,6 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
       setSelectedModelId("");
       setHistory([]);
       setGenerated(null);
-      setSendConfirmation(null);
     }
     setSendError(null);
     setSendInfo(null);
@@ -168,7 +164,7 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
     }
   }
 
-  async function prepareSend() {
+  async function sendQuote() {
     if (!selectedLead || !selectedModel || !quote || isPreparingSend || isSending) return;
     setIsPreparingSend(true);
     setSendError(null);
@@ -178,36 +174,24 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
       if (result.success && result.data) {
         setGenerated(result.data.quoteFile);
         setHistory((current) => [result.data!.quoteFile, ...current.filter((file) => file.id !== result.data!.quoteFile.id)]);
-        setSendConfirmation(result.data);
+        setIsPreparingSend(false);
+        setIsSending(true);
+        const sendResult = await sendCardQuoteAction({ leadId: selectedLead.id, modelId: selectedModel.id, amount: String(draft.amount ?? ""), modality: draft.modality, term: draft.term, preparedQuoteFileId: result.data.quoteFile.id });
+        if (sendResult.success && sendResult.data) {
+          setGenerated(sendResult.data.quoteFile);
+          setHistory((current) => [sendResult.data!.quoteFile, ...current.filter((file) => file.id !== sendResult.data!.quoteFile.id)]);
+          if (sendResult.data.status === "ACCEPTED") setSendInfo(sendResult.message ?? "Cotización enviada por WhatsApp.");
+          else setSendError(sendResult.message ?? "No pudimos confirmar el envío. Verifica WhatsApp antes de intentar otro.");
+        } else {
+          setSendError(sendResult.error ?? "No pudimos enviar la cotización. Verifica WhatsApp antes de intentar otro.");
+        }
       } else {
         setSendError(result.error ?? "No pudimos preparar la cotización para enviar.");
       }
     } catch {
-      setSendError("No pudimos preparar la cotización para enviar. Intenta de nuevo.");
+      setSendError("No pudimos enviar la cotización. Verifica WhatsApp e intenta de nuevo.");
     } finally {
       setIsPreparingSend(false);
-    }
-  }
-
-  async function confirmSend() {
-    if (!sendConfirmation || !selectedLead || !selectedModel || !quote || isSending) return;
-    setIsSending(true);
-    setSendError(null);
-    setSendInfo(null);
-    try {
-      const result = await sendCardQuoteAction({ leadId: selectedLead.id, modelId: selectedModel.id, amount: String(draft.amount ?? ""), modality: draft.modality, term: draft.term, preparedQuoteFileId: sendConfirmation.quoteFile.id });
-      if (result.success && result.data) {
-        setGenerated(result.data.quoteFile);
-        setHistory((current) => [result.data!.quoteFile, ...current.filter((file) => file.id !== result.data!.quoteFile.id)]);
-        setSendConfirmation(null);
-        if (result.data.status === "ACCEPTED") setSendInfo(result.message ?? "Cotización enviada por WhatsApp.");
-        else setSendError(result.message ?? "No pudimos confirmar el envío. Verifica WhatsApp antes de intentar otro.");
-      } else {
-        setSendError(result.error ?? "No pudimos confirmar el envío de la cotización.");
-      }
-    } catch {
-      setSendError("No pudimos confirmar el envío de la cotización. Verifica WhatsApp antes de intentar otro.");
-    } finally {
       setIsSending(false);
     }
   }
@@ -253,9 +237,9 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
             {isGenerating ? <LoaderCircle size={15} className="animate-spin" /> : <FileText size={15} />}
             {isGenerating ? "Generando…" : "Generar PDF"}
           </button>
-          <button type="button" onClick={() => void prepareSend()} disabled={isGenerating || isPreparingSend || isSending || !quote || !selectedLead || !selectedModel} className="button-primary min-h-10 justify-center px-4 text-xs disabled:cursor-not-allowed disabled:opacity-55">
-            {isPreparingSend ? <LoaderCircle size={15} className="animate-spin" /> : <Send size={15} />}
-            {isPreparingSend ? "Preparando…" : "Enviar cotización"}
+          <button type="button" onClick={() => void sendQuote()} disabled={isGenerating || isPreparingSend || isSending || !quote || !selectedLead || !selectedModel} className="button-primary min-h-10 justify-center px-4 text-xs disabled:cursor-not-allowed disabled:opacity-55">
+            {isPreparingSend || isSending ? <LoaderCircle size={15} className="animate-spin" /> : <Send size={15} />}
+            {isPreparingSend ? "Preparando…" : isSending ? "Enviando…" : "Enviar cotización"}
           </button>
         </div>
       </div>
@@ -274,8 +258,6 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
       {!isLoadingHistory && !historyError && history.length === 0 ? <p className="mt-3 text-xs text-[var(--muted)]">Todavía no hay PDFs generados para este cliente.</p> : null}
       {history.length > 0 ? <div className="mt-3 divide-y divide-black/[0.06]">{history.map((file) => <div key={file.id} className="flex flex-col gap-2 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="truncate text-xs font-black text-[var(--ink)]">{file.modelName}</p><p className="mt-1 text-[11px] text-[var(--muted)]">{formatGeneratedDate(file.generatedAt)} · {formatCardCurrency(file.amount)} · {file.term} meses</p>{file.sendStatus === "ACCEPTED" ? <p className="mt-1 text-[10px] font-semibold text-emerald-700">Enviada por WhatsApp</p> : file.sendStatus === "UNKNOWN" ? <p className="mt-1 text-[10px] font-semibold text-[#8a5b00]">Envío por confirmar</p> : null}</div><div className="flex shrink-0 gap-2"><button type="button" onClick={() => setPreviewFile(file)} className="button-secondary min-h-8 px-2.5 py-1 text-[10px]"><ExternalLink size={13} />Ver PDF</button><a href={quoteFileUrl(file.id, true)} className="button-secondary min-h-8 px-2.5 py-1 text-[10px]" aria-label={`Descargar cotización de ${file.modelName}`}><Download size={13} />Descargar</a></div></div>)}</div> : null}
     </section> : null}
-
-    {sendConfirmation ? <div role="presentation" onClick={() => { if (!isSending) setSendConfirmation(null); }} className="fixed inset-0 z-[80] grid place-items-center bg-[#101828]/60 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby="quote-send-confirm-title" onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-[22px] border border-black/[0.08] bg-white p-5 shadow-[0_24px_80px_rgba(16,24,40,0.24)]"><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Confirmar envío</p><h2 id="quote-send-confirm-title" className="mt-1 text-lg font-black">Enviar cotización</h2></div><button type="button" onClick={() => setSendConfirmation(null)} disabled={isSending} className="icon-action" aria-label="Cerrar confirmación"><X size={18} /></button></div><dl className="mt-4 space-y-2 rounded-xl bg-[#f8f6f1] p-3 text-xs"><div className="flex justify-between gap-3"><dt className="font-semibold text-[var(--muted)]">Cliente</dt><dd className="text-right font-black text-[var(--ink)]">{sendConfirmation.clientName}</dd></div><div className="flex justify-between gap-3"><dt className="font-semibold text-[var(--muted)]">Teléfono</dt><dd className="text-right font-black text-[var(--ink)]">{sendConfirmation.clientPhone}</dd></div><div className="flex justify-between gap-3"><dt className="font-semibold text-[var(--muted)]">Modelo</dt><dd className="text-right font-black text-[var(--ink)]">{sendConfirmation.modelName}</dd></div><div className="flex justify-between gap-3"><dt className="font-semibold text-[var(--muted)]">Resumen</dt><dd className="text-right font-black text-[var(--ink)]">{formatCardCurrency(sendConfirmation.quoteFile.amount)} · {sendConfirmation.quoteFile.term} meses · {formatCardCurrency(sendConfirmation.quoteFile.snapshot.installment)}/mes</dd></div></dl><button type="button" onClick={() => setPreviewFile(sendConfirmation.quoteFile)} className="button-secondary mt-4 min-h-10 w-full justify-center text-xs"><ExternalLink size={15} />Ver PDF que se enviará</button><div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setSendConfirmation(null)} disabled={isSending} className="button-secondary min-h-10 justify-center px-4 text-xs">Cancelar</button><button type="button" onClick={() => void confirmSend()} disabled={isSending} className="button-primary min-h-10 justify-center px-4 text-xs">{isSending ? <LoaderCircle size={15} className="animate-spin" /> : <Send size={15} />}{isSending ? "Enviando…" : "Enviar por WhatsApp"}</button></div></div></div> : null}
 
     {previewFile ? <div role="presentation" onClick={() => setPreviewFile(null)} className="fixed inset-0 z-[90] grid place-items-center bg-[#101828]/70 p-2 backdrop-blur-sm sm:p-5"><div role="dialog" aria-modal="true" aria-labelledby="quote-preview-title" onClick={(event) => event.stopPropagation()} className="relative flex h-[96vh] w-full min-w-0 max-w-4xl flex-col rounded-[24px] bg-white p-3 shadow-[0_24px_80px_rgba(16,24,40,0.28)] sm:h-[92vh] sm:p-5"><div className="flex shrink-0 items-center justify-between gap-3 px-1 pb-3"><div className="min-w-0"><p className="eyebrow">Cotización</p><h2 id="quote-preview-title" className="truncate text-sm font-black">{previewFile.modelName}</h2></div><div className="flex shrink-0 items-center gap-2"><a href={quoteFileUrl(previewFile.id, true)} className="grid size-8 place-items-center rounded-lg bg-[#f6f3ed] text-[var(--ink)]" aria-label="Descargar cotización" title="Descargar"><Download size={15} /></a><button type="button" onClick={() => setPreviewFile(null)} className="grid size-8 place-items-center rounded-full bg-[#f6f3ed] text-[var(--ink)]" aria-label="Cerrar PDF"><X size={17} /></button></div></div><PdfViewer url={quoteFileUrl(previewFile.id)} title={`Cotización de ${previewFile.modelName}`} /></div></div> : null}
   </div>;

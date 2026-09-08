@@ -10,6 +10,7 @@ import { capitalizeNameWords, carModels, getStatusLabel, leadTimeframes, selecta
 import { leadSchema, type LeadFormValues } from "@/lib/leads/validation";
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { FirstContactSummary } from "@/components/leads/first-contact-summary";
+import { CardQuoteTool } from "@/components/leads/card-quote-tool";
 import { LeadContactActions } from "@/components/leads/lead-contact-actions";
 import { LeadCaptureSummary } from "@/components/leads/lead-capture-summary";
 
@@ -87,7 +88,7 @@ export function LeadCaptureForm() {
     return <section className="space-y-2 rounded-2xl border border-black/[0.06] bg-white p-3 shadow-[0_12px_36px_rgba(16,24,40,0.05)] sm:p-4">
       <div className="rounded-xl bg-[#eef6d7] px-3 py-2.5"><p className="eyebrow">Lead guardado</p></div>
       <LeadCaptureSummary lead={savedLead} />
-      <LeadContactActions contact={{ name: savedLead.fullName, phone: savedLead.phone }} />
+      <LeadContactActions contact={{ name: savedLead.fullName, phone: savedLead.phone }}><CardQuoteTool lead={savedLead} inline /></LeadContactActions>
       <FollowUpActions leadId={savedLead.id} actions={savedActions} onActionsChange={setSavedActions} onError={setSubmitError} onInfo={setWarning} />
       <FirstContactSummary lead={{ id: savedLead.id, fullName: savedLead.fullName, phone: savedLead.phone, carModels: savedLead.carModels, whatsappStatus: savedLead.whatsappStatus, lastAgentMessageAt: savedLead.lastAgentMessageAt }} />
       {submitError ? <p className="rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]" role="alert">{submitError}</p> : null}

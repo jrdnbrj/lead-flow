@@ -53,7 +53,9 @@ assert.match(action, /sendWhatsappDocument/);
 assert.match(action, /getCustomerEvolutionInstanceName/);
 assert.doesNotMatch(action, /WHATSAPP_REMINDER|leadflow-reminders/);
 assert.match(workspace, /Enviar cotización/);
-assert.match(workspace, /Enviar por WhatsApp/);
-assert.match(workspace, /Ver PDF que se enviará/);
+assert.match(workspace, /sendQuote/);
+assert.match(workspace, /prepareCardQuoteSendAction/);
+assert.match(workspace, /sendCardQuoteAction/);
+assert.doesNotMatch(workspace, /Confirmar envío|Ver PDF que se enviará|sendConfirmation/);
 
 console.log("Quote send contract checks: PASS");
