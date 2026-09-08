@@ -50,6 +50,7 @@ node --experimental-strip-types scripts/e3-first-contact-optional-resources-runt
 node --experimental-strip-types scripts/credit-card-payment-method-contract-check.mjs
 node --experimental-strip-types scripts/multi-payment-method-contract-check.mjs
 node --experimental-strip-types scripts/card-quote-contract-check.mjs
+node --experimental-strip-types scripts/novacredit-contract-check.mjs
 node --experimental-strip-types scripts/quote-files-contract-check.mjs
 node --experimental-strip-types scripts/quote-send-contract-check.mjs
 node --experimental-strip-types scripts/jwt-clock-skew-contract-check.mjs

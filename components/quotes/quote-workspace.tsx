@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PdfViewer } from "@/components/catalog/pdf-viewer";
 import { CardQuoteCalculator } from "@/components/quotes/card-quote-calculator";
+import { NovaCreditCalculator } from "@/components/quotes/novacredit-calculator";
 import { calculateCardQuote, formatCardCurrency, validateCardQuote, type CardQuoteDraft } from "@/lib/financial/card-quote";
 import { generateCardQuotePdfAction, getQuoteFilesAction, prepareCardQuoteSendAction, sendCardQuoteAction } from "@/lib/quotes/actions";
 import { createCardQuoteSnapshot, quoteSnapshotsEquivalent } from "@/lib/quotes/snapshot";
@@ -17,6 +18,8 @@ type QuoteWorkspaceProps = {
   sellerProfile: SellerProfile;
   initialLeadId?: string | null;
 };
+
+type QuoteMode = "CARD" | "NOVACREDIT";
 
 function quoteFileUrl(id: string, download = false): string {
   return `/api/quotes/files/${encodeURIComponent(id)}${download ? "?download=1" : ""}`;
@@ -31,6 +34,7 @@ function normalizeSearch(value: string): string {
 }
 
 export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, initialLeadId = null }: QuoteWorkspaceProps) {
+  const [quoteMode, setQuoteMode] = useState<QuoteMode>("CARD");
   const initialLead = initialLeadId ? leadOptions.find((lead) => lead.id === initialLeadId) ?? null : null;
   const [selectedLeadId, setSelectedLeadId] = useState(initialLead?.id ?? "");
   const [leadSearch, setLeadSearch] = useState(initialLead ? `${initialLead.fullName} · ${initialLead.phone}` : "");
@@ -198,9 +202,18 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
   }
 
   return <div className="space-y-4">
-    <CardQuoteCalculator description="Calcula una cuota de Tarjeta de crédito sin lead, cliente ni vehículo." onDraftChange={handleDraftChange} />
+    <section className="rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_18px_50px_rgba(16,24,40,0.06)] sm:p-5" aria-labelledby="quote-mode-title">
+      <p className="eyebrow">Herramienta global</p>
+      <h2 id="quote-mode-title" className="mt-1 text-lg font-black">¿Qué quieres cotizar?</h2>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <button type="button" aria-pressed={quoteMode === "CARD"} onClick={() => setQuoteMode("CARD")} className={`rounded-xl border px-3 py-3 text-left text-xs font-black transition ${quoteMode === "CARD" ? "border-[var(--ink)] bg-[var(--ink)] text-white" : "border-black/[0.08] bg-[#f6f3ed] text-[var(--ink)] hover:border-black/25"}`}>Tarjeta de crédito<span className={`mt-1 block text-[10px] font-semibold ${quoteMode === "CARD" ? "text-white/70" : "text-[var(--muted)]"}`}>Normal o Corporativo</span></button>
+        <button type="button" aria-pressed={quoteMode === "NOVACREDIT"} onClick={() => setQuoteMode("NOVACREDIT")} className={`rounded-xl border px-3 py-3 text-left text-xs font-black transition ${quoteMode === "NOVACREDIT" ? "border-[var(--ink)] bg-[var(--ink)] text-white" : "border-black/[0.08] bg-[#f6f3ed] text-[var(--ink)] hover:border-black/25"}`}>Crédito vehicular<span className={`mt-1 block text-[10px] font-semibold ${quoteMode === "NOVACREDIT" ? "text-white/70" : "text-[var(--muted)]"}`}>NovaCredit</span></button>
+      </div>
+    </section>
 
-    <section className="rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_18px_50px_rgba(16,24,40,0.06)] sm:p-5" aria-labelledby="quote-document-title">
+    {quoteMode === "NOVACREDIT" ? <NovaCreditCalculator /> : <CardQuoteCalculator description="Calcula una cuota de Tarjeta de crédito sin lead, cliente ni vehículo." onDraftChange={handleDraftChange} />}
+
+    {quoteMode === "CARD" ? <section className="rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_18px_50px_rgba(16,24,40,0.06)] sm:p-5" aria-labelledby="quote-document-title">
       <div>
         <p className="eyebrow">Documento para cliente</p>
         <h2 id="quote-document-title" className="mt-1 text-lg font-black">Generar cotización</h2>
@@ -251,7 +264,7 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
         <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setPreviewFile(generated)} className="button-secondary min-h-9 px-3 py-1.5 text-[11px]"><ExternalLink size={14} />Ver PDF</button><a href={quoteFileUrl(generated.id, true)} className="button-secondary min-h-9 px-3 py-1.5 text-[11px]"><Download size={14} />Descargar</a></div>
         {generated.sendStatus === "ACCEPTED" ? <p className="mt-2 text-[11px] font-semibold text-emerald-800">Enviada por WhatsApp.</p> : null}
       </div> : null}
-    </section>
+    </section> : <section className="rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_18px_50px_rgba(16,24,40,0.06)] sm:p-5"><p className="text-xs leading-5 text-[var(--muted)]">El cálculo de NovaCredit es transitorio en esta versión. La generación de documentos se habilitará posteriormente.</p></section>}
 
     {selectedLead ? <section className="rounded-[22px] border border-black/[0.08] bg-white p-4 shadow-[0_18px_50px_rgba(16,24,40,0.06)] sm:p-5" aria-labelledby="quote-history-title">
       <div className="flex items-center justify-between gap-3"><div><p className="eyebrow">Histórico</p><h2 id="quote-history-title" className="mt-1 text-lg font-black">Cotizaciones anteriores</h2></div>{isLoadingHistory ? <LoaderCircle size={17} className="animate-spin text-[var(--muted)]" /> : null}</div>
