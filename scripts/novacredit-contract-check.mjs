@@ -79,6 +79,8 @@ for (const required of ["cliente nova", "alsvin v3", "crédito vehicular / novac
 assert.equal(validSnapshot.quoteType, "NOVACREDIT");
 assert.equal(validSnapshot.fixedFinancingChargeApplied, 75);
 assert.equal(quoteSnapshotsEquivalent(validSnapshot, { ...validSnapshot, documentDate: "2026-09-09T12:00:00.000Z" }), true);
+const reorderedSnapshot = Object.fromEntries(Object.entries(validSnapshot).sort(([left], [right]) => right.localeCompare(left)));
+assert.equal(quoteSnapshotsEquivalent(validSnapshot, reorderedSnapshot), true, "JSONB key order must not make a current PDF stale");
 assert.equal(quoteSnapshotsEquivalent(validSnapshot, { ...validSnapshot, downPayment: validSnapshot.downPayment + 1 }), false);
 assert.equal(quoteSnapshotsEquivalent(validSnapshot, { ...validSnapshot, termMonths: 48 }), false);
 assert.equal(quoteSnapshotsEquivalent(validSnapshot, { ...validSnapshot, deviceAmount: validSnapshot.deviceAmount + 1 }), false);

@@ -93,8 +93,14 @@ export function createNovaCreditSnapshot(input: NovaCreditSnapshotInput): NovaCr
 function snapshotIdentity(snapshot: QuoteSnapshot): Omit<QuoteSnapshot, "documentDate"> {
   // The generation date is printed for the customer's reference, but it is
   // not a form-controlled input. Excluding it prevents an otherwise identical
-  // cotización from becoming stale merely because time passed.
-  const identity = Object.fromEntries(Object.entries(snapshot).filter(([key]) => key !== "documentDate"));
+  // cotización from becoming stale merely because time passed. JSONB may also
+  // return object keys in a different order than the client-created snapshot,
+  // so canonicalize the remaining top-level fields before comparing them.
+  const identity = Object.fromEntries(
+    Object.entries(snapshot)
+      .filter(([key]) => key !== "documentDate")
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
   return identity as Omit<QuoteSnapshot, "documentDate">;
 }
 
