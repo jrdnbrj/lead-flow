@@ -23,10 +23,13 @@ for (const [name, source] of [["create", create], ["update", update], ["clear", 
   }
 }
 
-const usesRpc = (source, name) => source.includes(`rpc("${name}"`) || (source.includes("invokeRpc(") && source.includes(`"${name}"`));
+const usesRpc = (source, name) => source.includes(`rpc("${name}"`) || (source.includes("invokeRpc(") && source.includes(`"${name}"`)) || (source.includes("invokeAuthenticatedRpc(") && source.includes(`"${name}"`));
 if (!usesRpc(create, "create_lead_follow_up_action_v1")) throw new Error("create adapter does not call canonical RPC");
 if (!usesRpc(update, "transition_lead_follow_up_action_v1")) throw new Error("update adapter does not call canonical transition RPC");
 if (!usesRpc(clear, "transition_lead_follow_up_action_v1")) throw new Error("clear adapter does not use canonical transition RPC");
+for (const source of [create, update, clear]) if (!source.includes("invokeAuthenticatedRpc(")) throw new Error("follow-up adapter must send canonical RPC with explicit authenticated transport");
+const fallbackFunctions = repository.slice(repository.indexOf("const serverRpcFallbackFunctions"), repository.indexOf("let serverRpcFallbackActive"));
+for (const name of ["create_lead_follow_up_action_v1", "transition_lead_follow_up_action_v1"]) if (!fallbackFunctions.includes(`\"${name}\"`)) throw new Error(`missing JWT fallback allowlist entry: ${name}`);
 if (!update.includes("p_expected_action_version: version")) throw new Error("update adapter does not propagate expected version");
 if (!clear.includes("p_expected_action_version: action.action_version")) throw new Error("clear adapter does not use stored action version");
 if (!actions.includes("Promise<ActionResponse")) throw new Error("server actions lost ActionResponse contract");

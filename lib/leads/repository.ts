@@ -52,6 +52,8 @@ type FollowUpActionRow = Database["public"]["Tables"]["lead_follow_up_actions"][
 type LeadflowDbClient = NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>;
 type RpcResult = { data: Record<string, unknown> | null; error: { message?: string } | null };
 const serverRpcFallbackFunctions = new Set([
+  "create_lead_follow_up_action_v1",
+  "transition_lead_follow_up_action_v1",
   "request_first_contact_v1",
   "request_first_contact_v2",
   "claim_first_contact_effect_v1",
@@ -1093,7 +1095,7 @@ export async function createFollowUpAction(id: string, actionType: NextActionTyp
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
 
-  const { data, error } = await invokeRpc(supabase, "create_lead_follow_up_action_v1", {
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "create_lead_follow_up_action_v1", {
     p_lead_id: id,
     p_action_type: actionType,
     p_scheduled_for: scheduledFor,
@@ -1116,7 +1118,7 @@ export async function updateFollowUpAction(actionId: string, status: FollowUpAct
   }
   if (!version) return null;
 
-  const { data, error } = await invokeRpc(supabase, "transition_lead_follow_up_action_v1", {
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "transition_lead_follow_up_action_v1", {
     p_action_id: actionId,
     p_status: status,
     p_expected_action_version: version,
@@ -1139,7 +1141,7 @@ export async function clearLeadAction(id: string): Promise<boolean> {
   const { data: actions, error: readError } = await supabase.from("lead_follow_up_actions").select("id,action_version").eq("lead_id", id).in("status", ["PENDING", "POSTPONED"]);
   if (readError) return false;
   for (const action of actions ?? []) {
-    const { data, error } = await invokeRpc(supabase, "transition_lead_follow_up_action_v1", {
+    const { data, error } = await invokeAuthenticatedRpc(supabase, "transition_lead_follow_up_action_v1", {
       p_action_id: action.id,
       p_status: "IGNORED",
       p_expected_action_version: action.action_version,
