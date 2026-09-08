@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/supabase/database";
+import { fetchWithJwtClockSkewRetry } from "@/lib/supabase/fetch-with-jwt-clock-skew-retry";
 
 export function createSupabaseAdminClient() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -9,5 +10,6 @@ export function createSupabaseAdminClient() {
 
   return createClient<Database>(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    global: { fetch: fetchWithJwtClockSkewRetry },
   });
 }

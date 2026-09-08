@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 import type { Database } from "@/lib/supabase/database";
+import { fetchWithJwtClockSkewRetry } from "@/lib/supabase/fetch-with-jwt-clock-skew-retry";
 
 export function hasSupabaseConfig(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
@@ -17,6 +18,7 @@ export async function createSupabaseServerClient() {
   }
 
   return createServerClient<Database>(supabaseUrl, publishableKey, {
+    global: { fetch: fetchWithJwtClockSkewRetry },
     cookies: {
       getAll() {
         return cookieStore.getAll();

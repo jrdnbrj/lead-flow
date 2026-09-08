@@ -5,6 +5,7 @@ import { getInstallationAdvisorUserId } from "@/lib/config/installation";
 import { AUTH_REQUIRED_MESSAGE } from "@/lib/auth/auth-required";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient, hasSupabaseConfig } from "@/lib/supabase/server";
+import { fetchWithJwtClockSkewRetry, isJwtIssuedAtFutureError } from "@/lib/supabase/fetch-with-jwt-clock-skew-retry";
 import { resolveInboundLeadMatch, type InboundLeadMatch } from "@/lib/leads/inbound-matching";
 import type { FirstContactItem, FirstContactOperation, FirstContactOperationResult, FirstContactResource, FirstContactResult, ProviderOutcome, FirstContactResourceSnapshot } from "@/lib/first-contact/types";
 import { firstContactResourceModelEntries } from "@/lib/first-contact/resource-plan";
@@ -50,7 +51,7 @@ function isMissingPaymentMethodsColumn(error: { message?: string } | null): bool
 
 type FollowUpActionRow = Database["public"]["Tables"]["lead_follow_up_actions"]["Row"];
 type LeadflowDbClient = NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>;
-type RpcResult = { data: Record<string, unknown> | null; error: { message?: string } | null };
+type RpcResult = { data: Record<string, unknown> | null; error: { code?: string; message?: string } | null };
 const serverRpcFallbackFunctions = new Set([
   "create_lead_follow_up_action_v1",
   "transition_lead_follow_up_action_v1",
@@ -61,25 +62,12 @@ const serverRpcFallbackFunctions = new Set([
   "record_first_contact_effect_result_v1",
   "retry_first_contact_effect_v1",
 ]);
-let serverRpcFallbackActive = false;
-
 async function requireInstallationOwnerContext(errorCode: string) {
   const supabase = createSupabaseAdminClient();
   if (!supabase) throw new Error(`${errorCode}_CONFIGURATION_MISSING`);
   const ownerId = await getInstallationAdvisorUserId();
   if (!ownerId) throw new Error(`${errorCode}_OWNER_MISSING`);
   return { supabase, ownerId };
-}
-
-function getJwtTiming(token: string): { issuedAt: number | null; expiresAt: number | null; now: number } {
-  const now = Math.floor(Date.now() / 1000);
-  try {
-    const payload = token.split(".")[1];
-    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { iat?: unknown; exp?: unknown };
-    return { issuedAt: typeof claims.iat === "number" ? claims.iat : null, expiresAt: typeof claims.exp === "number" ? claims.exp : null, now };
-  } catch {
-    return { issuedAt: null, expiresAt: null, now };
-  }
 }
 
 async function invokeRpc(client: LeadflowDbClient, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
@@ -89,7 +77,7 @@ async function invokeRpc(client: LeadflowDbClient, functionName: string, args: R
 }
 
 async function invokeRpcWithToken(supabaseUrl: string, publishableKey: string, accessToken: string, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
-  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
+  const response = await fetchWithJwtClockSkewRetry(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
     method: "POST",
     headers: {
       apikey: publishableKey,
@@ -109,8 +97,14 @@ async function invokeRpcWithToken(supabaseUrl: string, publishableKey: string, a
   }
 
   if (!response.ok) {
-    const error = parsed && typeof parsed === "object" ? parsed as { message?: unknown } : null;
-    return { data: null, error: { message: typeof error?.message === "string" ? error.message : `RPC_HTTP_${response.status}` } };
+    const error = parsed && typeof parsed === "object" ? parsed as { code?: unknown; message?: unknown } : null;
+    return {
+      data: null,
+      error: {
+        code: typeof error?.code === "string" ? error.code : undefined,
+        message: typeof error?.message === "string" ? error.message : `RPC_HTTP_${response.status}`,
+      },
+    };
   }
 
   return { data: parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null, error: null };
@@ -139,48 +133,29 @@ async function invokeAuthenticatedRpc(client: LeadflowDbClient, functionName: st
 
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const canUseServerFallback = Boolean(serviceRoleKey) && serverRpcFallbackFunctions.has(functionName);
-  if (serverRpcFallbackActive && canUseServerFallback) {
-    console.error("[leadflow][rpc] using server-authenticated fallback", { functionName });
-    return invokeRpcWithToken(supabaseUrl, serviceRoleKey as string, serviceRoleKey as string, functionName, args);
-  }
 
   let result = await invokeWithToken(accessToken);
-  if (result.error?.message === "JWT issued at future" && canUseServerFallback) {
+  if (isJwtIssuedAtFutureError(result.error) && canUseServerFallback) {
     // The Server Action has already authorized the advisor. These allowlisted
     // RPCs re-check ownership and are also explicitly granted to service_role,
     // so do not make the user wait through retries that cannot change the
     // remote validator clock.
     console.error("[leadflow][rpc] using server-authenticated fallback", { functionName });
     result = await invokeRpcWithToken(supabaseUrl, serviceRoleKey as string, serviceRoleKey as string, functionName, args);
-    if (!result.error) serverRpcFallbackActive = true;
   }
-  if (result.error?.message === "JWT issued at future" && !canUseServerFallback) {
+  if (isJwtIssuedAtFutureError(result.error) && !canUseServerFallback) {
     // A browser can retain a token minted just ahead of the API validator's
     // clock. Refresh once before failing the action; never retry provider IO.
     const { data: refreshedSession, error: refreshError } = await client.auth.refreshSession();
     const refreshedToken = refreshedSession.session?.access_token;
     if (!refreshError && refreshedToken) {
-      console.error("[leadflow][rpc] JWT timing rejected", { functionName, original: getJwtTiming(accessToken), refreshed: getJwtTiming(refreshedToken) });
-      // Supabase validates `iat` against a clock with sub-second precision.
-      // Keep the same user-authenticated token and give the validator a bounded
-      // safety window; never bypass Auth/RLS or retry provider IO here.
-      for (const [attempt, delayMs] of [3000, 6000, 12000].entries()) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-        result = await invokeWithToken(refreshedToken);
-        if (result.error?.message !== "JWT issued at future") break;
-        console.error("[leadflow][rpc] JWT timing still rejected", { functionName, attempt: attempt + 1, delayMs });
-      }
+      console.error("[leadflow][rpc] JWT timing rejected; retrying refreshed session", { functionName });
+      result = await invokeWithToken(refreshedToken);
     }
     else console.error("[leadflow][rpc] session refresh failed", { functionName });
   }
-  if (result.error?.message === "JWT issued at future" && serverRpcFallbackFunctions.has(functionName)) {
-    if (canUseServerFallback) {
-      console.error("[leadflow][rpc] using server-authenticated fallback", { functionName });
-      result = await invokeRpcWithToken(supabaseUrl, serviceRoleKey as string, serviceRoleKey as string, functionName, args);
-      if (!result.error) serverRpcFallbackActive = true;
-    } else {
-      console.error("[leadflow][rpc] server-authenticated fallback unavailable", { functionName });
-    }
+  if (isJwtIssuedAtFutureError(result.error) && serverRpcFallbackFunctions.has(functionName) && !canUseServerFallback) {
+    console.error("[leadflow][rpc] server-authenticated fallback unavailable", { functionName });
   }
   if (result.error) console.error("[leadflow][rpc] call failed", { functionName, message: result.error.message ?? "UNKNOWN" });
   return result;

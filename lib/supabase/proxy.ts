@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import type { Database } from "@/lib/supabase/database";
+import { fetchWithJwtClockSkewRetry } from "@/lib/supabase/fetch-with-jwt-clock-skew-retry";
 
 export function createSupabaseProxyClient(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -23,6 +24,7 @@ export function createSupabaseProxyClient(request: NextRequest) {
   }
 
   const supabase = createServerClient<Database>(supabaseUrl, publishableKey, {
+    global: { fetch: fetchWithJwtClockSkewRetry },
     cookies: {
       getAll() {
         return request.cookies.getAll();

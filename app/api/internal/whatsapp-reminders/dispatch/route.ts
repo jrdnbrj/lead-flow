@@ -6,6 +6,7 @@ import {
   sendWhatsappReminderText,
   WhatsappReminderProviderError,
 } from "@/lib/whatsapp/reminders";
+import { fetchWithJwtClockSkewRetry } from "@/lib/supabase/fetch-with-jwt-clock-skew-retry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,7 +82,7 @@ function getAdminRestConfig(): { url: string; serviceRoleKey: string } | null {
 async function adminRest(path: string, init?: RequestInit): Promise<Response | null> {
   const config = getAdminRestConfig();
   if (!config) return null;
-  return fetch(`${config.url}/rest/v1/${path}`, {
+  return fetchWithJwtClockSkewRetry(`${config.url}/rest/v1/${path}`, {
     ...init,
     headers: {
       apikey: config.serviceRoleKey,

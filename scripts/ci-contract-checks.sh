@@ -52,5 +52,6 @@ node --experimental-strip-types scripts/multi-payment-method-contract-check.mjs
 node --experimental-strip-types scripts/card-quote-contract-check.mjs
 node --experimental-strip-types scripts/quote-files-contract-check.mjs
 node --experimental-strip-types scripts/quote-send-contract-check.mjs
+node --experimental-strip-types scripts/jwt-clock-skew-contract-check.mjs
 
 printf '%s\n' 'CI contract checks: PASS'

@@ -17,6 +17,14 @@ database as a first response.
 | Photo/sheet `No disponible aún` | Resource was unavailable at operation creation or awaits recovery | That the file does not exist unless lookup was successful |
 | App loads but send fails after a release | Schema/grant/JWT/config drift | That server capacity is the cause |
 
+When a sanitized LeadFlow log or Supabase response identifies `PGRST303` with
+`JWT issued at future` on a `/rest/v1/` request, the application now applies a
+short, bounded transport retry. This does not weaken JWT validation or retry
+Evolution/WhatsApp effects. If the error persists, treat it as a Supabase
+validator/clock incident: check the official Supabase status page, the VPS
+clock, and deployment/configuration alignment before retrying the advisor
+action. Never copy tokens into logs or use a service-role key in the browser.
+
 ## 2. Safe production checks
 
 Run from the operator machine, without printing environment files or tokens:
