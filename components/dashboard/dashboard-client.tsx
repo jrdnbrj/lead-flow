@@ -23,7 +23,7 @@ type TemperatureFilter = "ALL" | LeadTemperature;
 type StatusFilter = "ALL" | LeadStatus;
 type TradeInFilter = "ALL" | "YES" | "NO";
 type RealtimeState = "connecting" | "live" | "error";
-const DASHBOARD_PAGE_SIZE = 10;
+const DASHBOARD_PAGE_SIZE = 15;
 
 const statusFilters: Array<{ value: StatusFilter; label: string }> = [
   { value: "ALL", label: "Todos los estados" },
