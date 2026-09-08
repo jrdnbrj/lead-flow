@@ -35,6 +35,7 @@ assert.equal(canRetryQuoteSendStatus("UNKNOWN"), false);
 assert.equal(canRetryQuoteSendStatus("ACCEPTED"), false);
 
 const migration = fs.readFileSync("supabase/migrations/070_quote_file_sends.sql", "utf8");
+const claimFixMigration = fs.readFileSync("supabase/migrations/071_fix_quote_file_send_claim.sql", "utf8");
 assert.match(migration, /create table if not exists public\.quote_file_sends/);
 assert.match(migration, /idempotency_key text not null unique/i);
 assert.match(migration, /enable row level security/i);
@@ -43,6 +44,11 @@ assert.match(migration, /claim_quote_file_send_v1/);
 assert.match(migration, /begin_quote_file_send_io_v1/);
 assert.match(migration, /record_quote_file_send_result_v1/);
 assert.doesNotMatch(migration, /lead_contact_operations|external_effects/);
+assert.match(claimFixMigration, /create or replace function public\.claim_quote_file_send_v1/);
+assert.match(claimFixMigration, /created_new boolean := false/);
+assert.match(claimFixMigration, /claim_action := 'CLAIMED'/);
+assert.match(claimFixMigration, /interval '5 minutes'/);
+assert.match(claimFixMigration, /io_started_at is null/);
 
 const action = fs.readFileSync("lib/quotes/actions.ts", "utf8");
 const workspace = fs.readFileSync("components/quotes/quote-workspace.tsx", "utf8");
