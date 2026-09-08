@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import type { FollowUpAction, Lead, ScheduleShortcut } from "@/lib/domain/lead";
 import { getNextActionLabel } from "@/lib/domain/lead";
 import { updateFollowUpActionAction } from "@/lib/leads/actions";
-import { formatElapsedSince, formatScheduledDateTime, isLeadReminderDue } from "@/lib/leads/follow-up";
+import { formatElapsedSince, formatScheduledDateTime, isLeadReminderDue, isLeadReminderTooOld } from "@/lib/leads/follow-up";
 
 type PendingNotification = { lead: Lead; action: FollowUpAction };
 const shortcuts: Array<{ value: ScheduleShortcut; label: string }> = [
@@ -25,7 +25,7 @@ export function PendingNotifications({ leads }: { leads: Lead[] }) {
     const rows: PendingNotification[] = [];
     for (const lead of leads) for (const original of lead.followUpActions) {
       const action = localActions[original.id] ?? original;
-      if (action.status === "PENDING" || action.status === "POSTPONED") rows.push({ lead, action });
+      if ((action.status === "PENDING" || action.status === "POSTPONED") && !isLeadReminderTooOld(action.scheduledFor)) rows.push({ lead, action });
     }
     return rows.sort((a, b) => new Date(a.action.scheduledFor).getTime() - new Date(b.action.scheduledFor).getTime() || a.lead.id.localeCompare(b.lead.id) || a.action.id.localeCompare(b.action.id));
   }, [leads, localActions]);

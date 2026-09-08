@@ -52,6 +52,8 @@ function providerStatus(response: unknown): string {
 
 Deno.serve(async (request) => {
   if (request.method !== "POST" || !dispatchSecret || request.headers.get("authorization") !== `Bearer ${dispatchSecret}`) return unauthorized();
+  const expiry = await rpc("auto_ignore_expired_follow_up_actions_v1", { p_now: new Date().toISOString() });
+  if (!expiry.ok) console.error("push_expired_action_maintenance_failed", JSON.stringify({ statusCode: expiry.status }));
   const materialized = await fetch(`${supabaseUrl}/rest/v1/rpc/materialize_push_deliveries_v1`, { method: "POST", headers, body: JSON.stringify({ p_now: new Date().toISOString() }) });
   if (!materialized.ok) return new Response(JSON.stringify({ error: "MATERIALIZE_FAILED" }), { status: 502 });
   const due = await query("push_deliveries?status=eq.SCHEDULED&scheduled_for=lte." + encodeURIComponent(new Date().toISOString()) + "&select=*");

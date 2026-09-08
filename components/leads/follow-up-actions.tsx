@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { FollowUpAction, ScheduleShortcut } from "@/lib/domain/lead";
 import { getFollowUpActionStatusLabel, getNextActionLabel } from "@/lib/domain/lead";
 import { clearLeadActionAction, deleteCanceledFollowUpActionAction, scheduleLeadActionAction, updateFollowUpActionAction } from "@/lib/leads/actions";
-import { formatElapsedSince, formatScheduledDateTime, isLeadReminderDue } from "@/lib/leads/follow-up";
+import { formatElapsedSince, formatScheduledDateTime, isLeadReminderDue, isLeadReminderTooOld } from "@/lib/leads/follow-up";
 
 type TransitionStatus = "DONE" | "POSTPONED" | "IGNORED" | "CANCELED";
 type SchedulePreset = ScheduleShortcut | "CUSTOM";
@@ -62,9 +62,9 @@ export function FollowUpActions({
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
   const [isShowingCanceled, setIsShowingCanceled] = useState(false);
   const [deletingActionId, setDeletingActionId] = useState<string | null>(null);
-  const openActions = actions.filter(isOpenAction);
+  const openActions = actions.filter((action) => isOpenAction(action) && !isLeadReminderTooOld(action.scheduledFor));
   const canceledActions = actions.filter((action) => action.status === "CANCELED");
-  const visibleActions = actions.filter((action) => action.status !== "CANCELED");
+  const visibleActions = actions.filter((action) => action.status !== "CANCELED" && !(isOpenAction(action) && isLeadReminderTooOld(action.scheduledFor)));
   const canSchedule = Boolean(actionType && schedulePreset && (schedulePreset !== "CUSTOM" || customDateTime));
 
   async function schedule() {

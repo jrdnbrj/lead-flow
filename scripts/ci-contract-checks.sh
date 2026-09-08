@@ -34,6 +34,7 @@ checks=(
   scripts/e5-integrated-contract-check.mjs
   scripts/whatsapp-reminder-companion-contract-check.mjs
   scripts/e5-push-runtime-contract-check.mjs
+  scripts/follow-up-expiry-contract-check.mjs
   scripts/e6-integrated-contract-check.mjs
   scripts/e6-s1-s2-contract-check.mjs
   scripts/catalog-contract-check.mjs
@@ -50,5 +51,6 @@ node --experimental-strip-types scripts/credit-card-payment-method-contract-chec
 node --experimental-strip-types scripts/multi-payment-method-contract-check.mjs
 node --experimental-strip-types scripts/card-quote-contract-check.mjs
 node --experimental-strip-types scripts/quote-files-contract-check.mjs
+node --experimental-strip-types scripts/quote-send-contract-check.mjs
 
 printf '%s\n' 'CI contract checks: PASS'

@@ -185,6 +185,8 @@ export async function POST(request: Request) {
   }
 
   const now = new Date().toISOString();
+  const expiry = await adminRpc("auto_ignore_expired_follow_up_actions_v1", { p_now: now });
+  if (!expiry.ok) console.error("whatsapp_reminder_expired_action_maintenance_failed", JSON.stringify({ statusCode: expiry.status }));
   const materialized = await adminRpc("materialize_whatsapp_reminder_deliveries_v1", {
     p_destination_id: "advisor-whatsapp",
     p_evolution_instance: config.reminderInstance,

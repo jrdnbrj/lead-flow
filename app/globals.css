@@ -26,6 +26,7 @@ button, a { touch-action: manipulation; }
 
 .eyebrow { color: var(--muted); font-size: 10px; font-weight: 900; letter-spacing: .15em; line-height: 1; text-transform: uppercase; }
 .field-input { width: 100%; border: 1px solid rgba(16,24,40,.11); border-radius: 16px; background: #faf9f6; padding: .9rem 1rem; color: var(--ink); font-size: .95rem; outline: none; transition: border-color .2s, box-shadow .2s, background .2s; }
+.field-input.pl-12 { padding-left: 3rem; }
 .field-input::placeholder { color: #9b9e9e; }
 .field-input:focus { border-color: var(--ink); background: white; box-shadow: 0 0 0 4px rgba(201,243,106,.35); }
 .button-primary, .button-secondary, .action-button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: .55rem; border-radius: 14px; padding: .75rem 1rem; font-size: .82rem; font-weight: 900; transition: transform .2s, filter .2s, background .2s; }

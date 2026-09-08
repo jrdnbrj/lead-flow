@@ -13,13 +13,13 @@ cp .env.example .env
 npm run dev
 ```
 
-Para levantar la app y Evolution API:
+Para levantar la app local:
 
 ```bash
 docker compose up -d --build
 ```
 
-Abre [http://localhost:3000](http://localhost:3000). Supabase y el PostgreSQL de Evolution son remotos; Docker solo levanta LeadFlow, Evolution API y Redis local para la sesión/cache de Baileys.
+Abre [http://localhost:3000](http://localhost:3000). La app local usa el mismo Supabase configurado en `.env`, pero Docker levanta únicamente LeadFlow. Evolution API, su PostgreSQL y Redis son exclusivos de producción para proteger las sesiones reales de WhatsApp.
 
 ## Variables de entorno
 
@@ -58,15 +58,13 @@ Un lead permanece **Nuevo** hasta que se envía un mensaje aceptado por Evolutio
 
 El dashboard no consulta cada cierto número de segundos: escucha cambios de Supabase Realtime y refresca únicamente cuando cambia un lead, mensaje o acción de seguimiento. Los contactos se pueden **Eliminar** desde su detalle; es un borrado lógico, por lo que dejan de aparecer, no generan recordatorios y el webhook deja de asociarles respuestas.
 
-## Conectar el número de WhatsApp
+## WhatsApp y producción
 
 Evolution API es el gateway HTTP que mantiene una instancia conectada a WhatsApp y expone el endpoint `message/sendText`. No es el número ni reemplaza WhatsApp: el número se vincula escaneando el QR de una instancia desde **WhatsApp → Dispositivos vinculados → Vincular un dispositivo**.
 
-1. `docker compose up -d --build` levanta Evolution API y Redis; el contenedor de Evolution usa su conexión PostgreSQL configurada por `EVOLUTION_DATABASE_URL`. La API queda en `http://localhost:8081` para desarrollo local y en `http://evolution-api:8080` desde el contenedor de LeadFlow.
-2. Usa la instancia indicada por `EVOLUTION_API_INSTANCE_NAME`. Créala en Evolution API desde su panel o endpoint de creación de instancias; los nombres exactos pueden variar según la versión instalada.
-3. Abre [http://localhost:3000/whatsapp](http://localhost:3000/whatsapp), escanea el QR con el celular que enviará los mensajes y espera estado `open`. Si el código no escanea, **Generar QR nuevo** reinicia solo la instancia y solicita otro QR; no borra el PostgreSQL remoto.
-4. Reinicia Next.js después de cambiar `.env`. El botón del dashboard enviará a ese número usando `POST /message/sendText/{EVOLUTION_API_INSTANCE_NAME}`.
-5. El webhook de Evolution se configura automáticamente al usar **Enviar**. También puedes revisar que `EVOLUTION_WEBHOOK_URL` apunte a `/api/webhooks/evolution` y que `EVOLUTION_WEBHOOK_TOKEN` sea el mismo secreto en Next y Evolution.
+El compose local no ejecuta Evolution, no contiene sus sesiones y no conecta su PostgreSQL/Redis. Por seguridad, los envíos de WhatsApp y First Contact se prueban únicamente en producción con autorización explícita; en local esas acciones quedan sin conexión al proveedor.
+
+En producción, el host usa `docker-compose.production.yml` y mantiene Evolution, Redis y sus persistencias dentro de la red privada del servidor. Las variables `EVOLUTION_*` que aparecen abajo son de producción y no deben reutilizarse para levantar un Evolution local.
 
 `/qr` tiene otro objetivo: muestra la vCard del vendedor para que el prospecto guarde su nombre, teléfono y correo. No vincula la sesión de Evolution ni sirve para escanear WhatsApp Web.
 

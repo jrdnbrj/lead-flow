@@ -2,6 +2,8 @@ import type { Lead, NextActionType } from "@/lib/domain/lead";
 
 export const SELLER_TIME_ZONE = "America/Guayaquil";
 export const RESPONSE_REMINDER_DELAY_MINUTES = 10;
+export const LEAD_REMINDER_MAX_OVERDUE_DAYS = 15;
+const LEAD_REMINDER_MAX_OVERDUE_MS = LEAD_REMINDER_MAX_OVERDUE_DAYS * 86_400_000;
 
 export type ScheduleShortcut = "POSTPONE_PLUS_ONE_HOUR" | "POSTPONE_LATER" | "POSTPONE_TOMORROW" | "POSTPONE_IN_THREE_DAYS";
 
@@ -70,6 +72,17 @@ export function isLeadReminderDue(nextActionAt: string | null, reference = new D
   return Boolean(nextActionAt && new Date(nextActionAt).getTime() <= reference.getTime());
 }
 
+/**
+ * A pending reminder older than this is treated as ignored by the product.
+ * The UI uses this guard immediately; the scheduler migration persists the
+ * same outcome so Push and WhatsApp projections cannot materialize it later.
+ */
+export function isLeadReminderTooOld(nextActionAt: string | null, reference = new Date()): boolean {
+  if (!nextActionAt) return false;
+  const scheduledAt = new Date(nextActionAt).getTime();
+  return Number.isFinite(scheduledAt) && reference.getTime() - scheduledAt > LEAD_REMINDER_MAX_OVERDUE_MS;
+}
+
 export function formatNextActionDate(nextActionAt: string | null, reference = new Date()): string | null {
   if (!nextActionAt) return null;
   const target = new Date(nextActionAt);
@@ -125,9 +138,9 @@ export function getNextActionDefaultLabel(actionType: NextActionType): string {
 
 export function getDashboardLeadBucket(lead: Lead, reference = new Date()): 0 | 1 | 2 | 3 {
   if (lead.conversationState === "ACTIVE") return 0;
-  const hasDueAction = lead.followUpActions.some((action) => (action.status === "PENDING" || action.status === "POSTPONED") && isLeadReminderDue(action.scheduledFor, reference));
+  const hasDueAction = lead.followUpActions.some((action) => (action.status === "PENDING" || action.status === "POSTPONED") && !isLeadReminderTooOld(action.scheduledFor, reference) && isLeadReminderDue(action.scheduledFor, reference));
   if (hasDueAction) return 1;
-  const hasOpenAction = lead.followUpActions.some((action) => action.status === "PENDING" || action.status === "POSTPONED");
+  const hasOpenAction = lead.followUpActions.some((action) => (action.status === "PENDING" || action.status === "POSTPONED") && !isLeadReminderTooOld(action.scheduledFor, reference));
   if (!hasOpenAction) return 2;
   return 3;
 }
