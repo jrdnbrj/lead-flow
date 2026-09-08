@@ -11,6 +11,10 @@ type SnapshotInput = {
   modelName: string;
   quote: CardQuote;
   documentDate?: string;
+  sellerName?: string;
+  sellerPhone?: string;
+  sellerEmail?: string;
+  sellerCompany?: string;
 };
 
 export function createCardQuoteSnapshot(input: SnapshotInput): QuoteSnapshot {
@@ -30,6 +34,10 @@ export function createCardQuoteSnapshot(input: SnapshotInput): QuoteSnapshot {
     installment: input.quote.installment,
     rulesVersion: CARD_QUOTE_RULES_VERSION,
     documentDate: input.documentDate ?? new Date().toISOString(),
+    ...(input.sellerName ? { sellerName: input.sellerName.trim() } : {}),
+    ...(input.sellerPhone ? { sellerPhone: input.sellerPhone.trim() } : {}),
+    ...(input.sellerEmail ? { sellerEmail: input.sellerEmail.trim() } : {}),
+    ...(input.sellerCompany ? { sellerCompany: input.sellerCompany.trim() } : {}),
   };
 }
 
@@ -52,6 +60,10 @@ function snapshotIdentity(snapshot: QuoteSnapshot): Omit<QuoteSnapshot, "documen
     total: snapshot.total,
     installment: snapshot.installment,
     rulesVersion: snapshot.rulesVersion,
+    sellerName: snapshot.sellerName,
+    sellerPhone: snapshot.sellerPhone,
+    sellerEmail: snapshot.sellerEmail,
+    sellerCompany: snapshot.sellerCompany,
   };
 }
 

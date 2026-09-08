@@ -81,6 +81,97 @@ export type Database = {
           },
         ]
       }
+      quote_file_sends: {
+        Row: {
+          id: string
+          quote_file_id: string
+          lead_id: string
+          generated_by: string
+          recipient_phone: string
+          evolution_instance: string
+          idempotency_key: string
+          status: string
+          attempt_no: number
+          claim_token_digest: string
+          provider_message_id: string | null
+          provider_status: string | null
+          result_payload: Json | null
+          error_code: string | null
+          error_message: string | null
+          claimed_at: string
+          io_started_at: string | null
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          quote_file_id: string
+          lead_id: string
+          generated_by: string
+          recipient_phone: string
+          evolution_instance: string
+          idempotency_key: string
+          status: string
+          attempt_no?: number
+          claim_token_digest: string
+          provider_message_id?: string | null
+          provider_status?: string | null
+          result_payload?: Json | null
+          error_code?: string | null
+          error_message?: string | null
+          claimed_at?: string
+          io_started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          quote_file_id?: string
+          lead_id?: string
+          generated_by?: string
+          recipient_phone?: string
+          evolution_instance?: string
+          idempotency_key?: string
+          status?: string
+          attempt_no?: number
+          claim_token_digest?: string
+          provider_message_id?: string | null
+          provider_status?: string | null
+          result_payload?: Json | null
+          error_code?: string | null
+          error_message?: string | null
+          claimed_at?: string
+          io_started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_file_sends_quote_file_id_fkey"
+            columns: ["quote_file_id"]
+            isOneToOne: false
+            referencedRelation: "quote_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_file_sends_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_file_sends_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       car_model_colors: {
         Row: {
           active: boolean
@@ -1228,6 +1319,26 @@ export type Database = {
         Returns: Json
       }
       get_first_contact_v1: { Args: { p_lead_id: string }; Returns: Json }
+      claim_quote_file_send_v1: {
+        Args: {
+          p_claim_token_digest: string
+          p_evolution_instance: string
+          p_generated_by: string
+          p_idempotency_key: string
+          p_lead_id: string
+          p_quote_file_id: string
+          p_recipient_phone: string
+        }
+        Returns: Json
+      }
+      begin_quote_file_send_io_v1: {
+        Args: {
+          p_attempt_no: number
+          p_claim_token_digest: string
+          p_send_id: string
+        }
+        Returns: Json
+      }
       hydrate_first_contact_resource_v1: {
         Args: {
           p_item_key: string
@@ -1314,6 +1425,20 @@ export type Database = {
           p_provider_message_id?: string
           p_provider_status?: string
           p_result_kind: string
+        }
+        Returns: Json
+      }
+      record_quote_file_send_result_v1: {
+        Args: {
+          p_attempt_no: number
+          p_claim_token_digest: string
+          p_error_code?: string | null
+          p_error_message?: string | null
+          p_provider_message_id?: string | null
+          p_provider_status?: string | null
+          p_result_kind: string
+          p_result_payload?: Json | null
+          p_send_id: string
         }
         Returns: Json
       }

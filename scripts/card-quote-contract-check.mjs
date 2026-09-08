@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { calculateCardQuote, cardFactorTable, cardModalities, getCardFactor, getCardTerms, validateCardQuote } from "../lib/financial/card-quote.ts";
+import { calculateCardQuote, cardFactorTable, cardModalities, formatCardAmountInput, formatCardFactorPercentage, getCardFactor, getCardTerms, parseCardAmount, validateCardQuote } from "../lib/financial/card-quote.ts";
 
 const d1 = calculateCardQuote({ modality: "NORMAL", term: 60, amount: 3000 });
 assert.ok(d1);
@@ -41,6 +41,29 @@ assert.deepEqual(cardModalities.map((option) => option.value), ["NORMAL", "CORPO
 assert.equal(calculateCardQuote({ modality: "NORMAL", term: 48, amount: 2000 })?.factor, 0.3618);
 assert.equal(calculateCardQuote({ modality: "CORPORATIVO", term: 36, amount: 2000 })?.factor, 0.1825);
 assert.equal(calculateCardQuote({ modality: "NORMAL", term: 3, amount: 2000 })?.amount, 2000);
+assert.equal(formatCardFactorPercentage(0.4610), "46.10%");
+assert.equal(formatCardAmountInput("3000"), "3.000");
+assert.equal(formatCardAmountInput("2.0000"), "20.000");
+assert.equal(formatCardAmountInput("20.0000"), "200.000");
+assert.equal(formatCardAmountInput("12345,67"), "12.345,67");
+assert.equal(formatCardAmountInput("0,001"), "0,001");
+assert.equal(formatCardAmountInput("1.234.567,89"), "1.234.567,89");
+assert.equal(formatCardAmountInput("1,000.00"), "1.000,00");
+assert.equal(formatCardAmountInput(".01"), "0,01");
+assert.equal(parseCardAmount("3.000"), 3000);
+assert.equal(parseCardAmount("12.345,67"), 12345.67);
+assert.equal(parseCardAmount("0,01"), 0.01);
+assert.equal(parseCardAmount("$ 1.234,56"), 1234.56);
+assert.equal(parseCardAmount("1,000.00"), 1000);
+assert.equal(parseCardAmount("1.234.567"), 1234567);
+assert.equal(parseCardAmount("0,001"), null);
+assert.equal(parseCardAmount("-1"), null);
+assert.equal(parseCardAmount("abc1"), null);
+assert.equal(parseCardAmount("90071992547409,91"), null);
+assert.equal(parseCardAmount("999999999999,99"), 999999999999.99);
+assert.equal(validateCardQuote({ modality: "NORMAL", term: 3, amount: 0.001 }).valid, false);
+assert.equal(calculateCardQuote({ modality: "NORMAL", term: 3, amount: 0.01 })?.amount, 0.01);
+assert.equal(calculateCardQuote({ modality: "NORMAL", term: 60, amount: 1000000000 })?.total, 1461000000);
 
 const dashboard = fs.readFileSync("components/dashboard/dashboard-client.tsx", "utf8");
 const tool = fs.readFileSync("components/leads/card-quote-tool.tsx", "utf8");
@@ -48,10 +71,12 @@ const calculator = fs.readFileSync("components/quotes/card-quote-calculator.tsx"
 const shell = fs.readFileSync("components/layout/app-shell.tsx", "utf8");
 const globalPage = fs.readFileSync("app/cotizacion/page.tsx", "utf8");
 for (const required of ["lead.paymentMethods.includes(\"TARJETA_CREDITO\")", "CardQuoteTool"]) assert.ok(dashboard.includes(required), `dashboard missing ${required}`);
-for (const required of ["CardQuoteCalculator", "onClose", "description"]) assert.ok(tool.includes(required), `contextual card quote wrapper missing ${required}`);
-for (const required of ["Cotización", "Cuota mensual", "referencial", "aria-pressed", "parseCardAmount"]) assert.ok(calculator.includes(required), `global card quote UI missing ${required}`);
+for (const required of ["useRouter", "/cotizacion?leadId=", "Cotizar"]) assert.ok(tool.includes(required), `lead card quote entry missing ${required}`);
+for (const required of ["Cotización", "Cuota mensual", "referencial", "aria-pressed", "parseCardAmount", "formatCardAmountInput", "formatCardFactorPercentage", "DollarSign", "pl-12"]) assert.ok(calculator.includes(required), `global card quote UI missing ${required}`);
 assert.ok(!calculator.includes("Vehículo a cotizar"), "global card quote must not require a vehicle");
 for (const required of ["/cotizacion", "label: \"Cotización\"", "href=\"/whatsapp\"", "<MessageCircle"]) assert.ok(shell.includes(required), `navigation shell missing ${required}`);
 assert.ok(globalPage.includes("requireAdvisorOrRedirect(\"/cotizacion\")"), "global quotation route must require advisor session");
+assert.ok(globalPage.includes("initialLeadId"), "global quotation route must accept contextual lead");
+assert.ok(fs.readFileSync("components/quotes/quote-workspace.tsx", "utf8").includes("initialLeadId"), "quote workspace must preselect contextual lead");
 
 console.log("Card quote contract checks: PASS");

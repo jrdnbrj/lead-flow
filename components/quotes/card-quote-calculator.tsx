@@ -1,10 +1,10 @@
 "use client";
 
-import { CheckCircle2, X } from "lucide-react";
+import { CheckCircle2, DollarSign, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useEffect } from "react";
 
-import { cardModalities, calculateCardQuote, formatCardCurrency, formatCardFactor, getCardTerms, parseCardAmount, validateCardQuote, type CardModality } from "@/lib/financial/card-quote";
+import { cardModalities, calculateCardQuote, formatCardCurrency, formatCardFactorPercentage, formatCardAmountInput, getCardTerms, parseCardAmount, validateCardQuote, type CardModality } from "@/lib/financial/card-quote";
 import type { CardQuoteDraft } from "@/lib/financial/card-quote";
 
 type CardQuoteCalculatorProps = {
@@ -27,9 +27,16 @@ export function CardQuoteCalculator({ description = "Calcula una cuota sin guard
   useEffect(() => {
     onDraftChange?.({ modality, term, amount });
   }, [amount, modality, onDraftChange, term]);
+
   function changeModality(nextModality: CardModality) {
     setModality(nextModality);
-    if (term !== null && !getCardTerms(nextModality).includes(term)) setTerm(null);
+    const nextTerm = term !== null && getCardTerms(nextModality).includes(term) ? term : null;
+    if (nextTerm !== term) setTerm(nextTerm);
+  }
+
+  function changeAmount(nextAmountText: string) {
+    const formattedAmount = formatCardAmountInput(nextAmountText);
+    setAmountText(formattedAmount);
   }
 
   return (
@@ -59,12 +66,12 @@ export function CardQuoteCalculator({ description = "Calcula una cuota sin guard
           <p className="mt-1 text-[10px] font-semibold text-[var(--muted)]">Sólo se muestran los plazos válidos para esta modalidad.</p>
         </fieldset>
 
-        <label className="block text-xs font-black text-[var(--ink)]">Monto a financiar<input value={amountText} onChange={(event) => setAmountText(event.target.value)} inputMode="decimal" placeholder="Ej. 3000" className="field-input mt-1.5" /></label>
+        <label className="block text-xs font-black text-[var(--ink)]">Monto a financiar<span className="relative mt-1.5 block"><span aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg bg-[#f6f3ed] text-[#8a5b00]"><DollarSign size={15} strokeWidth={2.5} /></span><input value={amountText} onChange={(event) => changeAmount(event.target.value)} inputMode="decimal" placeholder="Ej. 3.000" className="field-input pl-12" /></span></label>
       </div>
 
       <div className="mt-4 rounded-xl border border-black/[0.06] bg-[#f8fbff] p-3">
         <p className="eyebrow">Resultado</p>
-        {waitingForInput ? <p className="mt-2 text-xs font-semibold text-[var(--muted)]">Selecciona un plazo e ingresa el monto para ver la cuota.</p> : validation && !validation.valid ? <p className="mt-2 text-xs font-semibold text-[#b33a2c]" role="alert">{validation.message}</p> : quote ? <div className="mt-2 grid grid-cols-2 gap-2 text-xs"><QuoteResult label="Factor" value={formatCardFactor(quote.factor)} /><QuoteResult label="Interés" value={formatCardCurrency(quote.interest)} /><QuoteResult label="Total" value={formatCardCurrency(quote.total)} /><QuoteResult label="Cuota mensual" value={formatCardCurrency(quote.installment)} highlight /></div> : null}
+        {waitingForInput ? <p className="mt-2 text-xs font-semibold text-[var(--muted)]">Selecciona un plazo e ingresa el monto para ver la cuota.</p> : validation && !validation.valid ? <p className="mt-2 text-xs font-semibold text-[#b33a2c]" role="alert">{validation.message}</p> : quote ? <div className="mt-2 grid grid-cols-2 gap-2 text-xs"><QuoteResult label="Factor" value={formatCardFactorPercentage(quote.factor)} /><QuoteResult label="Interés" value={formatCardCurrency(quote.interest)} /><QuoteResult label="Total" value={formatCardCurrency(quote.total)} /><QuoteResult label="Cuota mensual" value={formatCardCurrency(quote.installment)} highlight /></div> : null}
       </div>
 
       <div className="mt-4 flex items-start gap-2 text-[10px] leading-4 text-[var(--muted)]"><CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-700" /><p>Simulación de financiamiento referencial; no representa aprobación crediticia.</p></div>

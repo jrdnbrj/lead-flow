@@ -56,10 +56,14 @@ assert.match(fs.readFileSync("lib/quotes/pdf.ts", "utf8"), /server-only/);
 assert.match(route, /requireAdvisor/);
 assert.match(route, /getQuoteFileForAdvisor/);
 assert.match(route, /downloadQuotePdf/);
-assert.match(workspace, /Selecciona un cliente/);
+assert.match(workspace, /Buscar por nombre o número/);
 assert.match(workspace, /Selecciona un modelo/);
+assert.match(workspace, /catalogModels\.map/);
 assert.match(workspace, /Generar PDF/);
 assert.match(workspace, /Cotizaciones anteriores/);
 assert.doesNotMatch(workspace, /sendWhatsapp/);
+assert.match(action, /downloadVehiclePhoto/);
+assert.match(action, /getEffectiveSellerProfile/);
+assert.match(fs.readFileSync("lib/quotes/pdf-renderer.ts", "utf8"), /embedVehiclePhoto/);
 
 console.log("Quote files contract checks: PASS");

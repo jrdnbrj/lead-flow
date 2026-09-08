@@ -13,6 +13,25 @@ export interface EvolutionSendResult {
   payload: Record<string, unknown> | null;
 }
 
+export class EvolutionProviderRejectedError extends Error {
+  readonly code: string;
+
+  constructor(message: string, code: string) {
+    super(message);
+    this.name = "EvolutionProviderRejectedError";
+    this.code = code;
+  }
+}
+
+export function getCustomerEvolutionInstanceName(): string | null {
+  const instanceName = process.env.EVOLUTION_API_INSTANCE_NAME?.trim();
+  return instanceName || null;
+}
+
+export function hasCustomerEvolutionConfig(): boolean {
+  return Boolean(process.env.EVOLUTION_API_URL?.trim() && process.env.EVOLUTION_API_KEY?.trim() && getCustomerEvolutionInstanceName());
+}
+
 export type EvolutionConnectionState = "open" | "connecting" | "close" | "unknown";
 
 export type EvolutionConnectionResult = {
@@ -485,7 +504,7 @@ export async function sendWhatsappMedia(input: { phone: string; mediaUrl: string
   return { providerMessageId: extractEvolutionMessageId(rawPayload), status: normalizeEvolutionStatus(asRecord(rawPayload)?.status), payload: asRecord(rawPayload) };
 }
 
-export async function sendWhatsappDocument(input: { phone: string; documentUrl: string; caption?: string; fileName: string }): Promise<EvolutionSendResult> {
+export async function sendWhatsappDocument(input: { phone: string; documentUrl: string; caption?: string; fileName: string; signal?: AbortSignal }): Promise<EvolutionSendResult> {
   const config = getEvolutionConfig();
   if (!config) throw new Error("La conexión de WhatsApp no está disponible. Intenta de nuevo y avísame si continúa.");
 
@@ -497,9 +516,10 @@ export async function sendWhatsappDocument(input: { phone: string; documentUrl: 
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: config.apiKey },
     body: JSON.stringify({ number: normalizedPhone, mediatype: "document", mimetype: "application/pdf", media: input.documentUrl, caption: input.caption || "", fileName: input.fileName, delay: 0 }),
+    signal: input.signal,
     cache: "no-store",
   });
   const rawPayload: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(getEvolutionErrorMessage(response.status, rawPayload, "El mensaje se envió, pero no pudimos adjuntar la ficha técnica."));
+  if (!response.ok) throw new EvolutionProviderRejectedError(getEvolutionErrorMessage(response.status, rawPayload, "No pudimos enviar la cotización por WhatsApp."), `HTTP_${response.status}`);
   return { providerMessageId: extractEvolutionMessageId(rawPayload), status: normalizeEvolutionStatus(asRecord(rawPayload)?.status), payload: asRecord(rawPayload) };
 }
