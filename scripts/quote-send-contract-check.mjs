@@ -57,6 +57,8 @@ assert.match(action, /sendCardQuoteAction/);
 assert.match(action, /quoteSnapshotsEquivalent/);
 assert.match(action, /sendWhatsappDocument/);
 assert.match(action, /getCustomerEvolutionInstanceName/);
+assert.match(action, /const firstName = clientName\.trim\(\)\.split\(\/\\s\+\/\)\[0\] \|\| "cliente";/);
+assert.doesNotMatch(action, /Hola \$\{clientName\.trim\(\)\}/);
 assert.doesNotMatch(action, /WHATSAPP_REMINDER|leadflow-reminders/);
 assert.match(workspace, /Enviar cotización/);
 assert.match(workspace, /sendQuote/);

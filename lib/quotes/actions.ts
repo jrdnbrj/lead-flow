@@ -110,7 +110,8 @@ function claimTokenDigest(): string {
 }
 
 function quoteSendCaption(clientName: string): string {
-  return `Hola ${clientName.trim()}, te comparto la cotización que revisamos. Si deseas, podemos ajustar monto o plazo.`;
+  const firstName = clientName.trim().split(/\s+/)[0] || "cliente";
+  return `Hola ${firstName}, te comparto la cotización que revisamos. Si deseas, podemos ajustar monto o plazo.`;
 }
 
 function quoteSendTimeoutMs(): number {
