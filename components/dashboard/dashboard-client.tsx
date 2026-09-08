@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 
 import type { ConversationState, FollowUpAction, InboundClassification, Lead, LeadStatus, LeadTemperature, WhatsappStatus } from "@/lib/domain/lead";
 import { carModels, formatPhoneForWhatsapp, getConversationStateLabel, getNextActionLabel, getStatusLabel, getTemperatureLabel, leadTimeframes, paymentMethods, selectablePaymentMethods } from "@/lib/domain/lead";
-import { correctInboundResponseAction, deleteLeadAction, getFirstContactColorOptionsAction, recordPurchaseDecisionAction, sendLeadWhatsappAction, updateLeadConversationAction, updateLeadDetailsAction } from "@/lib/leads/actions";
+import { correctInboundResponseAction, deleteLeadAction, getFirstContactColorOptionsAction, recordPurchaseDecisionAction, revertPurchaseDecisionAction, sendLeadWhatsappAction, updateLeadConversationAction, updateLeadDetailsAction } from "@/lib/leads/actions";
 import { formatElapsedSince, formatScheduledDateTime, getDashboardLeadBucket, isLeadReminderDue, isLeadReminderTooOld, sortLeadsForDashboard } from "@/lib/leads/follow-up";
 import { FollowUpActions } from "@/components/leads/follow-up-actions";
 import { FirstContactSummary } from "@/components/leads/first-contact-summary";
@@ -22,6 +22,7 @@ import type { FirstContactColorModelOption, FirstContactColorSelection } from "@
 type TemperatureFilter = "ALL" | LeadTemperature;
 type StatusFilter = "ALL" | LeadStatus;
 type TradeInFilter = "ALL" | "YES" | "NO";
+type PurchaseFilter = "ALL" | "PURCHASED" | "NOT_PURCHASED";
 type RealtimeState = "connecting" | "live" | "error";
 const DASHBOARD_PAGE_SIZE = 15;
 
@@ -114,6 +115,7 @@ export function DashboardClient({ initialLeads, initialExpandedLeadId = null, in
   const [temperature, setTemperature] = useState<TemperatureFilter>("ALL");
   const [status, setStatus] = useState<StatusFilter>("ALL");
   const [tradeIn, setTradeIn] = useState<TradeInFilter>("ALL");
+  const [purchaseFilter, setPurchaseFilter] = useState<PurchaseFilter>("ALL");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(() => getInitialDashboardPage(initialLeads, initialExpandedLeadId));
   const [hiddenLeadIds, setHiddenLeadIds] = useState<string[]>([]);
@@ -183,10 +185,11 @@ function refreshAllLeads() {
     const matchesTemperature = temperature === "ALL" || lead.temperature === temperature;
     const matchesStatus = status === "ALL" || lead.status === status;
     const matchesTradeIn = tradeIn === "ALL" || (tradeIn === "YES" ? lead.tradeInCar : !lead.tradeInCar);
+    const matchesPurchase = purchaseFilter === "ALL" || (purchaseFilter === "PURCHASED" ? lead.purchaseDecisionAt !== null : lead.purchaseDecisionAt === null);
     const normalizedQuery = query.toLowerCase().trim();
     const matchesQuery = !normalizedQuery || `${lead.fullName} ${lead.phone} ${lead.carModel}`.toLowerCase().includes(normalizedQuery);
-    return matchesTemperature && matchesStatus && matchesTradeIn && matchesQuery;
-  }), [leads, query, status, temperature, tradeIn]);
+    return matchesTemperature && matchesStatus && matchesTradeIn && matchesPurchase && matchesQuery;
+  }), [leads, purchaseFilter, query, status, temperature, tradeIn]);
 
   const orderedLeads = sortLeadsForDashboard(filteredLeads);
   const totalPages = Math.max(1, Math.ceil(orderedLeads.length / DASHBOARD_PAGE_SIZE));
@@ -259,6 +262,9 @@ function refreshAllLeads() {
         </div>
         <div className="flex gap-1 overflow-x-auto pb-0">
           {([{ value: "ALL", label: "Parte de pago: todos" }, { value: "YES", label: "Con vehículo" }, { value: "NO", label: "Sin vehículo" }] as const).map((filter) => <button type="button" key={filter.value} onClick={() => { setTradeIn(filter.value); setPage(1); }} className={`filter-pill dashboard-filter-pill ${tradeIn === filter.value ? "filter-pill-active-muted" : ""}`}>{filter.label}</button>)}
+        </div>
+        <div className="flex gap-1 overflow-x-auto pb-0" aria-label="Filtro de compra">
+          {([{ value: "ALL", label: "Todos" }, { value: "PURCHASED", label: "Compró" }, { value: "NOT_PURCHASED", label: "No compró" }] as const).map((filter) => <button type="button" key={filter.value} onClick={() => { setPurchaseFilter(filter.value); setPage(1); }} className={`filter-pill dashboard-filter-pill ${purchaseFilter === filter.value ? "filter-pill-active-muted" : ""}`}>{filter.label}</button>)}
         </div>
           </div>
         </details>
@@ -382,7 +388,9 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
   const [isCorrectingInbound, setIsCorrectingInbound] = useState(false);
   const [purchaseDecisionAt, setPurchaseDecisionAt] = useState(lead.purchaseDecisionAt);
   const [isPurchaseConfirming, setIsPurchaseConfirming] = useState(false);
+  const [purchaseConfirmationMode, setPurchaseConfirmationMode] = useState<"MARK" | "REVERT">("MARK");
   const [isRecordingPurchase, setIsRecordingPurchase] = useState(false);
+  const [isRevertingPurchase, setIsRevertingPurchase] = useState(false);
   const [purchaseNationalId, setPurchaseNationalId] = useState(lead.nationalId ?? "");
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditingDetails, setIsEditingDetails] = useState(false);
@@ -435,6 +443,28 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
       setSendError(response.error || "No pudimos registrar la decisión. Puedes reintentarlo.");
     }
     setIsRecordingPurchase(false);
+  }
+
+  async function revertPurchaseDecision() {
+    if (isRevertingPurchase || !purchaseDecisionAt) return;
+    setIsRevertingPurchase(true);
+    setSendError(null);
+    setSendInfo(null);
+    try {
+      const response = await revertPurchaseDecisionAction({ leadId: lead.id });
+      if (response.success) {
+        setPurchaseDecisionAt(null);
+        setIsPurchaseConfirming(false);
+        setSendInfo("Compra desmarcada. El estado comercial y el seguimiento no cambiaron.");
+        router.refresh();
+      } else {
+        setSendError(response.error || "No pudimos desmarcar la compra. Puedes reintentarlo.");
+      }
+    } catch {
+      setSendError("No pudimos desmarcar la compra. Revisa tu conexión e inténtalo de nuevo.");
+    } finally {
+      setIsRevertingPurchase(false);
+    }
   }
 
   async function saveLeadDetails() {
@@ -564,7 +594,8 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
           <CardQuoteTool lead={lead} compact />
           <button type="button" aria-label={`Ver información de ${lead.fullName}`} title="Ver información del lead" onClick={(event) => { event.stopPropagation(); setDetails(toLeadDetailsForm(lead)); setDetailsError(null); setDetailsMessage(null); setIsEditingDetails(false); setIsDetailsOpen(true); }} className="icon-action"><FileText size={20} /></button>
           <button type="button" aria-label={`${sendIsRecovery ? "Reintentar" : "Enviar"} WhatsApp a ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); if (sendIsRecovery) void sendMessage(); else void sendWithOptionalColorSelection(); }} disabled={isSending || isPreparingColors || !canSend} aria-busy={isSending || isPreparingColors} className={`send-whatsapp-button ${!canSend ? "send-whatsapp-button-sent" : ""}`} title={!canSend ? "Mensaje ya enviado y confirmado en el detalle" : sendIsRecovery ? "No hay confirmación completa del primer contacto; intentar de nuevo" : whatsappStatus === "FAILED" ? "Reintentar envío automático" : "Enviar WhatsApp automáticamente"}>{isSending || isPreparingColors ? <LoaderCircle size={20} className="animate-spin" /> : !canSend ? <CheckCircle2 size={20} /> : sendIsRecovery ? <RefreshCw size={20} /> : <Send size={20} />}<span className="hidden sm:inline">{isSending ? "Enviando" : isPreparingColors ? "Preparando" : !canSend ? "Enviado" : sendIsRecovery ? "Reintentar" : whatsappStatus === "FAILED" ? "Reintentar" : "Enviar"}</span></button>
-          <button type="button" aria-label={purchaseDecisionAt ? "Compra registrada" : "Registrar compra"} title={purchaseDecisionAt ? "Compra registrada" : "Registrar compra"} disabled={Boolean(purchaseDecisionAt)} onClick={(event) => { event.stopPropagation(); if (!purchaseDecisionAt) { setPurchaseNationalId(lead.nationalId ?? ""); setSendError(null); setIsPurchaseConfirming(true); } }} className={`icon-action purchase-action ${purchaseDecisionAt ? "purchase-action-registered" : ""}`}><CircleDollarSign size={20} /></button>
+          <button type="button" aria-label={purchaseDecisionAt ? "Desmarcar compra" : "Registrar compra"} title={purchaseDecisionAt ? "Desmarcar compra" : "Registrar compra"} onClick={(event) => { event.stopPropagation(); setPurchaseConfirmationMode(purchaseDecisionAt ? "REVERT" : "MARK"); if (!purchaseDecisionAt) setPurchaseNationalId(lead.nationalId ?? ""); setSendError(null); setIsPurchaseConfirming(true); }} className={`icon-action purchase-action ${purchaseDecisionAt ? "purchase-action-registered" : ""}`}><CircleDollarSign size={20} /></button>
+          {purchaseDecisionAt ? <span className="rounded-full bg-[#e4f8e9] px-2 py-1 text-[10px] font-black text-[#18733a]">Compró</span> : null}
           <a aria-label={`Abrir WhatsApp manual para ${lead.fullName}`} href={`https://wa.me/${formatPhoneForWhatsapp(lead.phone)}`} target="_blank" rel="noreferrer" className="icon-action icon-action-whatsapp" title="Abrir chat de WhatsApp" onClick={(event) => event.stopPropagation()}><WhatsAppLogo size={24} /></a>
           <button type="button" aria-expanded={isExpanded} aria-label={isExpanded ? `Ocultar detalles de ${lead.fullName}` : `Mostrar detalles de ${lead.fullName}`} onClick={(event) => { event.stopPropagation(); toggleExpanded(); }} className="icon-action compact-expand-action" title={isExpanded ? "Ocultar detalles" : "Ver detalles"}>{isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
         </div>
@@ -584,7 +615,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
     {isExpanded && <div className="mt-3 flex justify-end border-t border-black/[0.06] pt-3"><button type="button" onClick={(event) => { event.stopPropagation(); setIsDeleteModalOpen(true); setSendError(null); }} disabled={isDeleting} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-black text-[#b33a2c] hover:bg-[#fff0ee] disabled:opacity-50"><Trash2 size={14} />Eliminar contacto</button></div>}
     {isExpanded && sendError ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-red-600"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{sendError}</p> : null}{isExpanded && sendInfo ? <p className="mt-3 flex items-start gap-2 text-xs font-semibold text-emerald-700"><CheckCircle2 size={14} className="mt-0.5 shrink-0" />{sendInfo}</p> : null}
     {isDetailsOpen ? <LeadDetailsModal details={details} isEditing={isEditingDetails} isSaving={isSavingDetails} error={detailsError} message={detailsMessage} onClose={() => setIsDetailsOpen(false)} onStartEditing={() => { setDetailsError(null); setDetailsMessage(null); setIsEditingDetails(true); }} onCancelEditing={() => { setDetails(toLeadDetailsForm(lead)); setDetailsError(null); setIsEditingDetails(false); }} onSave={() => void saveLeadDetails()} onChange={(patch) => setDetails((current) => ({ ...current, ...patch }))} /> : null}
-    {isPurchaseConfirming ? <div role="presentation" onClick={(event) => { event.stopPropagation(); if (!isRecordingPurchase) setIsPurchaseConfirming(false); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby={`purchase-title-${lead.id}`} onClick={(event) => event.stopPropagation()} className="w-full max-w-sm rounded-[22px] border border-black/[0.08] bg-white p-5 shadow-[0_24px_80px_rgba(16,24,40,0.24)]"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#fff8df] text-[#8a5b00]"><CircleDollarSign size={20} /></span><div><h2 id={`purchase-title-${lead.id}`} className="text-lg font-black">Registrar compra</h2><p className="mt-1 text-sm leading-6 text-[var(--muted)]">¿Confirmas que {lead.fullName} decidió comprar?</p></div></div><label className="mt-4 block text-xs font-black text-[var(--ink)]">Cédula para registrar la compra<input value={purchaseNationalId} onChange={(event) => setPurchaseNationalId(event.target.value)} inputMode="numeric" autoFocus={!purchaseNationalId} placeholder="Ej. 0102030405" className="field-input mt-1.5" /><span className="mt-1 block text-[11px] font-medium text-[var(--muted)]">Es obligatoria para confirmar esta compra.</span></label>{sendError ? <p className="mt-3 rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]" role="alert">{sendError}</p> : null}<div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsPurchaseConfirming(false)} disabled={isRecordingPurchase} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cancelar</button><button type="button" disabled={isRecordingPurchase || !purchaseNationalId.trim()} onClick={() => void recordPurchaseDecision()} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isRecordingPurchase ? "Registrando…" : "Confirmar"}</button></div></div></div> : null}
+    {isPurchaseConfirming ? <div role="presentation" onClick={(event) => { event.stopPropagation(); if (!isRecordingPurchase && !isRevertingPurchase) setIsPurchaseConfirming(false); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby={`purchase-title-${lead.id}`} onClick={(event) => event.stopPropagation()} className="w-full max-w-sm rounded-[22px] border border-black/[0.08] bg-white p-5 shadow-[0_24px_80px_rgba(16,24,40,0.24)]"><div className="flex items-start gap-3"><span className={`grid size-10 shrink-0 place-items-center rounded-xl ${purchaseConfirmationMode === "REVERT" ? "bg-[#fff0ee] text-[#b33a2c]" : "bg-[#fff8df] text-[#8a5b00]"}`}><CircleDollarSign size={20} /></span><div><h2 id={`purchase-title-${lead.id}`} className="text-lg font-black">{purchaseConfirmationMode === "REVERT" ? "Desmarcar compra" : "Registrar compra"}</h2><p className="mt-1 text-sm leading-6 text-[var(--muted)]">{purchaseConfirmationMode === "REVERT" ? "¿Confirmas que este lead ya no debe contar como comprador?" : `¿Confirmas que ${lead.fullName} decidió comprar?`}</p></div></div>{purchaseConfirmationMode === "MARK" ? <label className="mt-4 block text-xs font-black text-[var(--ink)]">Cédula para registrar la compra<input value={purchaseNationalId} onChange={(event) => setPurchaseNationalId(event.target.value)} inputMode="numeric" autoFocus={!purchaseNationalId} placeholder="Ej. 0102030405" className="field-input mt-1.5" /><span className="mt-1 block text-[11px] font-medium text-[var(--muted)]">Es obligatoria para confirmar esta compra.</span></label> : <p className="mt-4 rounded-xl bg-[#f6f3ed] px-3 py-2.5 text-xs leading-5 text-[var(--muted)]">No se eliminarán los datos del lead ni sus seguimientos.</p>}{sendError ? <p className="mt-3 rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]" role="alert">{sendError}</p> : null}<div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsPurchaseConfirming(false)} disabled={isRecordingPurchase || isRevertingPurchase} className="button-secondary min-h-9 px-3 py-2 text-[11px]">Cancelar</button><button type="button" disabled={isRecordingPurchase || isRevertingPurchase || (purchaseConfirmationMode === "MARK" && !purchaseNationalId.trim())} onClick={() => void (purchaseConfirmationMode === "REVERT" ? revertPurchaseDecision() : recordPurchaseDecision())} className="button-primary min-h-9 px-3 py-2 text-[11px]">{isRecordingPurchase ? "Registrando…" : isRevertingPurchase ? "Actualizando…" : purchaseConfirmationMode === "REVERT" ? "Desmarcar compra" : "Confirmar"}</button></div></div></div> : null}
     {isDeleteModalOpen ? <div role="presentation" onClick={(event) => { event.stopPropagation(); if (!isDeleting) setIsDeleteModalOpen(false); }} className="fixed inset-0 z-[70] grid place-items-center bg-[#101828]/55 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby={`delete-title-${lead.id}`} onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-[26px] border border-black/[0.08] bg-white p-5 shadow-[0_24px_80px_rgba(16,24,40,0.24)] sm:p-6"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#fff0ee] text-[#b33a2c]"><Trash2 size={18} /></span><div><h2 id={`delete-title-${lead.id}`} className="text-lg font-black">¿Eliminar a {lead.fullName}?</h2><p className="mt-1 text-sm leading-6 text-[var(--muted)]">El contacto se ocultará del resumen, dejará de generar recordatorios y no se eliminarán físicamente sus datos. Podrás conservarlo para auditoría.</p></div></div>{sendError ? <p className="mt-4 flex items-start gap-2 rounded-xl bg-[#fff0ee] px-3 py-2.5 text-xs font-semibold text-[#b33a2c]"><TriangleAlert size={14} className="mt-0.5 shrink-0" />{sendError}</p> : null}<div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsDeleteModalOpen(false)} disabled={isDeleting} className="button-secondary">Cancelar</button><button type="button" onClick={() => void deleteContact()} disabled={isDeleting} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#b33a2c] px-4 text-sm font-black text-white disabled:opacity-60"><Trash2 size={16} />{isDeleting ? "Eliminando" : "Eliminar contacto"}</button></div></div></div> : null}
   </article>;
 }

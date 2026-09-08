@@ -964,6 +964,7 @@ export type Database = {
           lead_id: string
           milestone_type: string
           origin: string
+          purchase_status: string
           recorded_at: string
         }
         Insert: {
@@ -973,6 +974,7 @@ export type Database = {
           lead_id: string
           milestone_type: string
           origin?: string
+          purchase_status?: string
           recorded_at?: string
         }
         Update: {
@@ -982,6 +984,7 @@ export type Database = {
           lead_id?: string
           milestone_type?: string
           origin?: string
+          purchase_status?: string
           recorded_at?: string
         }
         Relationships: [
@@ -1456,6 +1459,13 @@ export type Database = {
           p_lead_id: string
           p_national_id: string
           p_recorded_at?: string
+        }
+        Returns: Json
+      }
+      revert_purchase_decision_v1: {
+        Args: {
+          p_idempotency_key?: string
+          p_lead_id: string
         }
         Returns: Json
       }

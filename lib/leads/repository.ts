@@ -49,6 +49,11 @@ function isMissingPaymentMethodsColumn(error: { message?: string } | null): bool
   return /payment_methods|column .* does not exist|PGRST204/i.test(message);
 }
 
+function isMissingPurchaseStatusColumn(error: { message?: string } | null): boolean {
+  const message = error?.message ?? "";
+  return /purchase_status|column .* does not exist|PGRST204/i.test(message);
+}
+
 type FollowUpActionRow = Database["public"]["Tables"]["lead_follow_up_actions"]["Row"];
 type LeadflowDbClient = NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>;
 type RpcResult = { data: Record<string, unknown> | null; error: { code?: string; message?: string } | null };
@@ -325,10 +330,23 @@ async function attachInboundManualDecisions(supabase: LeadflowDbClient, leads: L
 
 async function attachPurchaseMilestones(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
   if (leads.length === 0) return leads;
-  const { data } = await supabase.from("lead_milestones").select("lead_id,recorded_at").eq("milestone_type", "PURCHASE_DECISION").in("lead_id", leads.map((lead) => lead.id));
-  if (!data) return leads;
+  const leadIds = leads.map((lead) => lead.id);
+  const { data, error } = await supabase.from("lead_milestones").select("lead_id,recorded_at,purchase_status").eq("milestone_type", "PURCHASE_DECISION").in("lead_id", leadIds);
+  if (error) {
+    // Migration 074 is intentionally forward-only. Keep older deployments
+    // readable while they are pending: historical milestones are PURCHASED.
+    if (!isMissingPurchaseStatusColumn(error)) {
+      console.error("[leadflow][leads] purchase milestone lookup failed", { message: error.message });
+      return leads;
+    }
+    const legacy = await supabase.from("lead_milestones").select("lead_id,recorded_at").eq("milestone_type", "PURCHASE_DECISION").in("lead_id", leadIds);
+    if (legacy.error || !legacy.data) return leads;
+    const legacyDates = new Map<string, string>();
+    legacy.data.forEach((row) => { if (!legacyDates.has(row.lead_id)) legacyDates.set(row.lead_id, row.recorded_at); });
+    return leads.map((lead) => ({ ...lead, purchaseDecisionAt: legacyDates.get(lead.id) ?? null }));
+  }
   const dates = new Map<string, string>();
-  data.forEach((row) => { if (!dates.has(row.lead_id)) dates.set(row.lead_id, row.recorded_at); });
+  data?.forEach((row) => { if (row.purchase_status !== "REVERTED" && !dates.has(row.lead_id)) dates.set(row.lead_id, row.recorded_at); });
   return leads.map((lead) => ({ ...lead, purchaseDecisionAt: dates.get(lead.id) ?? null }));
 }
 
@@ -901,13 +919,16 @@ export async function getInboundMessageCreatedAtForAdvisor(messageId: string, le
   return data?.created_at ?? null;
 }
 
-export type PurchaseDecisionMilestone = { id: string; leadId: string; milestoneType: "PURCHASE_DECISION"; recordedAt: string; origin: "MANUAL" };
+export type PurchaseDecisionStatus = "PURCHASED" | "REVERTED";
+export type PurchaseDecisionMilestone = { id: string; leadId: string; milestoneType: "PURCHASE_DECISION"; recordedAt: string; origin: "MANUAL"; purchaseStatus: PurchaseDecisionStatus };
 
 function toPurchaseDecisionMilestone(value: unknown): PurchaseDecisionMilestone | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
   if (typeof row.id !== "string" || typeof row.lead_id !== "string" || row.milestone_type !== "PURCHASE_DECISION" || typeof row.recorded_at !== "string" || row.origin !== "MANUAL") return null;
-  return { id: row.id, leadId: row.lead_id, milestoneType: "PURCHASE_DECISION", recordedAt: row.recorded_at, origin: "MANUAL" };
+  const purchaseStatus = row.purchase_status === undefined ? "PURCHASED" : row.purchase_status;
+  if (purchaseStatus !== "PURCHASED" && purchaseStatus !== "REVERTED") return null;
+  return { id: row.id, leadId: row.lead_id, milestoneType: "PURCHASE_DECISION", recordedAt: row.recorded_at, origin: "MANUAL", purchaseStatus };
 }
 
 export async function recordPurchaseDecision(leadId: string, nationalId: string, idempotencyKey: string): Promise<{ status: string; replayed: boolean; milestone: PurchaseDecisionMilestone } | null> {
@@ -920,6 +941,21 @@ export async function recordPurchaseDecision(leadId: string, nationalId: string,
   const milestone = toPurchaseDecisionMilestone(result.milestone);
   if (!milestone) return null;
   return { status: typeof result.status === "string" ? result.status : "UNKNOWN", replayed: result.replayed === true, milestone };
+}
+
+export async function revertPurchaseDecision(leadId: string, idempotencyKey: string): Promise<{ status: string; replayed: boolean; milestone: PurchaseDecisionMilestone | null } | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data, error } = await invokeRpc(supabase, "revert_purchase_decision_v1", { p_lead_id: leadId, p_idempotency_key: idempotencyKey });
+  if (error || !data || typeof data !== "object") return null;
+  const result = data as Record<string, unknown>;
+  const milestone = result.milestone === null || result.milestone === undefined ? null : toPurchaseDecisionMilestone(result.milestone);
+  if (result.milestone !== null && result.milestone !== undefined && !milestone) return null;
+  const status = result.status;
+  if (status !== "REVERTED" && status !== "ALREADY_REVERTED" && status !== "NOT_PURCHASED") return null;
+  if ((status === "REVERTED" || status === "ALREADY_REVERTED") && !milestone) return null;
+  if (status === "NOT_PURCHASED" && milestone) return null;
+  return { status, replayed: result.replayed === true, milestone };
 }
 
 function toResourceSnapshot(value: unknown): FirstContactResourceSnapshot | null {

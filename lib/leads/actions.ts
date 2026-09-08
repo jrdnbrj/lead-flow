@@ -7,8 +7,8 @@ import { executeFirstContact, retryFirstContact, retryFirstContactResourceFromRe
 import { createEvolutionFirstContactProvider } from "@/lib/first-contact/provider";
 import type { FirstContactOperationResult } from "@/lib/first-contact/types";
 import { getResponseReminderAt, getStartOfSellerDayAfter, resolveScheduleShortcut } from "@/lib/leads/follow-up";
-import { clearLeadAction, correctInboundResponseForAdvisor, createLead, deleteCanceledFollowUpAction, findLeadByPhone, getFirstContactColorOptionsForLead, getInboundMessageCreatedAtForAdvisor, getLeadById, recordPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadDetails } from "@/lib/leads/repository";
-import { correctInboundResponseSchema, firstContactRecoveryRetrySchema, firstContactRetrySchema, leadSchema, purchaseDecisionSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema, updateLeadSchema } from "@/lib/leads/validation";
+import { clearLeadAction, correctInboundResponseForAdvisor, createLead, deleteCanceledFollowUpAction, findLeadByPhone, getFirstContactColorOptionsForLead, getInboundMessageCreatedAtForAdvisor, getLeadById, recordPurchaseDecision, revertPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadDetails } from "@/lib/leads/repository";
+import { correctInboundResponseSchema, firstContactRecoveryRetrySchema, firstContactRetrySchema, leadSchema, purchaseDecisionSchema, revertPurchaseDecisionSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema, updateLeadSchema } from "@/lib/leads/validation";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
 
 async function requireAdvisorAction<T>(): Promise<ActionResponse<T> | null> {
@@ -48,6 +48,25 @@ export async function recordPurchaseDecisionAction(input: { leadId: string; nati
   } catch (error) {
     logActionFailure("recordPurchaseDecision", error);
     return { success: false, error: "No pudimos registrar la decisión de compra. Puedes reintentarlo." };
+  }
+}
+
+export async function revertPurchaseDecisionAction(input: { leadId: string; idempotencyKey?: string }): Promise<ActionResponse<{ status: string; milestoneId: string | null; recordedAt: string | null }>> {
+  const parsed = revertPurchaseDecisionSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "No encontramos el lead para desmarcar la compra." };
+  const auth = await requireAdvisorAction<{ status: string; milestoneId: string | null; recordedAt: string | null }>();
+  if (auth) return auth;
+  try {
+    const result = await revertPurchaseDecision(parsed.data.leadId, parsed.data.idempotencyKey ?? crypto.randomUUID());
+    if (!result) return { success: false, error: "No pudimos desmarcar la compra. Puedes reintentarlo." };
+    return {
+      success: true,
+      data: { status: result.status, milestoneId: result.milestone?.id ?? null, recordedAt: result.milestone?.recordedAt ?? null },
+      message: result.replayed ? "La compra ya estaba desmarcada." : "Compra desmarcada.",
+    };
+  } catch (error) {
+    logActionFailure("revertPurchaseDecision", error);
+    return { success: false, error: "No pudimos desmarcar la compra. Puedes reintentarlo." };
   }
 }
 

@@ -86,6 +86,11 @@ export const purchaseDecisionSchema = z.object({
   idempotencyKey: z.string().trim().min(16).max(200).optional(),
 });
 
+export const revertPurchaseDecisionSchema = z.object({
+  leadId: z.string().trim().min(1),
+  idempotencyKey: z.string().trim().min(16).max(200).optional(),
+});
+
 export const leadSchema = z.object({
   fullName: z.string().trim().min(2, "Escribe el nombre del prospecto").max(100),
   phone: z.string().trim().regex(/^[0-9+\s()-]{7,20}$/, "Ingresa un celular válido"),
