@@ -78,6 +78,7 @@ for (const required of ["useRouter", "/cotizacion?leadId=", "Cotizar", "compact 
 assert.ok(leadCapture.includes("<CardQuoteTool lead={savedLead} inline />"), "saved lead must expose quote action");
 assert.ok(!workspace.includes("sendConfirmation"), "quote send must not require confirmation modal");
 assert.ok(workspace.includes("sendCardQuoteAction"), "quote send must execute after preparation");
+assert.match(workspace, /if \(!isLeadPickerOpen\) return;/, "lead picker listener must not run while closed");
 for (const required of ["Cotización", "Cuota mensual", "referencial", "aria-pressed", "parseCardAmount", "formatCardAmountInput", "formatCardFactorPercentage", "DollarSign", "pl-12"]) assert.ok(calculator.includes(required), `global card quote UI missing ${required}`);
 assert.ok(!calculator.includes("Vehículo a cotizar"), "global card quote must not require a vehicle");
 for (const required of ["/cotizacion", "label: \"Cotización\"", "href=\"/whatsapp\"", "<MessageCircle"]) assert.ok(shell.includes(required), `navigation shell missing ${required}`);

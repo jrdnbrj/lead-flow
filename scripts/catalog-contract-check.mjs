@@ -17,6 +17,8 @@ const catalogActions = read("lib/catalog/actions.ts");
 for (const required of ["/catalogo", "/push-diagnostics", "logoutAction", "aria-haspopup=\"menu\"", "Catálogo de autos", "Push Diagnostics", "Cerrar sesión"]) {
   if (!shell.includes(required)) throw new Error(`user menu missing: ${required}`);
 }
+if (shell.includes("return <Link key={item.href}")) throw new Error("primary tabs must use reliable document navigation");
+if (!shell.includes("return <a key={item.href} href={item.href}")) throw new Error("primary tabs must render navigable anchors");
 if (shell.includes('href="/whatsapp" aria-label="Configurar vendedor y WhatsApp"')) throw new Error("user icon must not navigate directly to WhatsApp");
 for (const required of ["requireAdvisorOrRedirect(\"/catalogo\")", "getCatalogModels", "Catálogo de autos"]) {
   if (!page.includes(required)) throw new Error(`catalog page missing: ${required}`);

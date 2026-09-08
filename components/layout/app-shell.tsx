@@ -67,7 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {navigation.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href || (item.href === "/dashboard" && pathname === "/");
-              return <Link key={item.href} href={item.href} className={active ? "flex items-center gap-1.5 rounded-xl bg-[var(--ink)] px-2.5 py-2 text-xs font-black text-[var(--lime)]" : "flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-black text-[var(--muted)] transition hover:bg-black/[0.04]"}><Icon size={15} />{item.label}</Link>;
+              return <a key={item.href} href={item.href} className={active ? "flex items-center gap-1.5 rounded-xl bg-[var(--ink)] px-2.5 py-2 text-xs font-black text-[var(--lime)]" : "flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-black text-[var(--muted)] transition hover:bg-black/[0.04]"}><Icon size={15} />{item.label}</a>;
             })}
           </nav>
 
@@ -103,10 +103,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             const Icon = item.icon;
             const active = pathname === item.href || (item.href === "/dashboard" && pathname === "/");
             return (
-              <Link key={item.href} href={item.href} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition ${active ? "bg-[var(--ink)] text-[var(--lime)]" : "text-[var(--muted)] hover:bg-black/[0.04]"}`}>
+              <a key={item.href} href={item.href} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition ${active ? "bg-[var(--ink)] text-[var(--lime)]" : "text-[var(--muted)] hover:bg-black/[0.04]"}`}>
                 <Icon size={19} strokeWidth={active ? 2.5 : 2} />
                 {item.label}
-              </Link>
+              </a>
             );
           })}
         </div>

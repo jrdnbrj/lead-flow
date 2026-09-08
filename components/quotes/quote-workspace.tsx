@@ -76,12 +76,13 @@ export function QuoteWorkspace({ leadOptions, catalogModels, sellerProfile, init
   const generatedIsCurrent = Boolean(generated && currentSnapshot && quoteSnapshotsEquivalent(generated.snapshot, currentSnapshot));
 
   useEffect(() => {
+    if (!isLeadPickerOpen) return;
     function closeLeadPicker(event: PointerEvent) {
-      if (!leadPickerRef.current?.contains(event.target as Node)) setIsLeadPickerOpen(false);
+      if (event.target instanceof Node && !leadPickerRef.current?.contains(event.target)) setIsLeadPickerOpen(false);
     }
     document.addEventListener("pointerdown", closeLeadPicker);
     return () => document.removeEventListener("pointerdown", closeLeadPicker);
-  }, []);
+  }, [isLeadPickerOpen]);
 
   useEffect(() => {
     if (!selectedLeadId) return;
