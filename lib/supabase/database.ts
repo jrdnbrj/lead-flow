@@ -997,6 +997,109 @@ export type Database = {
           },
         ]
       }
+      purchase_cases: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          lead_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          lead_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          lead_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_cases_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_cases_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_case_milestones: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          id: string
+          milestone_type: string
+          position: number
+          purchase_case_id: string
+          reverted_at: string | null
+          reverted_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          milestone_type: string
+          position: number
+          purchase_case_id: string
+          reverted_at?: string | null
+          reverted_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          milestone_type?: string
+          position?: number
+          purchase_case_id?: string
+          reverted_at?: string | null
+          reverted_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_case_milestones_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_case_milestones_purchase_case_id_fkey"
+            columns: ["purchase_case_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_case_milestones_reverted_by_fkey"
+            columns: ["reverted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leadflow_event_registry: {
         Row: {
           aggregate_table: string | null
@@ -1322,6 +1425,24 @@ export type Database = {
         Returns: Json
       }
       get_first_contact_v1: { Args: { p_lead_id: string }; Returns: Json }
+      get_purchase_case_v1: { Args: { p_lead_id: string }; Returns: Json }
+      ensure_purchase_case_v1: { Args: { p_lead_id: string }; Returns: Json }
+      complete_purchase_milestone_v1: {
+        Args: {
+          p_case_id: string
+          p_idempotency_key?: string
+          p_milestone_type: string
+        }
+        Returns: Json
+      }
+      revert_purchase_milestone_v1: {
+        Args: {
+          p_case_id: string
+          p_idempotency_key?: string
+          p_milestone_type: string
+        }
+        Returns: Json
+      }
       claim_quote_file_send_v1: {
         Args: {
           p_claim_token_digest: string

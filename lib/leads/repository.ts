@@ -10,6 +10,7 @@ import { resolveInboundLeadMatch, type InboundLeadMatch } from "@/lib/leads/inbo
 import type { FirstContactItem, FirstContactOperation, FirstContactOperationResult, FirstContactResource, FirstContactResult, ProviderOutcome, FirstContactResourceSnapshot } from "@/lib/first-contact/types";
 import { firstContactResourceModelEntries } from "@/lib/first-contact/resource-plan";
 import type { FirstContactColorModelOption, FirstContactColorSelection } from "@/lib/first-contact/resource-plan";
+import { postPurchaseMilestones, type PostPurchaseCaseReadModel, type PostPurchaseCaseStatus, type PostPurchaseMilestone, type PostPurchaseMilestoneStatus, type PostPurchaseMilestoneType, type PostPurchasePurchaseStatus } from "@/lib/postpurchase/types";
 
 const leadSelect = "id,user_id,tenant_id,created_at,updated_at,full_name,phone,national_id,email,car_model,car_models,timeframe,payment_method,trade_in_car,score,temperature,notes,whatsapp_status,conversation_state,next_action_at,next_action_type,last_activity_at,last_customer_message_at,last_agent_message_at,last_customer_message_preview,deleted_at,status";
 
@@ -243,6 +244,7 @@ function toDomainLead(row: LeadRow, followUpActions: FollowUpAction[] = []): Lea
     inboundClassification: null,
     inboundManualDecision: null,
     purchaseDecisionAt: null,
+    purchaseDecisionStatus: null,
     deletedAt: row.deleted_at,
     status: row.status,
     followUpActions,
@@ -343,11 +345,16 @@ async function attachPurchaseMilestones(supabase: LeadflowDbClient, leads: Lead[
     if (legacy.error || !legacy.data) return leads;
     const legacyDates = new Map<string, string>();
     legacy.data.forEach((row) => { if (!legacyDates.has(row.lead_id)) legacyDates.set(row.lead_id, row.recorded_at); });
-    return leads.map((lead) => ({ ...lead, purchaseDecisionAt: legacyDates.get(lead.id) ?? null }));
+    return leads.map((lead) => ({ ...lead, purchaseDecisionAt: legacyDates.get(lead.id) ?? null, purchaseDecisionStatus: legacyDates.has(lead.id) ? "PURCHASED" : null }));
   }
   const dates = new Map<string, string>();
-  data?.forEach((row) => { if (row.purchase_status !== "REVERTED" && !dates.has(row.lead_id)) dates.set(row.lead_id, row.recorded_at); });
-  return leads.map((lead) => ({ ...lead, purchaseDecisionAt: dates.get(lead.id) ?? null }));
+  const statuses = new Map<string, "PURCHASED" | "REVERTED">();
+  data?.forEach((row) => {
+    const purchaseStatus = row.purchase_status === "REVERTED" ? "REVERTED" : "PURCHASED";
+    if (!statuses.has(row.lead_id)) statuses.set(row.lead_id, purchaseStatus);
+    if (row.purchase_status !== "REVERTED" && !dates.has(row.lead_id)) dates.set(row.lead_id, row.recorded_at);
+  });
+  return leads.map((lead) => ({ ...lead, purchaseDecisionAt: dates.get(lead.id) ?? null, purchaseDecisionStatus: statuses.get(lead.id) ?? null }));
 }
 
 async function attachLeadRelations(supabase: LeadflowDbClient, leads: Lead[]): Promise<Lead[]> {
@@ -405,6 +412,7 @@ export async function createLead(input: CreateLeadInput): Promise<{ lead: Lead; 
     inboundClassification: null,
     inboundManualDecision: null,
     purchaseDecisionAt: null,
+    purchaseDecisionStatus: null,
     deletedAt: null,
     status: "NUEVO",
     followUpActions: [],
@@ -956,6 +964,95 @@ export async function revertPurchaseDecision(leadId: string, idempotencyKey: str
   if ((status === "REVERTED" || status === "ALREADY_REVERTED") && !milestone) return null;
   if (status === "NOT_PURCHASED" && milestone) return null;
   return { status, replayed: result.replayed === true, milestone };
+}
+
+function toPostPurchaseCaseReadModel(value: unknown): PostPurchaseCaseReadModel | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const status = raw.status;
+  const purchaseStatus = raw.purchase_status;
+  if (status !== "READY" && status !== "NOT_CREATED" && status !== "PAUSED" && status !== "NOT_PURCHASED") return null;
+  if (purchaseStatus !== null && purchaseStatus !== "PURCHASED" && purchaseStatus !== "REVERTED") return null;
+
+  const rawCase = raw["case"];
+  let caseValue: PostPurchaseCaseReadModel["case"] = null;
+  if (rawCase !== null && rawCase !== undefined) {
+    if (typeof rawCase !== "object") return null;
+    const caseRow = rawCase as Record<string, unknown>;
+    if (typeof caseRow.id !== "string" || typeof caseRow.lead_id !== "string" || typeof caseRow.created_at !== "string" || typeof caseRow.created_by !== "string" || typeof caseRow.updated_at !== "string") return null;
+    caseValue = { id: caseRow.id, leadId: caseRow.lead_id, createdAt: caseRow.created_at, createdBy: caseRow.created_by, updatedAt: caseRow.updated_at };
+  }
+
+  if (!Array.isArray(raw.milestones)) return null;
+  const milestones: PostPurchaseMilestone[] = [];
+  for (const item of raw.milestones) {
+    if (!item || typeof item !== "object") return null;
+    const row = item as Record<string, unknown>;
+    const milestoneType = row.milestone_type;
+    const milestoneStatus = row.status;
+    if (typeof row.id !== "string" || typeof row.purchase_case_id !== "string" || typeof milestoneType !== "string" || !postPurchaseMilestones.some((milestone) => milestone.type === milestoneType) || (milestoneStatus !== "PENDING" && milestoneStatus !== "COMPLETED" && milestoneStatus !== "REVERTED") || typeof row.position !== "number" || !Number.isInteger(row.position) || row.position < 1 || row.position > 13 || (row.completed_at !== null && typeof row.completed_at !== "string") || (row.completed_by !== null && typeof row.completed_by !== "string") || (row.reverted_at !== null && typeof row.reverted_at !== "string") || (row.reverted_by !== null && typeof row.reverted_by !== "string") || typeof row.created_at !== "string" || typeof row.updated_at !== "string") return null;
+    milestones.push({
+      id: row.id,
+      purchaseCaseId: row.purchase_case_id,
+      milestoneType: milestoneType as PostPurchaseMilestoneType,
+      position: row.position,
+      status: milestoneStatus as PostPurchaseMilestoneStatus,
+      completedAt: row.completed_at as string | null,
+      completedBy: row.completed_by as string | null,
+      revertedAt: row.reverted_at as string | null,
+      revertedBy: row.reverted_by as string | null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    });
+  }
+
+  const completedCount = typeof raw.completed_count === "number" ? raw.completed_count : Number(raw.completed_count);
+  if (!Number.isInteger(completedCount) || completedCount < 0 || completedCount > 13 || raw.total !== 13) return null;
+  return { status: status as PostPurchaseCaseStatus, purchaseStatus: purchaseStatus as PostPurchasePurchaseStatus | null, case: caseValue, milestones, completedCount, total: 13 };
+}
+
+export async function getPostPurchaseCaseForAdvisor(leadId: string): Promise<PostPurchaseCaseReadModel | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "get_purchase_case_v1", { p_lead_id: leadId });
+  if (error || !data) {
+    if (error) console.error("[leadflow][postpurchase] case lookup failed", { message: error.message ?? "UNKNOWN" });
+    return null;
+  }
+  return toPostPurchaseCaseReadModel(data);
+}
+
+export async function ensurePostPurchaseCaseForAdvisor(leadId: string): Promise<PostPurchaseCaseReadModel | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "ensure_purchase_case_v1", { p_lead_id: leadId });
+  if (error || !data) {
+    if (error) console.error("[leadflow][postpurchase] case ensure failed", { message: error.message ?? "UNKNOWN" });
+    return null;
+  }
+  return toPostPurchaseCaseReadModel(data);
+}
+
+export async function completePostPurchaseMilestoneForAdvisor(caseId: string, milestoneType: PostPurchaseMilestoneType, idempotencyKey: string): Promise<PostPurchaseCaseReadModel | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "complete_purchase_milestone_v1", { p_case_id: caseId, p_milestone_type: milestoneType, p_idempotency_key: idempotencyKey });
+  if (error || !data) {
+    if (error) console.error("[leadflow][postpurchase] milestone completion failed", { message: error.message ?? "UNKNOWN" });
+    return null;
+  }
+  return toPostPurchaseCaseReadModel(data);
+}
+
+export async function revertPostPurchaseMilestoneForAdvisor(caseId: string, milestoneType: PostPurchaseMilestoneType, idempotencyKey: string): Promise<PostPurchaseCaseReadModel | null> {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "revert_purchase_milestone_v1", { p_case_id: caseId, p_milestone_type: milestoneType, p_idempotency_key: idempotencyKey });
+  if (error || !data) {
+    if (error) console.error("[leadflow][postpurchase] milestone reversion failed", { message: error.message ?? "UNKNOWN" });
+    return null;
+  }
+  return toPostPurchaseCaseReadModel(data);
 }
 
 function toResourceSnapshot(value: unknown): FirstContactResourceSnapshot | null {

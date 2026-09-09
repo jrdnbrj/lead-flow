@@ -14,6 +14,7 @@ import { FirstContactSummary } from "@/components/leads/first-contact-summary";
 import { FirstContactColorSelector } from "@/components/leads/first-contact-color-selector";
 import { CardQuoteTool } from "@/components/leads/card-quote-tool";
 import { LeadContactActions } from "@/components/leads/lead-contact-actions";
+import { PostPurchasePanel } from "@/components/leads/post-purchase-panel";
 import { PendingNotifications } from "@/components/leads/pending-notifications";
 import { PushNotifications } from "@/components/leads/push-notifications";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -387,6 +388,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
   const [manualDecision, setManualDecision] = useState<Lead["inboundManualDecision"]>(lead.inboundManualDecision);
   const [isCorrectingInbound, setIsCorrectingInbound] = useState(false);
   const [purchaseDecisionAt, setPurchaseDecisionAt] = useState(lead.purchaseDecisionAt);
+  const [purchaseDecisionStatus, setPurchaseDecisionStatus] = useState(lead.purchaseDecisionStatus);
   const [isPurchaseConfirming, setIsPurchaseConfirming] = useState(false);
   const [purchaseConfirmationMode, setPurchaseConfirmationMode] = useState<"MARK" | "REVERT">("MARK");
   const [isRecordingPurchase, setIsRecordingPurchase] = useState(false);
@@ -410,6 +412,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
       setFollowUpActions(lead.followUpActions);
       setManualDecision(lead.inboundManualDecision);
       setPurchaseDecisionAt(lead.purchaseDecisionAt);
+      setPurchaseDecisionStatus(lead.purchaseDecisionStatus);
       setDetails(toLeadDetailsForm(lead));
       setPurchaseNationalId(lead.nationalId ?? "");
     });
@@ -436,6 +439,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
     const response = await recordPurchaseDecisionAction({ leadId: lead.id, nationalId: purchaseNationalId });
     if (response.success && response.data) {
       setPurchaseDecisionAt(response.data.recordedAt);
+      setPurchaseDecisionStatus("PURCHASED");
       setIsPurchaseConfirming(false);
       setSendInfo("Compra registrada. El estado comercial y el seguimiento no cambiaron.");
       router.refresh();
@@ -454,6 +458,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
       const response = await revertPurchaseDecisionAction({ leadId: lead.id });
       if (response.success) {
         setPurchaseDecisionAt(null);
+        setPurchaseDecisionStatus("REVERTED");
         setIsPurchaseConfirming(false);
         setSendInfo("Compra desmarcada. El estado comercial y el seguimiento no cambiaron.");
         router.refresh();
@@ -609,6 +614,7 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
     {isExpanded && purchaseDecisionAt ? <p className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-emerald-700"><CheckCircle2 size={14} />Compra registrada · {new Intl.DateTimeFormat("es-EC", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Guayaquil" }).format(new Date(purchaseDecisionAt))}</p> : null}
 
     {isExpanded ? <FollowUpActions leadId={lead.id} actions={followUpActions} onActionsChange={setFollowUpActions} onError={setSendError} onInfo={setSendInfo} /> : null}
+    {isExpanded && purchaseDecisionStatus ? <PostPurchasePanel leadId={lead.id} purchaseStatus={purchaseDecisionStatus} /> : null}
     {isExpanded && (lead.firstContact || hasOutboundEvidence) ? <FirstContactSummary key={`${lead.id}-${lead.firstContact?.operation.operationVersion ?? "recovery"}`} lead={lead} initialOperation={lead.firstContact} /> : null}
     {isColorSelectorOpen ? <FirstContactColorSelector lead={lead} initialModels={colorModels} onCancel={() => setIsColorSelectorOpen(false)} onConfirm={(colorSelections) => void sendMessage(colorSelections)} /> : null}
     {isExpanded && lead.lastCustomerMessageAt ? <p className="mt-3 text-[11px] text-[var(--muted)]">Última respuesta del cliente registrada. Las acciones pendientes se cancelan cuando llega una nueva respuesta.</p> : null}

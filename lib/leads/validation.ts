@@ -91,6 +91,34 @@ export const revertPurchaseDecisionSchema = z.object({
   idempotencyKey: z.string().trim().min(16).max(200).optional(),
 });
 
+const postPurchaseMilestoneTypeSchema = z.enum([
+  "INVOICED",
+  "FONDO_VIAL",
+  "RAMV_REQUESTED",
+  "RAMV_UPLOADED",
+  "ORDERS_AVAILABLE",
+  "ORDERS_SENT",
+  "PAYMENTS_RECEIVED",
+  "SENT_TO_REGISTRATION",
+  "REGISTERED",
+  "ACCESSORIES_COMPLETE",
+  "VEHICLE_REQUESTED",
+  "DELIVERY_PREPARATION",
+  "DELIVERED",
+]);
+
+const postPurchaseCaseLeadSchema = z.object({ leadId: z.string().trim().min(1) });
+
+export const completePostPurchaseMilestoneSchema = z.object({
+  caseId: z.string().trim().min(1),
+  milestoneType: postPurchaseMilestoneTypeSchema,
+  idempotencyKey: z.string().trim().min(16).max(200).optional(),
+});
+
+export const revertPostPurchaseMilestoneSchema = completePostPurchaseMilestoneSchema;
+
+export { postPurchaseCaseLeadSchema };
+
 export const leadSchema = z.object({
   fullName: z.string().trim().min(2, "Escribe el nombre del prospecto").max(100),
   phone: z.string().trim().regex(/^[0-9+\s()-]{7,20}$/, "Ingresa un celular válido"),

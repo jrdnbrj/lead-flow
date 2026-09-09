@@ -116,6 +116,8 @@ export interface Lead {
   inboundClassification: InboundClassification | null;
   inboundManualDecision: "REQUIRES_RESPONSE" | "NO_RESPONSE_REQUIRED" | null;
   purchaseDecisionAt: string | null;
+  /** Current PURCHASE_DECISION state; kept separate from the active timestamp so paused cases remain discoverable. */
+  purchaseDecisionStatus: "PURCHASED" | "REVERTED" | null;
   deletedAt: string | null;
   status: LeadStatus;
   followUpActions: FollowUpAction[];

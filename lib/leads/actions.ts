@@ -6,9 +6,10 @@ import { requireAdvisor } from "@/lib/auth/advisor";
 import { executeFirstContact, retryFirstContact, retryFirstContactResourceFromRecovery } from "@/lib/first-contact/command";
 import { createEvolutionFirstContactProvider } from "@/lib/first-contact/provider";
 import type { FirstContactOperationResult } from "@/lib/first-contact/types";
+import type { PostPurchaseCaseReadModel, PostPurchaseMilestoneType } from "@/lib/postpurchase/types";
 import { getResponseReminderAt, getStartOfSellerDayAfter, resolveScheduleShortcut } from "@/lib/leads/follow-up";
-import { clearLeadAction, correctInboundResponseForAdvisor, createLead, deleteCanceledFollowUpAction, findLeadByPhone, getFirstContactColorOptionsForLead, getInboundMessageCreatedAtForAdvisor, getLeadById, recordPurchaseDecision, revertPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadDetails } from "@/lib/leads/repository";
-import { correctInboundResponseSchema, firstContactRecoveryRetrySchema, firstContactRetrySchema, leadSchema, purchaseDecisionSchema, revertPurchaseDecisionSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema, updateLeadSchema } from "@/lib/leads/validation";
+import { clearLeadAction, completePostPurchaseMilestoneForAdvisor, correctInboundResponseForAdvisor, createLead, deleteCanceledFollowUpAction, ensurePostPurchaseCaseForAdvisor, findLeadByPhone, getFirstContactColorOptionsForLead, getInboundMessageCreatedAtForAdvisor, getLeadById, getPostPurchaseCaseForAdvisor, recordPurchaseDecision, revertPostPurchaseMilestoneForAdvisor, revertPurchaseDecision, scheduleLeadAction, softDeleteLead, updateFollowUpAction, updateLeadConversationState, updateLeadDetails } from "@/lib/leads/repository";
+import { completePostPurchaseMilestoneSchema, correctInboundResponseSchema, firstContactRecoveryRetrySchema, firstContactRetrySchema, leadSchema, postPurchaseCaseLeadSchema, purchaseDecisionSchema, revertPurchaseDecisionSchema, revertPostPurchaseMilestoneSchema, scheduleLeadActionSchema, sendLeadSchema, updateFollowUpActionSchema, updateLeadSchema } from "@/lib/leads/validation";
 import { hasSupabaseConfig } from "@/lib/supabase/server";
 
 async function requireAdvisorAction<T>(): Promise<ActionResponse<T> | null> {
@@ -67,6 +68,53 @@ export async function revertPurchaseDecisionAction(input: { leadId: string; idem
   } catch (error) {
     logActionFailure("revertPurchaseDecision", error);
     return { success: false, error: "No pudimos desmarcar la compra. Puedes reintentarlo." };
+  }
+}
+
+export async function loadPostPurchaseCaseAction(leadId: string): Promise<ActionResponse<PostPurchaseCaseReadModel>> {
+  const parsed = postPurchaseCaseLeadSchema.safeParse({ leadId });
+  if (!parsed.success) return { success: false, error: "No encontramos el lead para abrir Postcompra." };
+  const auth = await requireAdvisorAction<PostPurchaseCaseReadModel>();
+  if (auth) return auth;
+  try {
+    const current = await getPostPurchaseCaseForAdvisor(parsed.data.leadId);
+    if (!current) return { success: false, error: "No pudimos cargar el estado de Postcompra. Puedes reintentarlo." };
+    if (current.status !== "NOT_CREATED") return { success: true, data: current };
+    const ensured = await ensurePostPurchaseCaseForAdvisor(parsed.data.leadId);
+    return ensured
+      ? { success: true, data: ensured }
+      : { success: false, error: "No pudimos preparar Postcompra. Puedes reintentarlo." };
+  } catch (error) {
+    logActionFailure("loadPostPurchaseCase", error);
+    return { success: false, error: "No pudimos cargar Postcompra. Puedes reintentarlo." };
+  }
+}
+
+export async function completePostPurchaseMilestoneAction(input: { caseId: string; milestoneType: PostPurchaseMilestoneType; idempotencyKey?: string }): Promise<ActionResponse<PostPurchaseCaseReadModel>> {
+  const parsed = completePostPurchaseMilestoneSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "La etapa seleccionada no es válida." };
+  const auth = await requireAdvisorAction<PostPurchaseCaseReadModel>();
+  if (auth) return auth;
+  try {
+    const result = await completePostPurchaseMilestoneForAdvisor(parsed.data.caseId, parsed.data.milestoneType as PostPurchaseMilestoneType, parsed.data.idempotencyKey ?? crypto.randomUUID());
+    return result ? { success: true, data: result } : { success: false, error: "No pudimos marcar la etapa. Puedes reintentarlo." };
+  } catch (error) {
+    logActionFailure("completePostPurchaseMilestone", error);
+    return { success: false, error: "No pudimos marcar la etapa. Puedes reintentarlo." };
+  }
+}
+
+export async function revertPostPurchaseMilestoneAction(input: { caseId: string; milestoneType: PostPurchaseMilestoneType; idempotencyKey?: string }): Promise<ActionResponse<PostPurchaseCaseReadModel>> {
+  const parsed = revertPostPurchaseMilestoneSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: "La etapa seleccionada no es válida." };
+  const auth = await requireAdvisorAction<PostPurchaseCaseReadModel>();
+  if (auth) return auth;
+  try {
+    const result = await revertPostPurchaseMilestoneForAdvisor(parsed.data.caseId, parsed.data.milestoneType as PostPurchaseMilestoneType, parsed.data.idempotencyKey ?? crypto.randomUUID());
+    return result ? { success: true, data: result } : { success: false, error: "No pudimos corregir la etapa. Puedes reintentarlo." };
+  } catch (error) {
+    logActionFailure("revertPostPurchaseMilestone", error);
+    return { success: false, error: "No pudimos corregir la etapa. Puedes reintentarlo." };
   }
 }
 
