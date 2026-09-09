@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Circle, LoaderCircle, RotateCcw, TriangleAlert } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { completePostPurchaseMilestoneAction, loadPostPurchaseCaseAction, revertPostPurchaseMilestoneAction } from "@/lib/leads/actions";
 import { postPurchaseMilestones, type PostPurchaseCaseReadModel, type PostPurchaseMilestone, type PostPurchaseMilestoneType, type PostPurchasePurchaseStatus } from "@/lib/postpurchase/types";
@@ -24,28 +24,51 @@ export function PostPurchasePanel({ leadId, purchaseStatus }: { leadId: string; 
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [busyMilestone, setBusyMilestone] = useState<PostPurchaseMilestoneType | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const requestContextRef = useRef({ leadId, purchaseStatus });
 
   const load = useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const requestContext = { leadId, purchaseStatus };
+    const isCurrentRequest = () => requestId === requestIdRef.current
+      && requestContextRef.current.leadId === requestContext.leadId
+      && requestContextRef.current.purchaseStatus === requestContext.purchaseStatus;
+
     setIsLoading(true);
     setLoadingError(null);
-    const response = await loadPostPurchaseCaseAction(leadId);
-    if (response.success && response.data) {
-      setData(response.data);
-      setActionError(null);
-    } else {
-      setLoadingError(response.error || "No pudimos cargar Postcompra. Puedes reintentarlo.");
+    try {
+      const response = await loadPostPurchaseCaseAction(leadId);
+      if (!isCurrentRequest()) return;
+      if (response.success && response.data) {
+        setData(response.data);
+        setActionError(null);
+      } else {
+        setLoadingError(response.error || "No pudimos cargar Postcompra. Puedes reintentarlo.");
+      }
+    } catch {
+      if (isCurrentRequest()) setLoadingError("No pudimos cargar Postcompra. Puedes reintentarlo.");
+    } finally {
+      if (isCurrentRequest()) setIsLoading(false);
     }
-    setIsLoading(false);
-  }, [leadId]);
+  }, [leadId, purchaseStatus]);
 
   const retryLoad = useCallback(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => { void load(); }, 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [load, purchaseStatus]);
+    requestContextRef.current = { leadId, purchaseStatus };
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const timeoutId = window.setTimeout(() => {
+      if (requestId === requestIdRef.current) void load();
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (requestId === requestIdRef.current) requestIdRef.current += 1;
+    };
+  }, [leadId, load, purchaseStatus]);
 
   async function complete(milestoneType: PostPurchaseMilestoneType) {
     if (!data?.case || busyMilestone || data.status === "PAUSED") return;

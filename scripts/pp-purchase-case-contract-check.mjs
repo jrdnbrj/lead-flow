@@ -5,6 +5,8 @@ import path from "node:path";
 const root = process.cwd();
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const migration = read("supabase/migrations/075_purchase_case_milestones.sql");
+const forwardMigrationPath = "supabase/migrations/077_harden_purchase_case_lock_order.sql";
+const forwardMigration = fs.existsSync(path.join(root, forwardMigrationPath)) ? read(forwardMigrationPath) : "";
 const databaseTypes = read("lib/supabase/database.ts");
 const repository = read("lib/leads/repository.ts");
 const actions = read("lib/leads/actions.ts");
@@ -34,10 +36,14 @@ function expect(condition, message) {
 }
 
 function functionBody(functionName) {
-  const start = migration.indexOf(`create or replace function public.${functionName}`);
+  return functionBodyFrom(migration, functionName);
+}
+
+function functionBodyFrom(source, functionName) {
+  const start = source.indexOf(`create or replace function public.${functionName}`);
   expect(start >= 0, `${functionName} body missing`);
-  const end = migration.indexOf("\ncreate or replace function public.", start + 1);
-  return migration.slice(start, end >= 0 ? end : migration.length);
+  const end = source.indexOf("\ncreate or replace function public.", start + 1);
+  return source.slice(start, end >= 0 ? end : source.length);
 }
 
 function lockedLookupPosition(body, variableName, tableName) {
@@ -59,6 +65,19 @@ function assertLockOrder(functionName) {
     expect(milestonePosition >= 0 && positions[2] < milestonePosition, `${functionName} lock order must continue with milestone`);
   }
   return body;
+}
+
+function assertForwardLockOrder(functionName) {
+  const body = functionBodyFrom(forwardMigration, functionName);
+  const positions = [
+    lockedLookupPosition(body, "lead_row", "leads"),
+    lockedLookupPosition(body, "purchase_row", "lead_milestones"),
+    lockedLookupPosition(body, "case_row", "purchase_cases"),
+    lockedLookupPosition(body, "milestone_row", "purchase_case_milestones"),
+  ];
+  expect(positions.every((position) => position >= 0), `${functionName} forward migration must lock all rows`);
+  expect(positions.every((position, index) => index === 0 || positions[index - 1] < position), `${functionName} forward lock order must be lead -> decision -> case -> milestone`);
+  expect(body.includes("select lead_id into target_lead_id"), `${functionName} forward migration must resolve lead before locking the case`);
 }
 
 expect(migration.includes("create table if not exists public.purchase_cases"), "purchase_cases table missing");
@@ -104,6 +123,16 @@ for (const [functionName, body] of [["complete_purchase_milestone_v1", completeB
   expect(!body.includes("select * into case_row from public.purchase_cases where id = p_case_id for update;"), `${functionName} must not lock case before lead`);
 }
 
+// T7-T11: the applied-schema fix is forward-only and preserves the 074-compatible lock hierarchy.
+expect(forwardMigration.length > 0, `new forward migration missing: ${forwardMigrationPath}`);
+expect(/^\s*create or replace function public\.complete_purchase_milestone_v1/mu.test(forwardMigration), "forward migration must replace complete RPC");
+expect(/^\s*create or replace function public\.revert_purchase_milestone_v1/mu.test(forwardMigration), "forward migration must replace revert RPC");
+expect(!/create table|alter table|backfill|insert into public\.leads|insert into public\.lead_milestones/iu.test(forwardMigration), "forward migration must contain only RPC replacements");
+assertForwardLockOrder("complete_purchase_milestone_v1");
+assertForwardLockOrder("revert_purchase_milestone_v1");
+expect(forwardMigration.includes("security definer") && forwardMigration.includes("set search_path = public, auth, extensions"), "forward RPC security contract missing");
+expect(forwardMigration.includes("MILESTONE_INPUT_INVALID") && forwardMigration.includes("MILESTONE_COMMAND_INPUT_REQUIRED"), "forward RPC validation contract missing");
+
 expect(databaseTypes.includes("purchase_cases:"), "database types missing purchase_cases");
 expect(databaseTypes.includes("purchase_case_milestones:"), "database types missing purchase_case_milestones");
 for (const functionName of ["get_purchase_case_v1", "ensure_purchase_case_v1", "complete_purchase_milestone_v1", "revert_purchase_milestone_v1"]) expect(databaseTypes.includes(`${functionName}:`), `database RPC type missing ${functionName}`);
@@ -114,8 +143,15 @@ expect(panel.includes("Postcompra") && panel.includes("Postcompra pausada"), "po
 expect(panel.includes("completedCount") && panel.includes("data.total"), "progress projection missing");
 expect(panel.includes("window.confirm"), "revert confirmation missing");
 expect(panel.includes("setData(response.data)"), "UI must update only after persisted response");
-expect(/const load = useCallback\(async \(\) => \{[\s\S]*?setIsLoading\(true\);[\s\S]*?\}, \[leadId\]\);/u.test(panel), "panel load must reset loading state");
-expect(/useEffect\(\(\) => \{[\s\S]*?void load\(\);[\s\S]*?\}, \[load, purchaseStatus\]\);/u.test(panel), "panel must reload when purchaseStatus changes");
+expect(/const load = useCallback\(async \(\) => \{[\s\S]*?setIsLoading\(true\);[\s\S]*?\}, \[leadId, purchaseStatus\]\);/u.test(panel), "panel load must reset loading state for its context");
+expect(/useEffect\(\(\) => \{[\s\S]*?void load\(\);[\s\S]*?\}, \[leadId, load, purchaseStatus\]\);/u.test(panel), "panel must reload when its context changes");
+// T1-T6: only the current load may commit state, including transport failures.
+expect(panel.includes("useRef(0)"), "panel must keep a monotonic load request version");
+expect(panel.includes("requestIdRef.current"), "panel request version guard missing");
+expect(panel.includes("requestContextRef"), "panel lead/status request context guard missing");
+expect(panel.includes("try {") && panel.includes("catch") && panel.includes("finally"), "panel load must handle transport rejection with finally");
+expect(/requestId === requestIdRef\.current/u.test(panel), "stale panel response guard missing");
+expect(/setIsLoading\(false\)/u.test(panel), "panel loading completion missing");
 expect(dashboard.includes("PostPurchasePanel") && dashboard.includes("purchaseDecisionStatus"), "dashboard integration/read projection missing");
 expect(types.includes("DELIVERED") && types.includes("total: 13"), "domain milestone contract missing");
 
@@ -212,5 +248,50 @@ const beforeRetry = JSON.stringify(purchased.milestones);
 assert.equal(JSON.stringify(purchased.milestones), beforeRetry);
 assert.equal(complete(purchased, "RAMV_UPLOADED", "advisor-1").replayed, true);
 
+function createLoadGuard() {
+  let currentRequest = 0;
+  let currentContext = null;
+  const state = { status: "IDLE", data: null, error: null };
+  return {
+    begin(context) {
+      const request = { id: ++currentRequest, context };
+      currentContext = context;
+      state.status = "LOADING";
+      state.error = null;
+      return request;
+    },
+    resolve(request, result) {
+      if (request.id !== currentRequest || request.context !== currentContext) return false;
+      state.status = "READY";
+      state.data = result;
+      state.error = null;
+      return true;
+    },
+    reject(request, error) {
+      if (request.id !== currentRequest || request.context !== currentContext) return false;
+      state.status = "ERROR";
+      state.error = error;
+      return true;
+    },
+    state,
+  };
+}
+
+// T1/T2/T3/T4/T5/T6: stale responses/errors cannot overwrite the current lead/status;
+// the active transport failure leaves a retryable error instead of infinite loading.
+const loadGuard = createLoadGuard();
+const purchasedLoad = loadGuard.begin("lead-1:PURCHASED");
+const pausedLoad = loadGuard.begin("lead-1:REVERTED");
+const activeReload = loadGuard.begin("lead-1:PURCHASED");
+assert.equal(loadGuard.resolve(pausedLoad, "PAUSED"), false);
+assert.equal(loadGuard.resolve(purchasedLoad, "READY"), false);
+assert.equal(loadGuard.resolve(activeReload, "READY"), true);
+assert.equal(loadGuard.state.data, "READY");
+const otherLeadLoad = loadGuard.begin("lead-2:PURCHASED");
+assert.equal(loadGuard.resolve(activeReload, "lead-1 READY"), false);
+assert.equal(loadGuard.reject(otherLeadLoad, "network"), true);
+assert.equal(loadGuard.state.status, "ERROR");
+assert.equal(loadGuard.state.error, "network");
+
 console.log("PP_PURCHASE_CASE_CONTRACT: PASS");
-console.log("PP_SCENARIOS: PP1-PP15 PASS (static/RPC contract plus deterministic state simulation)");
+console.log("PP_SCENARIOS: PP1-PP15 + T1-T12 PASS (static/RPC contract plus deterministic state simulation)");
