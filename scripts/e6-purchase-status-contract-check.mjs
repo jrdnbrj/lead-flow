@@ -21,6 +21,7 @@ const checks = [
   ["P8 combined filters", ui.includes("matchesPurchase") && ui.includes("matchesTemperature") && ui.includes("matchesStatus") && ui.includes("matchesTradeIn") && ui.includes("matchesQuery") && ui.includes("purchaseFilter")],
   ["P9 pagination and default", ui.includes('useState<PurchaseFilter>("ALL")') && ui.includes("setPurchaseFilter(filter.value); setPage(1)")],
   ["P10 preserved lead context", ui.includes("LeadContactActions") && ui.includes("CardQuoteTool") && ui.includes("FirstContactSummary") && actions.includes("No pudimos desmarcar la compra")],
+  ["P11 JWT-safe purchase RPC", repository.includes('invokeAuthenticatedRpc(supabase, "record_purchase_decision_v2"') && repository.includes('invokeAuthenticatedRpc(supabase, "revert_purchase_decision_v1"')],
 ];
 
 for (const [name, result] of checks) assert(result, `${name} contract missing`);

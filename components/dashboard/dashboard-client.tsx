@@ -414,7 +414,6 @@ function LeadCard({ lead, isExpanded, onExpandedChange, onDeleted }: { lead: Lea
       setPurchaseDecisionAt(lead.purchaseDecisionAt);
       setPurchaseDecisionStatus(lead.purchaseDecisionStatus);
       setDetails(toLeadDetailsForm(lead));
-      setPurchaseNationalId(lead.nationalId ?? "");
     });
   }, [lead]);
 

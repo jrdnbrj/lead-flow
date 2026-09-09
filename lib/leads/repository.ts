@@ -943,7 +943,7 @@ export async function recordPurchaseDecision(leadId: string, nationalId: string,
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
   // record_purchase_decision_v1 remains available for historical compatibility; new purchases use v2 so the buyer identity is atomic.
-  const { data, error } = await invokeRpc(supabase, "record_purchase_decision_v2", { p_lead_id: leadId, p_national_id: nationalId.trim(), p_idempotency_key: idempotencyKey, p_recorded_at: new Date().toISOString() });
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "record_purchase_decision_v2", { p_lead_id: leadId, p_national_id: nationalId.trim(), p_idempotency_key: idempotencyKey, p_recorded_at: new Date().toISOString() });
   if (error || !data || typeof data !== "object") return null;
   const result = data as Record<string, unknown>;
   const milestone = toPurchaseDecisionMilestone(result.milestone);
@@ -954,7 +954,7 @@ export async function recordPurchaseDecision(leadId: string, nationalId: string,
 export async function revertPurchaseDecision(leadId: string, idempotencyKey: string): Promise<{ status: string; replayed: boolean; milestone: PurchaseDecisionMilestone | null } | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data, error } = await invokeRpc(supabase, "revert_purchase_decision_v1", { p_lead_id: leadId, p_idempotency_key: idempotencyKey });
+  const { data, error } = await invokeAuthenticatedRpc(supabase, "revert_purchase_decision_v1", { p_lead_id: leadId, p_idempotency_key: idempotencyKey });
   if (error || !data || typeof data !== "object") return null;
   const result = data as Record<string, unknown>;
   const milestone = result.milestone === null || result.milestone === undefined ? null : toPurchaseDecisionMilestone(result.milestone);
