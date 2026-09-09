@@ -61,6 +61,12 @@ type RpcResult = { data: Record<string, unknown> | null; error: { code?: string;
 const serverRpcFallbackFunctions = new Set([
   "create_lead_follow_up_action_v1",
   "transition_lead_follow_up_action_v1",
+  // These purchase RPCs re-check the installation owner and the active lead
+  // inside SQL, and the service_role grant is kept in a forward-only migration.
+  // They are safe to use only after requireAdvisor() has passed in the action.
+  "record_purchase_decision_v1",
+  "record_purchase_decision_v2",
+  "revert_purchase_decision_v1",
   "request_first_contact_v1",
   "request_first_contact_v2",
   "claim_first_contact_effect_v1",

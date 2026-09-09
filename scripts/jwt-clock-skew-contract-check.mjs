@@ -8,6 +8,7 @@ import {
 
 const helper = fs.readFileSync("lib/supabase/fetch-with-jwt-clock-skew-retry.ts", "utf8");
 const clients = ["lib/supabase/server.ts", "lib/supabase/proxy.ts", "lib/supabase/client.ts", "lib/supabase/admin.ts"];
+const purchaseFallbackMigration = fs.readFileSync("supabase/migrations/076_purchase_rpc_server_fallback.sql", "utf8");
 
 assert.match(helper, /PGRST303/);
 assert.match(helper, /JWT issued at future/);
@@ -23,6 +24,11 @@ const repository = fs.readFileSync("lib/leads/repository.ts", "utf8");
 assert.match(repository, /fetchWithJwtClockSkewRetry/);
 assert.match(repository, /isJwtIssuedAtFutureError/);
 assert.doesNotMatch(repository, /serverRpcFallbackActive/);
+for (const functionName of ["record_purchase_decision_v1", "record_purchase_decision_v2", "revert_purchase_decision_v1"]) {
+  assert.match(repository, new RegExp(`\\"${functionName}\\"`), `${functionName} must have the server-authenticated fallback`);
+  assert.match(purchaseFallbackMigration, new RegExp(`grant execute on function public\\.${functionName}`), `${functionName} server grant is missing`);
+}
+assert.doesNotMatch(purchaseFallbackMigration, /purchase_case|first_contact|whatsapp|evolution/i, "purchase fallback migration must stay scoped");
 assert.match(fs.readFileSync("app/api/internal/whatsapp-reminders/dispatch/route.ts", "utf8"), /fetchWithJwtClockSkewRetry/);
 const ci = fs.readFileSync("scripts/ci-contract-checks.sh", "utf8");
 assert.match(ci, /scripts\/jwt-clock-skew-contract-check\.mjs/);
