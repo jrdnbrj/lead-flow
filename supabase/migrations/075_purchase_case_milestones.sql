@@ -209,6 +209,8 @@ begin
 end;
 $$;
 
+-- All post-purchase mutators acquire row locks in this order:
+-- lead -> PURCHASE_DECISION -> purchase_case -> purchase_case_milestone.
 create or replace function public.ensure_purchase_case_v1(p_lead_id uuid)
 returns jsonb
 language plpgsql
@@ -289,6 +291,7 @@ set search_path = public, auth, extensions
 as $$
 declare
   owner_id uuid;
+  target_lead_id uuid;
   case_row public.purchase_cases;
   lead_row public.leads;
   purchase_row public.lead_milestones;
@@ -311,12 +314,19 @@ begin
     raise exception using errcode = '22023', message = 'MILESTONE_COMMAND_INPUT_REQUIRED';
   end if;
 
-  select * into case_row from public.purchase_cases where id = p_case_id for update;
+  -- Resolve the immutable relationship without locking the case first.
+  -- The mutating lock order is lead -> decision -> case -> milestone.
+  select lead_id into target_lead_id
+  from public.purchase_cases
+  where id = p_case_id;
   if not found then
     raise exception using errcode = '42501', message = 'PURCHASE_CASE_NOT_FOUND';
   end if;
 
-  select * into lead_row from public.leads where id = case_row.lead_id for update;
+  select * into lead_row
+  from public.leads
+  where id = target_lead_id
+  for update;
   if not found or lead_row.user_id <> owner_id or lead_row.deleted_at is not null then
     raise exception using errcode = '42501', message = 'LEAD_NOT_ACTIVE_OR_NOT_OWNED';
   end if;
@@ -327,6 +337,15 @@ begin
   for update;
   if not found or purchase_row.purchase_status <> 'PURCHASED' then
     raise exception using errcode = '42501', message = 'PURCHASE_NOT_ACTIVE';
+  end if;
+
+  select * into case_row
+  from public.purchase_cases
+  where id = p_case_id
+    and lead_id = lead_row.id
+  for update;
+  if not found then
+    raise exception using errcode = '42501', message = 'PURCHASE_CASE_NOT_FOUND';
   end if;
 
   select * into milestone_row
@@ -363,6 +382,7 @@ set search_path = public, auth, extensions
 as $$
 declare
   owner_id uuid;
+  target_lead_id uuid;
   case_row public.purchase_cases;
   lead_row public.leads;
   purchase_row public.lead_milestones;
@@ -385,12 +405,19 @@ begin
     raise exception using errcode = '22023', message = 'MILESTONE_COMMAND_INPUT_REQUIRED';
   end if;
 
-  select * into case_row from public.purchase_cases where id = p_case_id for update;
+  -- Resolve the immutable relationship without locking the case first.
+  -- The mutating lock order is lead -> decision -> case -> milestone.
+  select lead_id into target_lead_id
+  from public.purchase_cases
+  where id = p_case_id;
   if not found then
     raise exception using errcode = '42501', message = 'PURCHASE_CASE_NOT_FOUND';
   end if;
 
-  select * into lead_row from public.leads where id = case_row.lead_id for update;
+  select * into lead_row
+  from public.leads
+  where id = target_lead_id
+  for update;
   if not found or lead_row.user_id <> owner_id or lead_row.deleted_at is not null then
     raise exception using errcode = '42501', message = 'LEAD_NOT_ACTIVE_OR_NOT_OWNED';
   end if;
@@ -401,6 +428,15 @@ begin
   for update;
   if not found or purchase_row.purchase_status <> 'PURCHASED' then
     raise exception using errcode = '42501', message = 'PURCHASE_NOT_ACTIVE';
+  end if;
+
+  select * into case_row
+  from public.purchase_cases
+  where id = p_case_id
+    and lead_id = lead_row.id
+  for update;
+  if not found then
+    raise exception using errcode = '42501', message = 'PURCHASE_CASE_NOT_FOUND';
   end if;
 
   select * into milestone_row

@@ -33,6 +33,34 @@ function expect(condition, message) {
   assert.equal(Boolean(condition), true, message);
 }
 
+function functionBody(functionName) {
+  const start = migration.indexOf(`create or replace function public.${functionName}`);
+  expect(start >= 0, `${functionName} body missing`);
+  const end = migration.indexOf("\ncreate or replace function public.", start + 1);
+  return migration.slice(start, end >= 0 ? end : migration.length);
+}
+
+function lockedLookupPosition(body, variableName, tableName) {
+  const match = body.match(new RegExp(`select \\* into ${variableName}[\\s\\S]*?from public\\.${tableName}[\\s\\S]*?for update;`));
+  return match ? match.index : -1;
+}
+
+function assertLockOrder(functionName) {
+  const body = functionBody(functionName);
+  const positions = [
+    lockedLookupPosition(body, "lead_row", "leads"),
+    lockedLookupPosition(body, "purchase_row", "lead_milestones"),
+    lockedLookupPosition(body, "case_row", "purchase_cases"),
+  ];
+  const milestonePosition = lockedLookupPosition(body, "milestone_row", "purchase_case_milestones");
+  expect(positions.every((position) => position >= 0), `${functionName} must lock lead, decision and case`);
+  expect(positions[0] < positions[1] && positions[1] < positions[2], `${functionName} lock order must be lead -> decision -> case`);
+  if (functionName !== "ensure_purchase_case_v1") {
+    expect(milestonePosition >= 0 && positions[2] < milestonePosition, `${functionName} lock order must continue with milestone`);
+  }
+  return body;
+}
+
 expect(migration.includes("create table if not exists public.purchase_cases"), "purchase_cases table missing");
 expect(migration.includes("create table if not exists public.purchase_case_milestones"), "purchase_case_milestones table missing");
 expect(/unique \(lead_id\)/u.test(migration), "purchase case must be unique per lead");
@@ -66,6 +94,16 @@ expect(migration.includes("for update"), "row locking missing");
 expect(migration.includes("on conflict do nothing"), "idempotent seed missing");
 expect(!migration.includes("append_leadflow_event_v1"), "per-click event ledger was introduced");
 
+// T1-T3: all post-purchase mutators use the same lead -> decision -> case order.
+assertLockOrder("ensure_purchase_case_v1");
+const completeBody = assertLockOrder("complete_purchase_milestone_v1");
+const revertBody = assertLockOrder("revert_purchase_milestone_v1");
+expect(migration.includes("-- All post-purchase mutators acquire row locks in this order:\n-- lead -> PURCHASE_DECISION -> purchase_case -> purchase_case_milestone."), "final lock order must be documented");
+for (const [functionName, body] of [["complete_purchase_milestone_v1", completeBody], ["revert_purchase_milestone_v1", revertBody]]) {
+  expect(body.includes("select lead_id into target_lead_id"), `${functionName} must resolve lead before locking the case`);
+  expect(!body.includes("select * into case_row from public.purchase_cases where id = p_case_id for update;"), `${functionName} must not lock case before lead`);
+}
+
 expect(databaseTypes.includes("purchase_cases:"), "database types missing purchase_cases");
 expect(databaseTypes.includes("purchase_case_milestones:"), "database types missing purchase_case_milestones");
 for (const functionName of ["get_purchase_case_v1", "ensure_purchase_case_v1", "complete_purchase_milestone_v1", "revert_purchase_milestone_v1"]) expect(databaseTypes.includes(`${functionName}:`), `database RPC type missing ${functionName}`);
@@ -76,6 +114,8 @@ expect(panel.includes("Postcompra") && panel.includes("Postcompra pausada"), "po
 expect(panel.includes("completedCount") && panel.includes("data.total"), "progress projection missing");
 expect(panel.includes("window.confirm"), "revert confirmation missing");
 expect(panel.includes("setData(response.data)"), "UI must update only after persisted response");
+expect(/const load = useCallback\(async \(\) => \{[\s\S]*?setIsLoading\(true\);[\s\S]*?\}, \[leadId\]\);/u.test(panel), "panel load must reset loading state");
+expect(/useEffect\(\(\) => \{[\s\S]*?void load\(\);[\s\S]*?\}, \[load, purchaseStatus\]\);/u.test(panel), "panel must reload when purchaseStatus changes");
 expect(dashboard.includes("PostPurchasePanel") && dashboard.includes("purchaseDecisionStatus"), "dashboard integration/read projection missing");
 expect(types.includes("DELIVERED") && types.includes("total: 13"), "domain milestone contract missing");
 
@@ -154,6 +194,16 @@ assert.throws(() => complete(purchased, "ORDERS_SENT", "advisor-1"), /NOT_ALLOWE
 purchased.lead.purchased = true;
 assert.equal(ensure(purchased, "advisor-1").case.id, caseId);
 assert.equal(purchased.milestones.length, 13);
+// T7: repeated purchase activation changes reuse the same case without loops or duplicates.
+for (const active of [false, true, false, true]) {
+  purchased.lead.purchased = active;
+  if (active) {
+    assert.equal(ensure(purchased, "advisor-1").case.id, caseId);
+    assert.equal(purchased.milestones.length, 13);
+  } else {
+    assert.throws(() => complete(purchased, "ORDERS_SENT", "advisor-1"), /NOT_ALLOWED/u);
+  }
+}
 // PP12: a historical purchased lead without a case is lazily initialized.
 const historical = ensure(newCase(true), "advisor-1");
 assert.equal(historical.milestones.length, 13);

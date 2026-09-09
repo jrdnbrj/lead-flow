@@ -26,6 +26,8 @@ export function PostPurchasePanel({ leadId, purchaseStatus }: { leadId: string; 
   const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setIsLoading(true);
+    setLoadingError(null);
     const response = await loadPostPurchaseCaseAction(leadId);
     if (response.success && response.data) {
       setData(response.data);
@@ -37,15 +39,13 @@ export function PostPurchasePanel({ leadId, purchaseStatus }: { leadId: string; 
   }, [leadId]);
 
   const retryLoad = useCallback(() => {
-    setIsLoading(true);
-    setLoadingError(null);
     void load();
   }, [load]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => { void load(); }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [load]);
+  }, [load, purchaseStatus]);
 
   async function complete(milestoneType: PostPurchaseMilestoneType) {
     if (!data?.case || busyMilestone || data.status === "PAUSED") return;
