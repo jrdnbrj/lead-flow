@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Circle, LoaderCircle, RotateCcw, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Circle, LoaderCircle, RotateCcw, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { completePostPurchaseMilestoneAction, loadPostPurchaseCaseAction, revertPostPurchaseMilestoneAction } from "@/lib/leads/actions";
@@ -24,6 +24,7 @@ export function PostPurchasePanel({ leadId, purchaseStatus }: { leadId: string; 
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [busyMilestone, setBusyMilestone] = useState<PostPurchaseMilestoneType | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const requestIdRef = useRef(0);
   const requestContextRef = useRef({ leadId, purchaseStatus });
 
@@ -82,7 +83,6 @@ export function PostPurchasePanel({ leadId, purchaseStatus }: { leadId: string; 
 
   async function revert(milestoneType: PostPurchaseMilestoneType) {
     if (!data?.case || busyMilestone || data.status === "PAUSED") return;
-    if (!window.confirm(`¿Corregir la etapa “${milestoneLabel(milestoneType)}”? Volverá a quedar pendiente.`)) return;
     setBusyMilestone(milestoneType);
     setActionError(null);
     const response = await revertPostPurchaseMilestoneAction({ caseId: data.case.id, milestoneType });
@@ -101,13 +101,14 @@ export function PostPurchasePanel({ leadId, purchaseStatus }: { leadId: string; 
   const milestones = [...data.milestones].sort((a, b) => a.position - b.position);
 
   return <section className="mt-2 min-w-0 rounded-xl border border-black/[0.06] bg-[#faf9f6] p-2.5" aria-label="Postcompra" onClick={(event) => event.stopPropagation()}>
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex items-center gap-2 text-xs font-black"><Circle size={14} className={paused ? "text-[#8c6c00]" : "text-[var(--ink)]"} />Postcompra</div>
-      <span className={`rounded-full px-2 py-1 text-[10px] font-black ${paused ? "bg-[#fff0bd] text-[#765000]" : "bg-white text-[var(--muted)]"}`}>{paused ? "Postcompra pausada" : `${data.completedCount} de ${data.total} completados`}</span>
-    </div>
-    {paused ? <p className="mt-1 text-[11px] font-semibold text-[var(--muted)]">La compra está desmarcada. Se conserva el avance y se reactivará al volver a registrar la compra.</p> : null}
+    <button type="button" aria-expanded={!isCollapsed} aria-controls={`postpurchase-content-${leadId}`} onClick={() => setIsCollapsed((current) => !current)} className="flex w-full flex-wrap items-center justify-between gap-2 text-left">
+      <span className="flex items-center gap-2 text-xs font-black"><Circle size={14} className={paused ? "text-[#8c6c00]" : "text-[var(--ink)]"} />Postcompra</span>
+      <span className="flex items-center gap-1.5"><span className={`rounded-full px-2 py-1 text-[10px] font-black ${paused ? "bg-[#fff0bd] text-[#765000]" : "bg-white text-[var(--muted)]"}`}>{paused ? "Postcompra pausada" : `${data.completedCount} de ${data.total} completados`}</span>{isCollapsed ? <ChevronDown size={14} className="text-[var(--muted)]" /> : <ChevronUp size={14} className="text-[var(--muted)]" />}</span>
+    </button>
     {actionError ? <p className="mt-2 flex items-start gap-2 rounded-lg bg-[#fff0ee] px-2.5 py-2 text-[11px] font-semibold text-[#b33a2c]" role="alert"><TriangleAlert size={13} className="mt-0.5 shrink-0" />{actionError}</p> : null}
-    {milestones.length ? <div className="mt-2 space-y-1.5">{milestones.map((milestone) => {
+    {!isCollapsed ? <div id={`postpurchase-content-${leadId}`}>
+      {paused ? <p className="mt-1 text-[11px] font-semibold text-[var(--muted)]">La compra está desmarcada. Se conserva el avance y se reactivará al volver a registrar la compra.</p> : null}
+      {milestones.length ? <div className="mt-2 space-y-1.5">{milestones.map((milestone) => {
       const busy = busyMilestone === milestone.milestoneType;
       const completed = milestone.status === "COMPLETED";
       return <div key={milestone.id} className="flex min-w-0 flex-col gap-2 rounded-lg border border-black/[0.06] bg-white px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between">
@@ -118,6 +119,7 @@ export function PostPurchasePanel({ leadId, purchaseStatus }: { leadId: string; 
         </div>
         {!paused ? completed ? <button type="button" disabled={busy} aria-busy={busy} onClick={() => void revert(milestone.milestoneType)} className="inline-flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-lg bg-[#f1f1f1] px-2.5 text-[10px] font-black text-[var(--muted)] disabled:cursor-wait disabled:opacity-50">{busy ? <LoaderCircle size={12} className="animate-spin" /> : <RotateCcw size={12} />} {busy ? "Guardando…" : "Corregir"}</button> : <button type="button" disabled={busy} aria-busy={busy} onClick={() => void complete(milestone.milestoneType)} className="inline-flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-lg bg-[#e4f8e9] px-2.5 text-[10px] font-black text-[#18733a] disabled:cursor-wait disabled:opacity-50">{busy ? <LoaderCircle size={12} className="animate-spin" /> : <Check size={12} />} {busy ? "Guardando…" : "Marcar como hecho"}</button> : null}
       </div>;
-    })}</div> : <p className="mt-2 text-[11px] font-semibold text-[var(--muted)]">No hay etapas registradas para este caso.</p>}
+      })}</div> : <p className="mt-2 text-[11px] font-semibold text-[var(--muted)]">No hay etapas registradas para este caso.</p>}
+    </div> : null}
   </section>;
 }

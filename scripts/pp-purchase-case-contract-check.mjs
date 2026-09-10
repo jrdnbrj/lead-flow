@@ -147,7 +147,9 @@ expect(revertRepositoryBody.includes("return toPostPurchaseMutationReadModel(dat
 expect(actions.includes("loadPostPurchaseCaseAction") && actions.includes("completePostPurchaseMilestoneAction") && actions.includes("revertPostPurchaseMilestoneAction"), "server actions missing");
 expect(panel.includes("Postcompra") && panel.includes("Postcompra pausada"), "postpurchase panel copy missing");
 expect(panel.includes("completedCount") && panel.includes("data.total"), "progress projection missing");
-expect(panel.includes("window.confirm"), "revert confirmation missing");
+expect(panel.includes("aria-expanded={!isCollapsed}") && panel.includes("postpurchase-content-"), "postpurchase collapse control missing");
+expect(!panel.includes("window.confirm"), "revert must not show a confirmation modal");
+expect(panel.includes("onClick={() => void revert(milestone.milestoneType)}"), "revert must update directly from the milestone action");
 expect(panel.includes("setData(response.data)"), "UI must update only after persisted response");
 expect(/const load = useCallback\(async \(\) => \{[\s\S]*?setIsLoading\(true\);[\s\S]*?\}, \[leadId, purchaseStatus\]\);/u.test(panel), "panel load must reset loading state for its context");
 expect(/useEffect\(\(\) => \{[\s\S]*?void load\(\);[\s\S]*?\}, \[leadId, load, purchaseStatus\]\);/u.test(panel), "panel must reload when its context changes");

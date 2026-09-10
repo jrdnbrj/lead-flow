@@ -17,6 +17,8 @@ if (!capture.includes("<FollowUpActions")) throw new Error("capture result does 
 for (const bucket of ["getDashboardLeadBucket", "sortLeadsForDashboard", "ACTIVE", "Sin próxima acción"]) {
   if (!dashboard.includes(bucket) && !followUp.includes(bucket)) throw new Error(`dashboard ordering missing ${bucket}`);
 }
+if (!followUp.includes("new Date(a.createdAt).getTime()") || !followUp.includes("new Date(b.createdAt).getTime()") || !followUp.includes("a.id.localeCompare(b.id)")) throw new Error("dashboard categories must sort by newest lead date with a stable tie-breaker");
+if (followUp.includes("a.index - b.index")) throw new Error("dashboard ordering must not depend on the incoming array index");
 if (!dashboard.includes("Actualización automática no disponible; usa Actualizar datos")) throw new Error("Realtime fallback is not visible");
 if (!capture.includes("Abrir lead existente") || !capture.includes("Crear nueva oportunidad")) throw new Error("duplicate decision paths missing");
 if (!actions.includes("findExistingLeadByPhoneAction")) throw new Error("E1-S3 duplicate contract is not consumed");

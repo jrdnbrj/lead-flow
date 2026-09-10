@@ -147,7 +147,15 @@ export function getDashboardLeadBucket(lead: Lead, reference = new Date()): 0 | 
 
 export function sortLeadsForDashboard(leads: Lead[], reference = new Date()): Lead[] {
   return leads
-    .map((lead, index) => ({ lead, index }))
-    .sort((a, b) => getDashboardLeadBucket(a.lead, reference) - getDashboardLeadBucket(b.lead, reference) || a.index - b.index)
-    .map(({ lead }) => lead);
+    .slice()
+    .sort((a, b) => {
+      const bucketDifference = getDashboardLeadBucket(a, reference) - getDashboardLeadBucket(b, reference);
+      if (bucketDifference !== 0) return bucketDifference;
+
+      const aCreatedAt = new Date(a.createdAt).getTime();
+      const bCreatedAt = new Date(b.createdAt).getTime();
+      const aTimestamp = Number.isFinite(aCreatedAt) ? aCreatedAt : 0;
+      const bTimestamp = Number.isFinite(bCreatedAt) ? bCreatedAt : 0;
+      return bTimestamp - aTimestamp || a.id.localeCompare(b.id);
+    });
 }
