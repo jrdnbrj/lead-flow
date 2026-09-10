@@ -138,6 +138,12 @@ expect(databaseTypes.includes("purchase_case_milestones:"), "database types miss
 for (const functionName of ["get_purchase_case_v1", "ensure_purchase_case_v1", "complete_purchase_milestone_v1", "revert_purchase_milestone_v1"]) expect(databaseTypes.includes(`${functionName}:`), `database RPC type missing ${functionName}`);
 expect(repository.includes("get_purchase_case_v1") && repository.includes("ensure_purchase_case_v1"), "repository case loading missing");
 expect(repository.includes("complete_purchase_milestone_v1") && repository.includes("revert_purchase_milestone_v1"), "repository milestone mutations missing");
+expect(repository.includes("function toPostPurchaseMutationReadModel"), "mutator response normalization missing");
+expect(repository.includes('raw.status !== "COMPLETED"') && repository.includes('raw.status !== "REPLAYED"') && repository.includes('raw.status !== "REVERTED"') && repository.includes('raw.status !== "ALREADY_REVERTED"'), "mutator operation statuses must be validated before read-model normalization");
+const completeRepositoryBody = repository.slice(repository.indexOf("export async function completePostPurchaseMilestoneForAdvisor"), repository.indexOf("export async function revertPostPurchaseMilestoneForAdvisor"));
+const revertRepositoryBody = repository.slice(repository.indexOf("export async function revertPostPurchaseMilestoneForAdvisor"), repository.indexOf("function toResourceSnapshot"));
+expect(completeRepositoryBody.includes("return toPostPurchaseMutationReadModel(data)"), "complete mutation must normalize its operation response");
+expect(revertRepositoryBody.includes("return toPostPurchaseMutationReadModel(data)"), "revert mutation must normalize its operation response");
 expect(actions.includes("loadPostPurchaseCaseAction") && actions.includes("completePostPurchaseMilestoneAction") && actions.includes("revertPostPurchaseMilestoneAction"), "server actions missing");
 expect(panel.includes("Postcompra") && panel.includes("Postcompra pausada"), "postpurchase panel copy missing");
 expect(panel.includes("completedCount") && panel.includes("data.total"), "progress projection missing");

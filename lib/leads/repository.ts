@@ -916,6 +916,15 @@ function toPostPurchaseCaseReadModel(value: unknown): PostPurchaseCaseReadModel 
   return { status: status as PostPurchaseCaseStatus, purchaseStatus: purchaseStatus as PostPurchasePurchaseStatus | null, case: caseValue, milestones, completedCount, total: 13 };
 }
 
+function toPostPurchaseMutationReadModel(value: unknown): PostPurchaseCaseReadModel | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  if (raw.status !== "COMPLETED" && raw.status !== "REPLAYED" && raw.status !== "REVERTED" && raw.status !== "ALREADY_REVERTED") return null;
+  // Mutator RPCs return an operation status plus the embedded read model.
+  // Normalize only at this boundary; the UI consumes the read-model status.
+  return toPostPurchaseCaseReadModel({ ...raw, status: "READY" });
+}
+
 export async function getPostPurchaseCaseForAdvisor(leadId: string): Promise<PostPurchaseCaseReadModel | null> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
@@ -946,7 +955,7 @@ export async function completePostPurchaseMilestoneForAdvisor(caseId: string, mi
     if (error) console.error("[leadflow][postpurchase] milestone completion failed", { message: error.message ?? "UNKNOWN" });
     return null;
   }
-  return toPostPurchaseCaseReadModel(data);
+  return toPostPurchaseMutationReadModel(data);
 }
 
 export async function revertPostPurchaseMilestoneForAdvisor(caseId: string, milestoneType: PostPurchaseMilestoneType, idempotencyKey: string): Promise<PostPurchaseCaseReadModel | null> {
@@ -957,7 +966,7 @@ export async function revertPostPurchaseMilestoneForAdvisor(caseId: string, mile
     if (error) console.error("[leadflow][postpurchase] milestone reversion failed", { message: error.message ?? "UNKNOWN" });
     return null;
   }
-  return toPostPurchaseCaseReadModel(data);
+  return toPostPurchaseMutationReadModel(data);
 }
 
 function toResourceSnapshot(value: unknown): FirstContactResourceSnapshot | null {
