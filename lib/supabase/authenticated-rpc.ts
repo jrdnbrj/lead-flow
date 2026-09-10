@@ -26,8 +26,10 @@ async function invokeRpcWithToken(
   accessToken: string,
   functionName: AuthenticatedRpcName,
   args: Record<string, unknown>,
+  retryOnClockSkew = true,
 ): Promise<AuthenticatedRpcResult> {
-  const response = await fetchWithJwtClockSkewRetry(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
+  const fetchRpc = retryOnClockSkew ? fetchWithJwtClockSkewRetry : fetch;
+  const response = await fetchRpc(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
     method: "POST",
     headers: {
       apikey: apiKey,
@@ -58,10 +60,10 @@ function shouldRetryWithUserToken(error: { code?: string; message?: string } | n
 /**
  * Calls an authenticated RPC with one bounded recovery policy.
  *
- * The browser/session token remains the first choice. A service-role retry is
- * available only for an explicit registry entry whose SQL function is
- * ownership-safe and has a matching forward migration grant. Every other
- * function can only refresh the advisor session once.
+ * Ownership-safe internal RPCs use the server credential first. A server path
+ * is available only for an explicit registry entry whose SQL function has a
+ * matching forward migration grant. Session-bound functions keep the browser
+ * token and its bounded clock-skew recovery instead.
  */
 export async function invokeAuthenticatedRpc(
   client: AuthenticatedRpcClient,
@@ -71,31 +73,35 @@ export async function invokeAuthenticatedRpc(
   const { data: claimsData, error: claimsError } = await client.auth.getClaims();
   if (claimsError || !claimsData?.claims?.sub) return { data: null, error: { message: "AUTH_REQUIRED" } };
 
-  const { data: sessionData, error: sessionError } = await client.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (sessionError || !accessToken || !supabaseUrl || !publishableKey) {
+  const policy = AUTHENTICATED_RPC_POLICIES[functionName];
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const canUseServerFallback = policy === "SERVER_FALLBACK" && Boolean(serviceRoleKey);
+  if (!supabaseUrl || !publishableKey) {
+    console.error("[leadflow][rpc] authenticated session unavailable", { functionName });
+    return { data: null, error: { message: "AUTH_REQUIRED" } };
+  }
+
+  // Internal mutations have already passed requireAdvisor() in their server
+  // action/route. Use the server-only credential first so a provider clock
+  // skew cannot add the browser-token retry budget to the critical path.
+  if (canUseServerFallback && serviceRoleKey) {
+    console.error("[leadflow][rpc] using server-authenticated fast path", { functionName });
+    const serverResult = await invokeRpcWithToken(supabaseUrl, serviceRoleKey, serviceRoleKey, functionName, args, false);
+    if (!serverResult.error || (!shouldRetryWithUserToken(serverResult.error) && !isJwtIssuedAtFutureError(serverResult.error))) return serverResult;
+  }
+
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (sessionError || !accessToken) {
     console.error("[leadflow][rpc] authenticated session unavailable", { functionName });
     return { data: null, error: { message: "AUTH_REQUIRED" } };
   }
 
   const invokeWithToken = (token: string) => invokeRpcWithToken(supabaseUrl, publishableKey, token, functionName, args);
-  const policy = AUTHENTICATED_RPC_POLICIES[functionName];
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const canUseServerFallback = policy === "SERVER_FALLBACK" && Boolean(serviceRoleKey);
 
   let result = await invokeWithToken(accessToken);
-  if (isJwtIssuedAtFutureError(result.error) && canUseServerFallback && serviceRoleKey) {
-    console.error("[leadflow][rpc] using server-authenticated fallback", { functionName });
-    result = await invokeRpcWithToken(supabaseUrl, serviceRoleKey, serviceRoleKey, functionName, args);
-    // This keeps environments that have not received the forward grant
-    // backwards-compatible: try the normal user token before returning the
-    // original provider timing failure.
-    if (result.error && shouldRetryWithUserToken(result.error)) {
-      result = await invokeWithToken(accessToken);
-    }
-  }
 
   if (isJwtIssuedAtFutureError(result.error)) {
     const { data: refreshedSession, error: refreshError } = await client.auth.refreshSession();

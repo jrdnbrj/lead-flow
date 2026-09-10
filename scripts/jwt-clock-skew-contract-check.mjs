@@ -35,7 +35,11 @@ assert.doesNotMatch(repository, /serverRpcFallbackFunctions/);
 assert.match(authenticatedRpc, /AUTHENTICATED_RPC_POLICIES/);
 assert.match(authenticatedRpc, /server-only/);
 assert.doesNotMatch(authenticatedRpc, /grant execute|create or replace function/i);
+assert.match(authenticatedRpc, /using server-authenticated fast path/);
+assert.match(authenticatedRpc, /invokeRpcWithToken\(supabaseUrl, serviceRoleKey, serviceRoleKey, functionName, args, false\)/);
+assert.match(authenticatedRpc, /const fetchRpc = retryOnClockSkew \? fetchWithJwtClockSkewRetry : fetch/);
 assert.match(policy, /SERVER_FALLBACK/);
+assert.equal(AUTHENTICATED_RPC_POLICIES.upsert_push_subscription_v1, "SESSION_REFRESH", "push subscription must remain session-bound");
 
 const invokedRpcNames = new Set();
 for (const source of authenticatedRpcSources) {
