@@ -15,6 +15,7 @@ const reminder = read("lib/whatsapp/reminders.ts");
 const serverRpcFallback = read("supabase/migrations/058_e3_server_rpc_fallback.sql");
 const recovery = read("supabase/migrations/059_e3_resource_recovery.sql");
 const compose = read("docker-compose.production.yml");
+const rpcPolicy = read("lib/supabase/authenticated-rpc-policy.ts");
 
 assert(command.includes("const messageAccepted"), "message acceptance gate is missing");
 assert(command.includes("if (messageAccepted)"), "resources are not gated behind accepted message");
@@ -25,7 +26,7 @@ assert(command.includes("retryFirstContactResourceFromRecovery"), "independent r
 assert(repository.includes("createSupabaseAdminClient() ?? await createSupabaseServerClient()"), "catalog lookup does not prefer the server-only client");
 assert(repository.includes('throw new Error("FIRST_CONTACT_CATALOG_LOOKUP_FAILED")'), "catalog query errors can regress to false availability");
 assert(repository.includes("export async function hydrateFirstContactResource"), "server-only resource hydration boundary is missing");
-assert(repository.includes('"request_first_contact_v2"'), "color-aware First Contact RPC is not included in the server-authenticated fallback allowlist");
+assert(rpcPolicy.includes('request_first_contact_v2: "SERVER_FALLBACK"'), "color-aware First Contact RPC is not included in the server-authenticated fallback policy");
 
 assert(webhook.includes("belongsToCustomerInstance"), "Evolution webhook instance isolation is missing");
 assert(webhook.includes("if (!belongsToCustomerInstance"), "webhook does not reject non-customer instances before persistence");

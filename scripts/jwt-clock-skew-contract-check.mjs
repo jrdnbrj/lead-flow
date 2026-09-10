@@ -5,10 +5,19 @@ import {
   createJwtClockSkewRetryFetch,
   JWT_CLOCK_SKEW_RETRY_DELAYS_MS,
 } from "../lib/supabase/fetch-with-jwt-clock-skew-retry.ts";
+import { AUTHENTICATED_RPC_POLICIES } from "../lib/supabase/authenticated-rpc-policy.ts";
 
 const helper = fs.readFileSync("lib/supabase/fetch-with-jwt-clock-skew-retry.ts", "utf8");
 const clients = ["lib/supabase/server.ts", "lib/supabase/proxy.ts", "lib/supabase/client.ts", "lib/supabase/admin.ts"];
 const purchaseFallbackMigration = fs.readFileSync("supabase/migrations/076_purchase_rpc_server_fallback.sql", "utf8");
+const authenticatedRpc = fs.readFileSync("lib/supabase/authenticated-rpc.ts", "utf8");
+const policy = fs.readFileSync("lib/supabase/authenticated-rpc-policy.ts", "utf8");
+const migration078 = fs.readFileSync("supabase/migrations/078_authenticated_rpc_jwt_fallback.sql", "utf8");
+const authenticatedRpcSources = [
+  fs.readFileSync("lib/leads/repository.ts", "utf8"),
+  fs.readFileSync("app/api/push/command/route.ts", "utf8"),
+  fs.readFileSync("app/api/push/subscription/route.ts", "utf8"),
+];
 
 assert.match(helper, /PGRST303/);
 assert.match(helper, /JWT issued at future/);
@@ -21,14 +30,40 @@ for (const file of clients) {
   assert.match(source, /global:\s*\{\s*fetch:\s*fetchWithJwtClockSkewRetry/);
 }
 const repository = fs.readFileSync("lib/leads/repository.ts", "utf8");
-assert.match(repository, /fetchWithJwtClockSkewRetry/);
-assert.match(repository, /isJwtIssuedAtFutureError/);
-assert.doesNotMatch(repository, /serverRpcFallbackActive/);
-for (const functionName of ["record_purchase_decision_v1", "record_purchase_decision_v2", "revert_purchase_decision_v1"]) {
-  assert.match(repository, new RegExp(`\\"${functionName}\\"`), `${functionName} must have the server-authenticated fallback`);
-  assert.match(purchaseFallbackMigration, new RegExp(`grant execute on function public\\.${functionName}`), `${functionName} server grant is missing`);
+assert.match(repository, /authenticated-rpc/);
+assert.doesNotMatch(repository, /serverRpcFallbackFunctions/);
+assert.match(authenticatedRpc, /AUTHENTICATED_RPC_POLICIES/);
+assert.match(authenticatedRpc, /server-only/);
+assert.doesNotMatch(authenticatedRpc, /grant execute|create or replace function/i);
+assert.match(policy, /SERVER_FALLBACK/);
+
+const invokedRpcNames = new Set();
+for (const source of authenticatedRpcSources) {
+  for (const match of source.matchAll(/invokeAuthenticatedRpc\(\s*[^,]+,\s*["']([^"']+)["']/g)) invokedRpcNames.add(match[1]);
+}
+assert.ok(invokedRpcNames.size > 0, "authenticated RPC calls must use the centralized helper");
+for (const functionName of invokedRpcNames) {
+  assert.ok(Object.hasOwn(AUTHENTICATED_RPC_POLICIES, functionName), `${functionName} must be registered in the recovery policy`);
+}
+
+const serverFallbackMigrations = [
+  fs.readFileSync("supabase/migrations/058_e3_server_rpc_fallback.sql", "utf8"),
+  fs.readFileSync("supabase/migrations/060_first_contact_color_selection_snapshot.sql", "utf8"),
+  fs.readFileSync("supabase/migrations/072_follow_up_server_rpc_fallback.sql", "utf8"),
+  purchaseFallbackMigration,
+  migration078,
+].join("\n");
+for (const [functionName, recovery] of Object.entries(AUTHENTICATED_RPC_POLICIES)) {
+  if (recovery !== "SERVER_FALLBACK") continue;
+  assert.match(serverFallbackMigrations, new RegExp(`grant execute on function public\\.${functionName}`, "i"), `${functionName} server grant is missing`);
 }
 assert.doesNotMatch(purchaseFallbackMigration, /purchase_case|first_contact|whatsapp|evolution/i, "purchase fallback migration must stay scoped");
+for (const functionName of ["correct_inbound_response_v1", "get_purchase_case_v1", "ensure_purchase_case_v1", "complete_purchase_milestone_v1", "revert_purchase_milestone_v1"]) {
+  assert.match(migration078, new RegExp(`create or replace function public\\.${functionName}`, "i"), `${functionName} must be covered by the forward migration`);
+}
+assert.equal((migration078.match(/auth\.role\(\) <> 'service_role'/g) ?? []).length, 4, "purchase RPCs must preserve advisor authorization while accepting service_role fallback");
+assert.doesNotMatch(migration078, /drop table|delete from|truncate /i, "JWT fallback migration must not mutate data");
+assert.doesNotMatch(migration078, /upsert_push_subscription_v1.*to service_role/is, "push subscription must remain session-authorized");
 assert.match(fs.readFileSync("app/api/internal/whatsapp-reminders/dispatch/route.ts", "utf8"), /fetchWithJwtClockSkewRetry/);
 const ci = fs.readFileSync("scripts/ci-contract-checks.sh", "utf8");
 assert.match(ci, /scripts\/jwt-clock-skew-contract-check\.mjs/);

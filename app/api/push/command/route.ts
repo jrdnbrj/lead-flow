@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 
 import { requireAdvisor } from "@/lib/auth/advisor";
 import { resolveScheduleShortcut, type ScheduleShortcut } from "@/lib/leads/follow-up";
+import { invokeAuthenticatedRpc } from "@/lib/supabase/authenticated-rpc";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type PushQuery = { maybeSingle: () => Promise<{ data: { action_id: string } | null }>; eq: (column: string, value: unknown) => PushQuery };
-type PushDb = { from: (table: string) => { select: (columns: string) => PushQuery }; rpc: (name: string, args: Record<string, unknown>) => Promise<{ error: Error | null }> };
+type PushDb = { from: (table: string) => { select: (columns: string) => PushQuery } };
 
 const commands = new Set(["DONE", "IGNORE", "POSTPONE_PLUS_ONE_HOUR", "POSTPONE_LATER", "POSTPONE_TOMORROW", "POSTPONE_IN_THREE_DAYS"]);
 
@@ -31,6 +32,6 @@ export async function GET(request: Request) {
   const status = command === "DONE" ? "DONE" : command === "IGNORE" ? "IGNORED" : "POSTPONED";
   const shortcut = (command === "POSTPONE_PLUS_ONE_HOUR" || command === "POSTPONE_LATER" || command === "POSTPONE_TOMORROW" || command === "POSTPONE_IN_THREE_DAYS" ? command : null) as ScheduleShortcut | null;
   const scheduledFor = shortcut ? resolveScheduleShortcut(shortcut) : null;
-  const { error } = await pushDb.rpc("transition_lead_follow_up_action_v1", { p_action_id: delivery.action_id, p_status: status, p_expected_action_version: actionVersion, p_scheduled_for: scheduledFor ?? undefined, p_note: undefined, p_idempotency_key: `push-${deliveryId}-${command}-${actionVersion}`, p_cancel_reason: "PUSH_COMMAND" });
+  const { error } = await invokeAuthenticatedRpc(supabase, "transition_lead_follow_up_action_v1", { p_action_id: delivery.action_id, p_status: status, p_expected_action_version: actionVersion, p_scheduled_for: scheduledFor ?? undefined, p_note: undefined, p_idempotency_key: `push-${deliveryId}-${command}-${actionVersion}`, p_cancel_reason: "PUSH_COMMAND" });
   return redirectTo(`/dashboard?push=${error ? "error" : "applied"}`);
 }

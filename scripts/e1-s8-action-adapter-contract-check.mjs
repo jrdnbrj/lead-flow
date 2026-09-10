@@ -5,6 +5,7 @@ const actions = await readFile("lib/leads/actions.ts", "utf8");
 const validation = await readFile("lib/leads/validation.ts", "utf8");
 const dashboard = await readFile("components/dashboard/dashboard-client.tsx", "utf8");
 const followUpComponent = await readFile("components/leads/follow-up-actions.tsx", "utf8");
+const rpcPolicy = await readFile("lib/supabase/authenticated-rpc-policy.ts", "utf8");
 
 function block(source, name) {
   const start = source.indexOf(`export async function ${name}`);
@@ -28,8 +29,7 @@ if (!usesRpc(create, "create_lead_follow_up_action_v1")) throw new Error("create
 if (!usesRpc(update, "transition_lead_follow_up_action_v1")) throw new Error("update adapter does not call canonical transition RPC");
 if (!usesRpc(clear, "transition_lead_follow_up_action_v1")) throw new Error("clear adapter does not use canonical transition RPC");
 for (const source of [create, update, clear]) if (!source.includes("invokeAuthenticatedRpc(")) throw new Error("follow-up adapter must send canonical RPC with explicit authenticated transport");
-const fallbackFunctions = repository.slice(repository.indexOf("const serverRpcFallbackFunctions"), repository.indexOf("let serverRpcFallbackActive"));
-for (const name of ["create_lead_follow_up_action_v1", "transition_lead_follow_up_action_v1"]) if (!fallbackFunctions.includes(`\"${name}\"`)) throw new Error(`missing JWT fallback allowlist entry: ${name}`);
+for (const name of ["create_lead_follow_up_action_v1", "transition_lead_follow_up_action_v1"]) if (!rpcPolicy.includes(`${name}: \"SERVER_FALLBACK\"`)) throw new Error(`missing JWT fallback policy entry: ${name}`);
 if (!update.includes("p_expected_action_version: version")) throw new Error("update adapter does not propagate expected version");
 if (!clear.includes("p_expected_action_version: action.action_version")) throw new Error("clear adapter does not use stored action version");
 if (!actions.includes("Promise<ActionResponse")) throw new Error("server actions lost ActionResponse contract");

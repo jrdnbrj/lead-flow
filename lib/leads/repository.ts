@@ -5,7 +5,7 @@ import { getInstallationAdvisorUserId } from "@/lib/config/installation";
 import { AUTH_REQUIRED_MESSAGE } from "@/lib/auth/auth-required";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient, hasSupabaseConfig } from "@/lib/supabase/server";
-import { fetchWithJwtClockSkewRetry, isJwtIssuedAtFutureError } from "@/lib/supabase/fetch-with-jwt-clock-skew-retry";
+import { invokeAuthenticatedRpc, type AuthenticatedRpcResult } from "@/lib/supabase/authenticated-rpc";
 import { resolveInboundLeadMatch, type InboundLeadMatch } from "@/lib/leads/inbound-matching";
 import type { FirstContactItem, FirstContactOperation, FirstContactOperationResult, FirstContactResource, FirstContactResult, ProviderOutcome, FirstContactResourceSnapshot } from "@/lib/first-contact/types";
 import { firstContactResourceModelEntries } from "@/lib/first-contact/resource-plan";
@@ -57,23 +57,7 @@ function isMissingPurchaseStatusColumn(error: { message?: string } | null): bool
 
 type FollowUpActionRow = Database["public"]["Tables"]["lead_follow_up_actions"]["Row"];
 type LeadflowDbClient = NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>;
-type RpcResult = { data: Record<string, unknown> | null; error: { code?: string; message?: string } | null };
-const serverRpcFallbackFunctions = new Set([
-  "create_lead_follow_up_action_v1",
-  "transition_lead_follow_up_action_v1",
-  // These purchase RPCs re-check the installation owner and the active lead
-  // inside SQL, and the service_role grant is kept in a forward-only migration.
-  // They are safe to use only after requireAdvisor() has passed in the action.
-  "record_purchase_decision_v1",
-  "record_purchase_decision_v2",
-  "revert_purchase_decision_v1",
-  "request_first_contact_v1",
-  "request_first_contact_v2",
-  "claim_first_contact_effect_v1",
-  "begin_first_contact_effect_io_v1",
-  "record_first_contact_effect_result_v1",
-  "retry_first_contact_effect_v1",
-]);
+type RpcResult = AuthenticatedRpcResult;
 async function requireInstallationOwnerContext(errorCode: string) {
   const supabase = createSupabaseAdminClient();
   if (!supabase) throw new Error(`${errorCode}_CONFIGURATION_MISSING`);
@@ -84,91 +68,6 @@ async function requireInstallationOwnerContext(errorCode: string) {
 
 async function invokeRpc(client: LeadflowDbClient, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
   const result = await (client.rpc as unknown as (name: string, parameters: Record<string, unknown>) => Promise<RpcResult>)(functionName, args);
-  if (result.error) console.error("[leadflow][rpc] call failed", { functionName, message: result.error.message ?? "UNKNOWN" });
-  return result;
-}
-
-async function invokeRpcWithToken(supabaseUrl: string, publishableKey: string, accessToken: string, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
-  const response = await fetchWithJwtClockSkewRetry(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
-    method: "POST",
-    headers: {
-      apikey: publishableKey,
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(args),
-    cache: "no-store",
-  });
-
-  const body = await response.text();
-  let parsed: unknown = null;
-  try {
-    parsed = body ? JSON.parse(body) : null;
-  } catch {
-    parsed = null;
-  }
-
-  if (!response.ok) {
-    const error = parsed && typeof parsed === "object" ? parsed as { code?: unknown; message?: unknown } : null;
-    return {
-      data: null,
-      error: {
-        code: typeof error?.code === "string" ? error.code : undefined,
-        message: typeof error?.message === "string" ? error.message : `RPC_HTTP_${response.status}`,
-      },
-    };
-  }
-
-  return { data: parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null, error: null };
-}
-
-async function invokeAuthenticatedRpc(client: LeadflowDbClient, functionName: string, args: Record<string, unknown>): Promise<RpcResult> {
-  // Server Actions validate the advisor through the SSR client, but the
-  // PostgREST request must carry the access token explicitly. This avoids a
-  // lazy SSR-session race where auth.getClaims() succeeds while the following
-  // RPC is sent without auth.uid().
-  const { data: claimsData, error: claimsError } = await client.auth.getClaims();
-  if (claimsError || !claimsData?.claims?.sub) return { data: null, error: { message: "AUTH_REQUIRED" } };
-
-  const { data: sessionData, error: sessionError } = await client.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (sessionError || !accessToken || !supabaseUrl || !publishableKey) {
-    console.error("[leadflow][rpc] authenticated session unavailable", { functionName });
-    return { data: null, error: { message: "AUTH_REQUIRED" } };
-  }
-
-  const invokeWithToken = async (token: string): Promise<RpcResult> => {
-    return invokeRpcWithToken(supabaseUrl, publishableKey, token, functionName, args);
-  };
-
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const canUseServerFallback = Boolean(serviceRoleKey) && serverRpcFallbackFunctions.has(functionName);
-
-  let result = await invokeWithToken(accessToken);
-  if (isJwtIssuedAtFutureError(result.error) && canUseServerFallback) {
-    // The Server Action has already authorized the advisor. These allowlisted
-    // RPCs re-check ownership and are also explicitly granted to service_role,
-    // so do not make the user wait through retries that cannot change the
-    // remote validator clock.
-    console.error("[leadflow][rpc] using server-authenticated fallback", { functionName });
-    result = await invokeRpcWithToken(supabaseUrl, serviceRoleKey as string, serviceRoleKey as string, functionName, args);
-  }
-  if (isJwtIssuedAtFutureError(result.error) && !canUseServerFallback) {
-    // A browser can retain a token minted just ahead of the API validator's
-    // clock. Refresh once before failing the action; never retry provider IO.
-    const { data: refreshedSession, error: refreshError } = await client.auth.refreshSession();
-    const refreshedToken = refreshedSession.session?.access_token;
-    if (!refreshError && refreshedToken) {
-      console.error("[leadflow][rpc] JWT timing rejected; retrying refreshed session", { functionName });
-      result = await invokeWithToken(refreshedToken);
-    }
-    else console.error("[leadflow][rpc] session refresh failed", { functionName });
-  }
-  if (isJwtIssuedAtFutureError(result.error) && serverRpcFallbackFunctions.has(functionName) && !canUseServerFallback) {
-    console.error("[leadflow][rpc] server-authenticated fallback unavailable", { functionName });
-  }
   if (result.error) console.error("[leadflow][rpc] call failed", { functionName, message: result.error.message ?? "UNKNOWN" });
   return result;
 }

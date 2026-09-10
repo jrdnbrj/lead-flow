@@ -70,6 +70,21 @@ manager/Vault and is never sent to the browser. The current remote scheduler
 is the single active job `leadflow-dispatch-push-every-minute` with cadence
 `* * * * *`; it invokes the function through Vault-backed authorization.
 
+## JWT timing failures
+
+`PGRST303` / `JWT issued at future` is a rejected user token, not a business
+error. PostgREST validates JWT time claims before the database function runs.
+LeadFlow handles it with a bounded REST retry, one session refresh, and—only
+for RPCs explicitly registered as `SERVER_FALLBACK`—a server-only retry using
+the service key. Those RPCs must independently verify installation ownership
+in SQL and receive a matching forward migration grant. Never disable JWT
+validation, log tokens, or add a blanket service-role fallback.
+
+When this appears in production, inspect the application log for the RPC name
+and the Supabase status page before changing business code. The provider has
+documented a JWT rejection incident involving stale time caching; the local
+mitigation cannot replace applying its forward migration to the target project.
+
 ## Target guard
 
 Run `scripts/assert-supabase-target.sh` before any remote mutation. It verifies
