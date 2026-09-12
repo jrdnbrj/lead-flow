@@ -14,9 +14,10 @@ for (const token of ["scheduleLeadActionAction", "updateFollowUpActionAction", "
 }
 if (!dashboard.includes("<FollowUpActions")) throw new Error("dashboard does not use reusable follow-up component");
 if (!capture.includes("<FollowUpActions")) throw new Error("capture result does not use reusable follow-up component");
-for (const bucket of ["getDashboardLeadBucket", "sortLeadsForDashboard", "ACTIVE", "Sin próxima acción"]) {
+for (const bucket of ["getDashboardLeadBucket", "sortLeadsForDashboard", "ACTIVE"]) {
   if (!dashboard.includes(bucket) && !followUp.includes(bucket)) throw new Error(`dashboard ordering missing ${bucket}`);
 }
+if (followUp.includes("Sin próxima acción.")) throw new Error("empty follow-up state must not show a redundant no-next-action label");
 if (!followUp.includes("new Date(a.createdAt).getTime()") || !followUp.includes("new Date(b.createdAt).getTime()") || !followUp.includes("a.id.localeCompare(b.id)")) throw new Error("dashboard categories must sort by newest lead date with a stable tie-breaker");
 if (followUp.includes("a.index - b.index")) throw new Error("dashboard ordering must not depend on the incoming array index");
 if (!dashboard.includes("Actualización automática no disponible; usa Actualizar datos")) throw new Error("Realtime fallback is not visible");
