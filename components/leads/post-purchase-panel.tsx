@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ChevronUp, Circle, LoaderCircle, TriangleAlert, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Circle, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { completePostPurchaseMilestoneAction, loadPostPurchaseCaseAction, revertPostPurchaseMilestoneAction } from "@/lib/leads/actions";
@@ -15,8 +15,10 @@ function milestoneLabel(type: PostPurchaseMilestoneType): string {
   return postPurchaseMilestones.find((milestone) => milestone.type === type)?.label ?? type;
 }
 
-function statusLabel(status: PostPurchaseMilestone["status"]): string {
-  return status === "COMPLETED" ? "Completado" : status === "REVERTED" ? "Pendiente" : "Pendiente";
+function milestoneActivityAt(milestone: PostPurchaseMilestone): string | null {
+  if (milestone.status === "COMPLETED") return milestone.completedAt;
+  if (milestone.status === "REVERTED") return milestone.revertedAt;
+  return null;
 }
 
 export function PostPurchasePanel({ leadId, purchaseStatus }: { leadId: string; purchaseStatus: PostPurchasePurchaseStatus }) {
@@ -122,15 +124,26 @@ export function PostPurchasePanel({ leadId, purchaseStatus }: { leadId: string; 
       {milestones.length ? <div className="mt-2 grid grid-cols-2 gap-1.5">{milestones.map((milestone) => {
       const busy = busyMilestone === milestone.milestoneType;
       const completed = milestone.status === "COMPLETED";
-      return <div key={milestone.id} className="min-w-0 rounded-lg border border-black/[0.06] bg-white px-1.5 py-1.5">
-        <div className="flex min-w-0 items-start gap-1.5">
-          <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5"><span className={`grid size-5 shrink-0 place-items-center rounded-full ${completed ? "bg-[#e4f8e9] text-[#18733a]" : milestone.status === "REVERTED" ? "bg-[#fff0bd] text-[#8c6c00]" : "bg-[#f0eee8] text-[var(--muted)]"}`}>{completed ? <Check size={12} /> : <span className="size-1.5 rounded-full bg-current" />}</span><span className="min-w-0 flex-1 break-words text-[11px] font-black leading-4 text-[var(--ink)]">{milestoneLabel(milestone.milestoneType)}</span><span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black ${completed ? "bg-[#e4f8e9] text-[#18733a]" : "bg-[#f0eee8] text-[var(--muted)]"}`}>{statusLabel(milestone.status)}</span></div>
-          {completed && milestone.completedAt ? <p className="mt-1 pl-6 text-[10px] font-semibold text-[var(--muted)]">{formatCompletedAt(milestone.completedAt)}</p> : null}
-          {milestone.status === "REVERTED" && milestone.revertedAt ? <p className="mt-1 pl-6 text-[10px] font-semibold text-[#8c6c00]">{formatCompletedAt(milestone.revertedAt)}</p> : null}
-          </div>
-          {!paused ? completed ? <button type="button" disabled={busy} aria-busy={busy} aria-label={`Quitar hecho: ${milestoneLabel(milestone.milestoneType)}`} title="Quitar hecho" onClick={() => void revert(milestone.milestoneType)} className="grid size-7 shrink-0 place-items-center rounded-lg bg-[#f1f1f1] text-[var(--muted)] disabled:cursor-wait disabled:opacity-50">{busy ? <LoaderCircle size={14} className="animate-spin" /> : <X size={14} />}</button> : <button type="button" disabled={busy} aria-busy={busy} aria-label={`Marcar como hecho: ${milestoneLabel(milestone.milestoneType)}`} title="Marcar como hecho" onClick={() => void complete(milestone.milestoneType)} className="grid size-7 shrink-0 place-items-center rounded-lg bg-[#e4f8e9] text-[#18733a] disabled:cursor-wait disabled:opacity-50">{busy ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />}</button> : null}
-        </div>
+      const activityAt = milestoneActivityAt(milestone);
+      return <div key={milestone.id} className="min-w-0 rounded-xl border border-black/[0.05] bg-white/95 px-2 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-colors hover:border-black/[0.1]">
+        <label className={`flex min-w-0 items-center gap-2 ${paused || busy ? "cursor-not-allowed" : "cursor-pointer"}`}>
+          <span className="relative grid size-5 shrink-0 place-items-center">
+            <input
+              type="checkbox"
+              checked={completed}
+              disabled={paused || busy}
+              aria-busy={busy}
+              aria-label={`${completed ? "Desmarcar" : "Marcar como hecho"}: ${milestoneLabel(milestone.milestoneType)}`}
+              onChange={(event) => event.target.checked ? void complete(milestone.milestoneType) : void revert(milestone.milestoneType)}
+              className="peer absolute size-px opacity-0"
+            />
+            <span aria-hidden="true" className="grid size-5 place-items-center rounded-[7px] border border-[#d7d7d2] bg-[#fbfbfa] text-[#19310f] transition-[background-color,border-color,box-shadow,transform] duration-150 peer-checked:border-[#b8f451] peer-checked:bg-[#b8f451] peer-checked:shadow-[0_2px_5px_rgba(132,180,36,0.22)] peer-focus-visible:ring-4 peer-focus-visible:ring-[#b8f451]/25 peer-disabled:bg-[#f2f1ed] peer-disabled:opacity-50">
+              {busy ? <LoaderCircle size={13} className="animate-spin text-[var(--muted)]" /> : completed ? <Check size={13} strokeWidth={3} /> : null}
+            </span>
+          </span>
+          <span className="min-w-0 flex-1 break-words text-xs font-semibold leading-4 text-[var(--ink)]">{milestoneLabel(milestone.milestoneType)}</span>
+        </label>
+        {activityAt ? <p className="mt-1 pl-7 text-[10px] font-medium tracking-[0.01em] text-[var(--muted)]">{formatCompletedAt(activityAt)}</p> : null}
       </div>;
       })}</div> : <p className="mt-2 text-[11px] font-semibold text-[var(--muted)]">No hay etapas registradas para este caso.</p>}
       {data.case ? <PostPurchaseDocuments purchaseCaseId={data.case.id} paused={paused} /> : null}

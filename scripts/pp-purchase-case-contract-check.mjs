@@ -148,10 +148,12 @@ expect(actions.includes("loadPostPurchaseCaseAction") && actions.includes("compl
 expect(panel.includes("Postcompra") && panel.includes("Postcompra pausada"), "postpurchase panel copy missing");
 expect(panel.includes("completedCount") && panel.includes("data.total"), "progress projection missing");
 expect(panel.includes("aria-expanded={!isCollapsed}") && panel.includes("postpurchase-content-"), "postpurchase collapse control missing");
-expect(panel.includes("grid grid-cols-2") && panel.includes('aria-label={`Marcar como hecho: ${milestoneLabel(milestone.milestoneType)}`}') && panel.includes('aria-label={`Quitar hecho: ${milestoneLabel(milestone.milestoneType)}`}') && panel.includes("size-7 shrink-0"), "milestone controls must be compact right-side icon actions in a two-column grid");
+expect(panel.includes("grid grid-cols-2") && panel.includes('type="checkbox"') && panel.includes("checked={completed}") && panel.includes("event.target.checked"), "milestones must use one controlled checkbox as indicator and action in a two-column grid");
+expect(panel.includes("milestoneActivityAt") && panel.includes('if (milestone.status === "REVERTED") return milestone.revertedAt') && panel.includes("return null"), "milestone dates must only show for completed or reverted actions");
+expect(!panel.includes("statusLabel") && !panel.includes("Completado") && !panel.includes("Pendiente"), "milestone cards must not show redundant status labels");
 expect(panel.includes("try {") && panel.includes("finally") && panel.includes("setBusyMilestone(null)"), "milestone actions must release busy state after transport failures");
 expect(!panel.includes("window.confirm"), "revert must not show a confirmation modal");
-expect(panel.includes("onClick={() => void revert(milestone.milestoneType)}"), "revert must update directly from the milestone action");
+expect(panel.includes("void revert(milestone.milestoneType)"), "revert must update directly from the milestone action");
 expect(panel.includes("setData(response.data)"), "UI must update only after persisted response");
 expect(/const load = useCallback\(async \(\) => \{[\s\S]*?setIsLoading\(true\);[\s\S]*?\}, \[leadId, purchaseStatus\]\);/u.test(panel), "panel load must reset loading state for its context");
 expect(/useEffect\(\(\) => \{[\s\S]*?void load\(\);[\s\S]*?\}, \[leadId, load, purchaseStatus\]\);/u.test(panel), "panel must reload when its context changes");
