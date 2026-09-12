@@ -18,6 +18,7 @@ for (const bucket of ["getDashboardLeadBucket", "sortLeadsForDashboard", "ACTIVE
   if (!dashboard.includes(bucket) && !followUp.includes(bucket)) throw new Error(`dashboard ordering missing ${bucket}`);
 }
 if (followUp.includes("Sin próxima acción.")) throw new Error("empty follow-up state must not show a redundant no-next-action label");
+if (component.includes("acciones canceladas") || component.includes("Ver acciones canceladas")) throw new Error("canceled follow-up actions must stay hidden");
 if (!followUp.includes("new Date(a.createdAt).getTime()") || !followUp.includes("new Date(b.createdAt).getTime()") || !followUp.includes("a.id.localeCompare(b.id)")) throw new Error("dashboard categories must sort by newest lead date with a stable tie-breaker");
 if (followUp.includes("a.index - b.index")) throw new Error("dashboard ordering must not depend on the incoming array index");
 if (!dashboard.includes("Actualización automática no disponible; usa Actualizar datos")) throw new Error("Realtime fallback is not visible");

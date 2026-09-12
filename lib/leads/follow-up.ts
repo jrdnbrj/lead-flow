@@ -2,7 +2,7 @@ import type { Lead, NextActionType } from "@/lib/domain/lead";
 
 export const SELLER_TIME_ZONE = "America/Guayaquil";
 export const RESPONSE_REMINDER_DELAY_MINUTES = 10;
-export const LEAD_REMINDER_MAX_OVERDUE_DAYS = 15;
+export const LEAD_REMINDER_MAX_OVERDUE_DAYS = 5;
 const LEAD_REMINDER_MAX_OVERDUE_MS = LEAD_REMINDER_MAX_OVERDUE_DAYS * 86_400_000;
 
 export type ScheduleShortcut = "POSTPONE_PLUS_ONE_HOUR" | "POSTPONE_LATER" | "POSTPONE_TOMORROW" | "POSTPONE_IN_THREE_DAYS";
@@ -65,7 +65,8 @@ export function resolveScheduleShortcut(shortcut: ScheduleShortcut, reference = 
     return new Date(reference.getTime() + 60 * 60 * 1000).toISOString();
   }
   const days = shortcut === "POSTPONE_TOMORROW" ? 1 : 3;
-  return sellerLocalDateTimeToUtc({ ...local, day: local.day + days, hour: 14, minute: 0, second: 0 });
+  const hour = shortcut === "POSTPONE_TOMORROW" ? 9 : 14;
+  return sellerLocalDateTimeToUtc({ ...local, day: local.day + days, hour, minute: 0, second: 0 });
 }
 
 export function isLeadReminderDue(nextActionAt: string | null, reference = new Date()): boolean {
