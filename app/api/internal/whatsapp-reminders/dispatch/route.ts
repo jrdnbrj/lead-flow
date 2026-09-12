@@ -175,6 +175,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
+  const now = new Date().toISOString();
+  const conversationMaintenance = await adminRpc("auto_close_inactive_conversations_v1", { p_now: now });
+  if (!conversationMaintenance.ok) console.error("conversation_auto_close_maintenance_failed", JSON.stringify({ statusCode: conversationMaintenance.status }));
+
   if (!isEnabled()) {
     return NextResponse.json({ enabled: false, materialized: 0, results: [] }, { headers: { "cache-control": "no-store" } });
   }
@@ -185,7 +189,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "WHATSAPP_REMINDER_CONFIGURATION_INVALID" }, { status: 503 });
   }
 
-  const now = new Date().toISOString();
   const expiry = await adminRpc("auto_ignore_expired_follow_up_actions_v1", { p_now: now });
   if (!expiry.ok) console.error("whatsapp_reminder_expired_action_maintenance_failed", JSON.stringify({ statusCode: expiry.status }));
   const materialized = await adminRpc("materialize_whatsapp_reminder_deliveries_v1", {

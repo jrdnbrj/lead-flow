@@ -1260,9 +1260,11 @@ export async function markLeadConversationActiveForProvider(id: string): Promise
 
 export async function updateLeadConversationState(id: string, state: ConversationState): Promise<boolean> {
   const { supabase, ownerId } = await requireInstallationOwnerContext("CONVERSATION_UPDATE");
+  const leadUpdate: Database["public"]["Tables"]["leads"]["Update"] = { conversation_state: state };
+  if (state === "ACTIVE") leadUpdate.last_activity_at = new Date().toISOString();
   const { data, error } = await supabase
     .from("leads")
-    .update({ conversation_state: state })
+    .update(leadUpdate)
     .eq("id", id)
     .eq("user_id", ownerId)
     .is("deleted_at", null)
