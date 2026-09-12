@@ -25,6 +25,21 @@ if (!actions.includes("findExistingLeadByPhoneAction")) throw new Error("E1-S3 d
 if (!repository.includes("DUPLICATE_LOOKUP_FAILED") || !repository.includes("createSupabaseAdminClient()")) throw new Error("duplicate lookup must fail closed with the server-only owner read");
 if (!actions.includes("allowDuplicate") || !actions.includes("findLeadByPhone(parsed.data.phone)")) throw new Error("lead creation must recheck duplicates server-side and preserve explicit new-opportunity opt-in");
 if (!repository.includes('requireInstallationOwnerContext("LEAD_UPDATE")') || !repository.includes('const ownerId = await getInstallationAdvisorUserId()') || !repository.includes('.eq("user_id", ownerId)')) throw new Error("lead owner mutations/lookups must use the installation owner boundary");
+const conversationStart = repository.indexOf("export async function updateLeadConversationState");
+const conversationEnd = repository.indexOf("type LeadMessageInput", conversationStart);
+if (conversationStart < 0 || conversationEnd < 0) throw new Error("conversation state update boundary is missing");
+const conversationUpdate = repository.slice(conversationStart, conversationEnd);
+for (const token of [
+  'requireInstallationOwnerContext("CONVERSATION_UPDATE")',
+  '.eq("id", id)',
+  '.eq("user_id", ownerId)',
+  '.is("deleted_at", null)',
+  '.select("id")',
+  ".maybeSingle()",
+  "Boolean(data)",
+]) {
+  if (!conversationUpdate.includes(token)) throw new Error(`conversation state update contract missing ${token}`);
+}
 if (!catalog.includes('throw new Error("CATALOG_LOOKUP_FAILED")') || !catalog.includes("assetsError") || !catalog.includes("colorAssetsError")) throw new Error("catalog query failures must not render as an empty catalog");
 if (!pushDiagnostics.includes("createSupabaseAdminClient()") || !pushDiagnostics.includes('throw new Error("PUSH_DIAGNOSTICS_LOOKUP_FAILED")')) throw new Error("Push Diagnostics query failures must not render as an empty result");
 if (capture.includes("merge") || capture.includes("fusion")) throw new Error("capture contains merge behavior");

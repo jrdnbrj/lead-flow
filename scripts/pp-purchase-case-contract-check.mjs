@@ -148,6 +148,8 @@ expect(actions.includes("loadPostPurchaseCaseAction") && actions.includes("compl
 expect(panel.includes("Postcompra") && panel.includes("Postcompra pausada"), "postpurchase panel copy missing");
 expect(panel.includes("completedCount") && panel.includes("data.total"), "progress projection missing");
 expect(panel.includes("aria-expanded={!isCollapsed}") && panel.includes("postpurchase-content-"), "postpurchase collapse control missing");
+expect(panel.includes("grid grid-cols-2") && panel.includes('aria-label={`Marcar como hecho: ${milestoneLabel(milestone.milestoneType)}`}') && panel.includes('aria-label={`Quitar hecho: ${milestoneLabel(milestone.milestoneType)}`}') && panel.includes("absolute right-1.5 top-1.5"), "milestone controls must be compact icon actions in a two-column grid");
+expect(panel.includes("try {") && panel.includes("finally") && panel.includes("setBusyMilestone(null)"), "milestone actions must release busy state after transport failures");
 expect(!panel.includes("window.confirm"), "revert must not show a confirmation modal");
 expect(panel.includes("onClick={() => void revert(milestone.milestoneType)}"), "revert must update directly from the milestone action");
 expect(panel.includes("setData(response.data)"), "UI must update only after persisted response");

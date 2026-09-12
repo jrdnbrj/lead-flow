@@ -38,6 +38,7 @@ checks=(
   scripts/e6-integrated-contract-check.mjs
   scripts/e6-s1-s2-contract-check.mjs
   scripts/e6-purchase-status-contract-check.mjs
+  scripts/pp-purchase-case-contract-check.mjs
   scripts/catalog-contract-check.mjs
 )
 

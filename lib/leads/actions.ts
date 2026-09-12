@@ -331,8 +331,13 @@ export async function updateLeadConversationAction(input: { leadId: string; stat
   }
   const auth = await requireAdvisorAction<{ leadId: string; state: ConversationState }>();
   if (auth) return auth;
-  const persisted = await updateLeadConversationState(input.leadId, input.state);
-  return { success: persisted, data: persisted ? input : undefined, error: persisted ? undefined : "No pudimos actualizar la conversación." };
+  try {
+    const persisted = await updateLeadConversationState(input.leadId, input.state);
+    return { success: persisted, data: persisted ? input : undefined, error: persisted ? undefined : "No pudimos actualizar la conversación." };
+  } catch (error) {
+    logActionFailure("updateLeadConversation", error);
+    return { success: false, error: "No pudimos actualizar la conversación. Puedes reintentarlo." };
+  }
 }
 
 export async function deleteLeadAction(leadId: string): Promise<ActionResponse<{ leadId: string }>> {

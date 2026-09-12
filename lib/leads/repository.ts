@@ -1259,11 +1259,16 @@ export async function markLeadConversationActiveForProvider(id: string): Promise
 }
 
 export async function updateLeadConversationState(id: string, state: ConversationState): Promise<boolean> {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return false;
-
-  const { error } = await supabase.from("leads").update({ conversation_state: state }).eq("id", id).is("deleted_at", null);
-  return !error;
+  const { supabase, ownerId } = await requireInstallationOwnerContext("CONVERSATION_UPDATE");
+  const { data, error } = await supabase
+    .from("leads")
+    .update({ conversation_state: state })
+    .eq("id", id)
+    .eq("user_id", ownerId)
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle();
+  return !error && Boolean(data);
 }
 
 type LeadMessageInput = {
