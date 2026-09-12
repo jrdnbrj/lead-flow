@@ -23,6 +23,8 @@ export const AUTHENTICATED_RPC_POLICIES = {
   ensure_purchase_case_v1: "SERVER_FALLBACK",
   complete_purchase_milestone_v1: "SERVER_FALLBACK",
   revert_purchase_milestone_v1: "SERVER_FALLBACK",
+  create_or_replace_purchase_case_document_v1: "SERVER_FALLBACK",
+  delete_purchase_case_document_v1: "SERVER_FALLBACK",
   upsert_push_subscription_v1: "SESSION_REFRESH",
 } as const;
 

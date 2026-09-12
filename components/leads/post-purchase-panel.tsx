@@ -4,6 +4,7 @@ import { Check, ChevronDown, ChevronUp, Circle, LoaderCircle, TriangleAlert, X }
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { completePostPurchaseMilestoneAction, loadPostPurchaseCaseAction, revertPostPurchaseMilestoneAction } from "@/lib/leads/actions";
+import { PostPurchaseDocuments } from "@/components/leads/post-purchase-documents";
 import { postPurchaseMilestones, type PostPurchaseCaseReadModel, type PostPurchaseMilestone, type PostPurchaseMilestoneType, type PostPurchasePurchaseStatus } from "@/lib/postpurchase/types";
 
 function formatCompletedAt(value: string): string {
@@ -132,6 +133,7 @@ export function PostPurchasePanel({ leadId, purchaseStatus }: { leadId: string; 
         </div>
       </div>;
       })}</div> : <p className="mt-2 text-[11px] font-semibold text-[var(--muted)]">No hay etapas registradas para este caso.</p>}
+      {data.case ? <PostPurchaseDocuments purchaseCaseId={data.case.id} paused={paused} /> : null}
     </div> : null}
   </section>;
 }

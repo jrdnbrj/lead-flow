@@ -13,6 +13,7 @@ const purchaseFallbackMigration = fs.readFileSync("supabase/migrations/076_purch
 const authenticatedRpc = fs.readFileSync("lib/supabase/authenticated-rpc.ts", "utf8");
 const policy = fs.readFileSync("lib/supabase/authenticated-rpc-policy.ts", "utf8");
 const migration078 = fs.readFileSync("supabase/migrations/078_authenticated_rpc_jwt_fallback.sql", "utf8");
+const migration081 = fs.readFileSync("supabase/migrations/081_purchase_case_documents_v1.sql", "utf8");
 const authenticatedRpcSources = [
   fs.readFileSync("lib/leads/repository.ts", "utf8"),
   fs.readFileSync("app/api/push/command/route.ts", "utf8"),
@@ -56,6 +57,7 @@ const serverFallbackMigrations = [
   fs.readFileSync("supabase/migrations/072_follow_up_server_rpc_fallback.sql", "utf8"),
   purchaseFallbackMigration,
   migration078,
+  migration081,
 ].join("\n");
 for (const [functionName, recovery] of Object.entries(AUTHENTICATED_RPC_POLICIES)) {
   if (recovery !== "SERVER_FALLBACK") continue;

@@ -1,0 +1,61 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const read = (path) => fs.readFileSync(path, "utf8");
+const migration = read("supabase/migrations/081_purchase_case_documents_v1.sql");
+const correctionMigration = read("supabase/migrations/082_purchase_case_documents_v1_corrections.sql");
+const database = read("lib/supabase/database.ts");
+const policy = read("lib/supabase/authenticated-rpc-policy.ts");
+const repository = read("lib/postpurchase-documents/repository.ts");
+const validation = read("lib/postpurchase-documents/file-validation.ts");
+const route = read("app/api/postpurchase/documents/route.ts");
+const accessRoute = read("app/api/postpurchase/documents/[id]/route.ts");
+const panel = read("components/leads/post-purchase-panel.tsx");
+const documents = read("components/leads/post-purchase-documents.tsx");
+
+const expect = (condition, message) => assert.equal(Boolean(condition), true, message);
+const documentTypes = ["INVOICE", "FONDO_VIAL", "RAMV", "PAYMENT_ORDER", "PAYMENT_RECEIPT", "REGISTRATION", "OTHER"];
+const documentStatuses = ["ACTIVE", "REPLACED", "DELETED"];
+
+expect(migration.includes("create table if not exists public.purchase_case_documents"), "document table missing");
+for (const field of ["id", "purchase_case_id", "document_type", "status", "storage_path", "original_filename", "mime_type", "size_bytes", "replaced_by", "deleted_at", "deleted_by", "created_at", "created_by", "updated_at"]) expect(migration.includes(`${field} `), `${field} missing from migration`);
+for (const type of documentTypes) expect(migration.includes(`'${type}'`), `document type ${type} missing`);
+for (const status of documentStatuses) expect(migration.includes(`'${status}'`), `document status ${status} missing`);
+expect(migration.includes("purchase_case_documents_single_active_idx"), "single-active database guard missing");
+expect(correctionMigration.includes("deferrable initially deferred"), "replacement FK must be deferrable");
+expect(correctionMigration.includes("'/[0-9a-f-]{36}\\.(pdf|jpg|png|webp)$'"), "document path contract missing");
+expect(migration.includes("status = 'ACTIVE' and document_type in ('INVOICE', 'FONDO_VIAL', 'RAMV', 'REGISTRATION')"), "single-active type set missing");
+expect(migration.includes("alter table public.purchase_case_documents enable row level security"), "document RLS missing");
+expect(migration.includes("revoke all on table public.purchase_case_documents from public, anon, authenticated"), "direct table writes must be revoked");
+expect(migration.includes("purchase-documents"), "dedicated bucket missing");
+expect(migration.includes("public = false"), "document bucket must be private");
+expect(migration.includes("10485760"), "10 MiB limit missing");
+expect(migration.includes("image/jpeg") && migration.includes("image/png") && migration.includes("image/webp"), "image MIME types missing");
+expect(migration.includes("documents.status = 'ACTIVE'"), "Storage policy must expose ACTIVE documents only");
+expect(migration.includes("leads.deleted_at is null") && migration.includes("leads.user_id = auth.uid()"), "owner/active-lead policy missing");
+expect(migration.includes("create_or_replace_purchase_case_document_v1"), "create/replace RPC missing");
+expect(migration.includes("delete_purchase_case_document_v1"), "delete RPC missing");
+expect(migration.includes("security definer") && migration.includes("set search_path = public, auth, extensions"), "RPC hardening missing");
+expect(migration.includes("auth.role() <> 'service_role'"), "server fallback authorization guard missing");
+expect(migration.includes("grant execute on function public.create_or_replace_purchase_case_document_v1") && migration.includes("to service_role"), "server RPC grants missing");
+expect(migration.includes("purchase_row.purchase_status <> 'PURCHASED'"), "PURCHASED mutation guard missing");
+expect(migration.includes("status = 'REPLACED'") && migration.includes("status = 'DELETED'"), "historical status transitions missing");
+expect(!/delete from public\.purchase_case_documents/iu.test(migration), "documents must be soft-deleted");
+expect(!/purchase_case_milestones|lead_milestones.*update|update public\.leads/iu.test(migration), "document migration must not mutate milestones or leads");
+
+expect(policy.includes("create_or_replace_purchase_case_document_v1: \"SERVER_FALLBACK\""), "create RPC must use centralized auth transport");
+expect(policy.includes("delete_purchase_case_document_v1: \"SERVER_FALLBACK\""), "delete RPC must use centralized auth transport");
+expect(repository.includes("createSupabaseAdminClient") && repository.includes("purchase-documents"), "server-only storage boundary missing");
+expect(repository.includes("createSignedUrl(document.storage_path, 300)"), "signed URL TTL must be five minutes or less");
+expect(repository.includes('.eq("status", "ACTIVE")'), "server access must reject historical documents");
+expect(route.includes("requireAdvisor") && route.includes("request.formData()"), "upload route authorization/input boundary missing");
+expect(route.includes("validatePurchaseCaseDocumentFile") && route.includes("file.arrayBuffer()"), "magic-byte validation missing");
+expect(repository.includes("upsert: false") && route.includes("removePurchaseCaseDocumentObject(storagePath)"), "upload must be non-overwriting and compensated");
+expect(accessRoute.includes("createPurchaseCaseDocumentSignedUrl") && accessRoute.includes("DELETE"), "document access/delete route missing");
+expect(panel.includes("PostPurchaseDocuments") && panel.includes("paused={paused}"), "documents must be integrated without changing milestone actions");
+expect(documents.includes("Sólo lectura") && documents.includes("Descargar") && documents.includes("Guardar"), "document UI controls missing");
+expect(validation.includes("%PDF-") && validation.includes("RIFF") && validation.includes("WEBP"), "file signatures missing");
+expect(database.includes("purchase_case_documents:") && database.includes("create_or_replace_purchase_case_document_v1:"), "generated database contract missing");
+expect(route.includes("purchase-cases/${purchaseCaseId}/${documentId}.${validated.extension}"), "API must use case/document UUID path");
+
+console.log("Postpurchase documents contract checks: PASS");

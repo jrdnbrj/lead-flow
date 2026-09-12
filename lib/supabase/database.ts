@@ -1100,6 +1100,86 @@ export type Database = {
           },
         ]
       }
+      purchase_case_documents: {
+        Row: {
+          id: string
+          purchase_case_id: string
+          document_type: string
+          status: string
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          size_bytes: number
+          replaced_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          created_at: string
+          created_by: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          purchase_case_id: string
+          document_type: string
+          status?: string
+          storage_path: string
+          original_filename: string
+          mime_type: string
+          size_bytes: number
+          replaced_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          created_at?: string
+          created_by: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          purchase_case_id?: string
+          document_type?: string
+          status?: string
+          storage_path?: string
+          original_filename?: string
+          mime_type?: string
+          size_bytes?: number
+          replaced_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          created_at?: string
+          created_by?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_case_documents_purchase_case_id_fkey"
+            columns: ["purchase_case_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_case_documents_replaced_by_fkey"
+            columns: ["replaced_by"]
+            isOneToOne: false
+            referencedRelation: "purchase_case_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_case_documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_case_documents_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leadflow_event_registry: {
         Row: {
           aggregate_table: string | null
@@ -1441,6 +1521,23 @@ export type Database = {
           p_idempotency_key?: string
           p_milestone_type: string
         }
+        Returns: Json
+      }
+      create_or_replace_purchase_case_document_v1: {
+        Args: {
+          p_document_id: string
+          p_purchase_case_id: string
+          p_document_type: string
+          p_storage_path: string
+          p_original_filename: string
+          p_mime_type: string
+          p_size_bytes: number
+          p_replace_document_id?: string | null
+        }
+        Returns: Json
+      }
+      delete_purchase_case_document_v1: {
+        Args: { p_document_id: string }
         Returns: Json
       }
       claim_quote_file_send_v1: {

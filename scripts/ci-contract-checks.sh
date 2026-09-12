@@ -41,6 +41,7 @@ checks=(
   scripts/pp-purchase-case-contract-check.mjs
   scripts/auto-close-conversation-contract-check.mjs
   scripts/catalog-contract-check.mjs
+  scripts/postpurchase-documents-contract-check.mjs
 )
 
 for check in "${checks[@]}"; do
@@ -54,6 +55,7 @@ node --experimental-strip-types scripts/credit-card-payment-method-contract-chec
 node --experimental-strip-types scripts/multi-payment-method-contract-check.mjs
 node --experimental-strip-types scripts/card-quote-contract-check.mjs
 node --experimental-strip-types scripts/novacredit-contract-check.mjs
+node --experimental-strip-types scripts/postpurchase-documents-runtime-check.mjs
 node --experimental-strip-types scripts/quote-files-contract-check.mjs
 node --experimental-strip-types scripts/quote-send-contract-check.mjs
 node --experimental-strip-types scripts/jwt-clock-skew-contract-check.mjs
